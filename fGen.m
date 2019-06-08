@@ -199,28 +199,28 @@ classdef fGen < handle
         end
         
         function disableOutput(this, ch)     
-            fprintf(this.inst, [':INSTrument ', num2str(this.CH{ch}.id)]);
+            fprintf(this.inst, [':INSTrument ', num2str(this.ChVars{ch}.id)]);
             fprintf(this.inst, ':OUTP OFF');
         end
         
         function disableAllOutputs(this)
             for ch = 1:2
-                fprintf(this.inst, [':INSTrument ', num2str(this.CH{ch}.id)]);
+                fprintf(this.inst, [':INSTrument ', num2str(this.ChVars{ch}.id)]);
                 fprintf(this.inst, ':OUTP OFF');
             end
             fprintf(this.inst, ':OUTP:SYNC OFF');
         end
         
         function enableOutput(this, ch)     
-            fprintf(this.inst, [':INSTrument ', num2str(this.CH{ch}.id)]);
+            fprintf(this.inst, [':INSTrument ', num2str(this.ChVars{ch}.id)]);
             fprintf(this.inst, ':OUTP ON');
         end
         
         function enableAllOutputs(this)
             for ch = 1:2
-                fprintf(this.inst, [':INSTrument ', num2str(this.CH{ch}.id)]);
+                fprintf(this.inst, [':INSTrument ', num2str(this.ChVars{ch}.id)]);
                 fprintf(this.inst, ':OUTP ON');
-                if (this.CH{ch}.triggerOwner)
+                if (this.ChVars{ch}.triggerOwner)
                     fprintf(this.inst, ':OUTP:SYNC ON');
 %                     disp(query(this.inst, ':OUTP:SYNC?'))
                 end

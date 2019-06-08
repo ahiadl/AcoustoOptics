@@ -48,6 +48,8 @@ classdef acoustoOptics < handle
             % General: algo & digitizer
             redVars.useGPU            = []; %algo, digitizer;
             redVars.exportRawData     = [];
+            
+            redVars.gReq              = Algo.createGraphicRequest();
         end
         
         function newExtVars = extVarsCreate()
@@ -143,7 +145,8 @@ classdef acoustoOptics < handle
             algoVars.timeToSample    = reducedVars.timeToSample;
             algoVars.extClkDcyc      = reducedVars.extClkDcyc;
             algoVars.exportRawData   = reducedVars.exportRawData;
-
+            algoVars.gReq            = reducedVars.gReq;
+            
             fprintf(" 2. Sets Function Generator reduced Vars\n")
             %fGen - static configurations
             fGenVars      = this.fGen.uVarsCreate();
@@ -192,7 +195,7 @@ classdef acoustoOptics < handle
             % Calculate measurement variables and dimensions
             fprintf(" 4. Calculating Algorithm Variables\n")
             this.measVars.algo = this.algo.updateAlgoUserVars(algoVars);
-
+            
             % Complete digitizer variables from calculated algorithm vars
             fprintf(" 5. Extracting Digitizer Variables from Algorith,\n")
            

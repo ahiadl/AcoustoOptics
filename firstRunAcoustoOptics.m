@@ -19,39 +19,35 @@ uVars.extClkDcyc        = 50; % [%]
 uVars.IOPort            = 1;
 uVars.IOLine            = 4;
 uVars.useGPU            = true; %algo, digitizer;
-uVars.exportRawData     = false;
+uVars.exportRawData     = true;
 
-
-% uVars.graphicRequest = acoustoOptics.createGraphicsRequest();
-% uVars.graphicRequest.vars.internal = true;
-% uVars.graphicRequest.vars.extClk = true;
-% 
-% uVars.graphics.internal = true;
-% uVars.graphics.ch       = 1;
-% uVars.graphics.pos      = 1;
-% uVars.graphics.mask     = ones(1,9);
-
-% uVars.general.useGPU
-% uVars.general.exportRawData = false;
-
+uVars.gReq.ch  = 4;
+uVars.gReq.pos = 1;
+uVars.gReq.intExt = 'int';
+names = fieldnames(uVars.gReq.validStruct);
+for i=1:length(names)
+    uVars.gReq.validStruct.(names{i}) = true;
+end
 
 acoustoOptics = acoustoOptics();
 
 acoustoOptics.init();
 
-% acoustoOptics.setMeasVars(uVars);
-% 
-% % acoustoOptics.prepareGraphics();
-% 
-% acoustoOptics.configPeripherals();
-% 
-% tic
-% acoustoOptics.measureAndAnlayse();
-% toc
+acoustoOptics.setMeasVars(uVars);
+
+% acoustoOptics.prepareGraphics();
+
+acoustoOptics.configPeripherals();
+
+tic
+acoustoOptics.measureAndAnlayse();
+toc
 
 acoustoOptics.fullMeasureAndAnalyse(uVars);
 
 timeTable = acoustoOptics.getTimeTable();
+
+acoustoOptics.fGen.disableAllOutputs()
 % clear acoustoOptics
 
 

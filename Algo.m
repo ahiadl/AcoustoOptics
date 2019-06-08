@@ -3,44 +3,27 @@ classdef Algo < handle
     %   Detailed explanation goes here
     
     properties
-        uVars; % user vars
+        uVars;
         extClk;
         usSignal;
-        geometry;  % c , phantom depth, distnace from transducer
-        digitizer; % fs, channels, buffersPerAcq, preTriggerSamples
+        geometry;
+        digitizer;
         samples;
-        timing; % timeToSample
+        timing;
         len;
         freq;
         
-%         plotReq;
         graphics;
-        graphicsNames;
         
         timeTable;
         res;
     end
  
-    methods (Static)
-        function gReq = createGraphicsRequest()
-           fontSize = [18, 18, 18];
-           plotReq.extClk                   = plotRequest('stem', 'External Clock',                       't[\mus]', 'V',              [], fontSize); 
-           plotReq.usSignal                 = plotRequest('stem', 'Ultrasound Signal',                    't[\mus]', 'V',              [], fontSize); 
-           plotReq.fullSignal               = plotRequest('stem', 'Full Signal Ch = %d',                  't[\mus]', 'V',              [], fontSize); 
-           plotReq.measSamples              = plotRequest('stem', 'Measured Samples Ch = %d',             't[\mus]', 'V',              [], fontSize); 
-           plotReq.netSignal                = plotRequest('stem', 'Net Signal Ch = %d',                   't[\mus]', 'V',              [], fontSize); 
-           plotReq.reshapedSignal           = plotRequest('stem', 'Reshaped Signal Ch = %d, Pos = %d',    't[\mus]', 'V',              [], fontSize); 
-           plotReq.FFT                      = plotRequest('stem', 'Fourier Transform, Ch = %d, Pos = %d', 'f[MHz]',  'Power Spectrum', [], fontSize); 
-           plotReq.phiCh                    = plotRequest('stem', '\phi_{ch = %d}',                       'z[mm]',   'V',              [], fontSize); 
-           plotReq.phi                      = plotRequest('stem', '\phi_{tot}',                           'z[mm]',   'V',              [], fontSize); 
-           
-           vars.internal = true;
-           vars.mask = zeros(1, length(fieldnames(plotReq)));
-           
-           gReq.plotRequests = plotReq;
-           gReq.vars = vars;
+    methods (Static)   
+        function gNames = getGraphicsNames()
+            gNames = {'extClk';'usSignal';'fullSignal';'measSamples';'netSignal';'reshapedSignal';'FFT';'phiCh';'phi'};
         end
-              
+        
         function uVars = uVarsCreate()
             uVars.fSin       = [];              
             uVars.fTrain     = [];
@@ -59,7 +42,11 @@ classdef Algo < handle
             uVars.extClkDcyc        = []; % [%]
             uVars.useGPU            = false;
             uVars.exportRawData     = true;
-            uVars.graphicRequest    = Algo.createGraphicsRequest();
+            uVars.gReq              = Algo.createGraphicRequest();
+        end
+       
+        function gReq = createGraphicRequest()
+            gReq = Graphics.createGraphicsRunVars(Algo.getGraphicsNames());
         end
         
     end
@@ -67,9 +54,11 @@ classdef Algo < handle
     methods
         function this = Algo()
             this.initTimeTable();
-            this.graphicsNames = {'extClk';'usSignal';'fullSignal';'measSamples';'netSignal';'reshapedSignal';'FFT';'phiCh';'phi'};
-            this.graphics = Graphics(this.graphicsNames);
-            this.setGraphicsDefaultVars();
+            
+            this.graphics.graphicsNames = this.getGraphicsNames();
+            this.graphics.obj  = Graphics(this.graphics.graphicsNames);
+            this.graphics.gReq = Graphics.createGraphicsRunVars(this.graphics.graphicsNames);
+            this.setGraphicsStaticVars();
         end
         
         function initTimeTable(this)
@@ -92,19 +81,9 @@ classdef Algo < handle
             
             this.timeTable.FullAnalysis = 0;
         end
-        
-        function directGraphics(this)
-            this.graphics.directGraphics();
-        end
-        
-        
-        function setGraphics(this, gReq)
-            this.graphics.setPlotRequests(gReq)
-        end
 
         function [vars] = updateAlgoUserVars(this, user)
            this.uVars.fSin              = user.fSin; %V
-%            this.uVar.fs           = user.fs; %V
            this.uVars.fTrain            = user.fTrain; %V
            this.uVars.cycInPulse        = user.cycInPulse; %V
            this.uVars.channels          = user.channels; %V
@@ -121,6 +100,11 @@ classdef Algo < handle
            this.uVars.useGPU            = user.useGPU;
            this.uVars.exportRawData     = user.exportRawData;
            vars = this.calcDimensions();
+           
+           this.graphics.gReq = user.gReq;
+           this.graphics.obj.setGlobalReq(user.gReq);
+           this.setGraphicsDynamicVars()
+           
         end
         
         function vars = calcDimensions(this)
@@ -134,14 +118,12 @@ classdef Algo < handle
             this.calcFreq();
             
             vars = this.getVars();
- 
         end
         
         function calcGeometry(this)
             this.geometry.c = this.uVars.c;
             this.geometry.distFromPhantom = this.uVars.distFromPhantom;
             this.geometry.phantomDepth = this.uVars.phantomDepth;
-            
         end
         
         function vars = getVars(this)
@@ -283,29 +265,16 @@ classdef Algo < handle
             
             this.extClk.data = clkData;
             this.usSignal.data = sigData;
-            
-%             
-            if this.graphics.isRequest('extClk')
-                this.graphics.displayResults('extClk', tExtClk*1e6, clkData, []);
+          
+            if this.graphics.gReq.validStruct.extClk
+                this.graphics.obj.plotSingleSignal('extClk', tExtClk*1e6, clkData);
             end
-%             
-%             if this.plotReq.extClk.getIsValid() && isgraphics(this.plotReq.extClk.getAx())
-%                 this.displayResults(this.plotReq.extClk,...
-%                                     tExtClk*1e6, clkData, 'Sampling Clock (External)',...
-%                                     't[\mus]', 'Voltage')
-%             end
-% 
-%             if this.plotReq.usSignal.getIsValid() && isgraphics(this.plotReq.usSignal.getAx())
-%                 this.displayResults(this.plotReq.usSignal,...
-%                                     tSig*1e6, sigData, 'Ultrasound Signal',...
-%                                     't[\mus]', 'Voltage')
-%             end
             
-        end
-
-        function sendPlotsRequest(this, plotReq)
-            this.plotReq = plotReq;
-        end        
+            if this.graphics.gReq.validStruct.usSignal
+                this.graphics.obj.plotSingleSignal('usSignal', tSig*1e6, sigData);
+            end
+            
+        end      
         
         function res = analyse(this, data)
             % rawData(input)  - [ch x samplesPerAcq]
@@ -347,24 +316,14 @@ classdef Algo < handle
             % rawData(input)  - [ch x samplesPerAcq]
             % rawData(output) - [ch x samplesPerSignal]
             
-%             if this.plotReq.fullSignal.getIsValid() && isgraphics(this.plotReq.fullSignal.getAx())
-%                 [~, ch, ~, ~] = this.plotReq.fullSignal.getRequest();
-%                     this.displayResults(this.plotReq.fullSignal,...
-%                                         this.timing.tAcqVec*1e6,...
-%                                         this.res.rawData(ch, :)',...
-%                                         sprintf('Full Signal (All Buffers), ch: %d', ch),...
-%                                         't[\mus]', 'Voltage');
-%             end
+            if this.graphics.gReq.validStruct.fullSignal
+                this.graphics.obj.plotSelectedSignals('fullSignal', this.timing.tAcqVec*1e6, data);
+            end
             
-%             if this.plotReq.measSamples.getIsValid() && isgraphics(this.plotReq.measSamples.getAx())
-%                 [~, ch, ~, ~] = this.plotReq.measSamples.getRequest();
-%                     this.displayResults(this.plotReq.measSamples,...
-%                                         this.timing.tMeasVec*1e6,...
-%                                         this.res.rawData(ch, 1:this.samples.samplesPerMeas)',...
-%                                         sprintf('Measured Signal, ch: %d', ch),...
-%                                         't[\mus]', 'Voltage');
-%             end
-            
+            if this.graphics.gReq.validStruct.measSamples
+                this.graphics.obj.plotSelectedSignals('measSamples', this.timing.tMeasVec*1e6, data(:, 1:this.samples.samplesPerMeas));
+            end
+           
             % Chop unneccesarry cycles
             this.timeTable.CutDigiPreSamples = tic;
             data(:,1:this.digitizer.preTriggerSamples)    = []; % Card Bug 
@@ -378,13 +337,9 @@ classdef Algo < handle
             data(:,(this.samples.samplesPerSignal+1):end) = []; % extra trains to fill a buffer
             this.timeTable.CutPostSamples = toc(this.timeTable.CutPostSamples);
             
-%             if this.plotReq.netSignal.getIsValid() && isgraphics(this.plotReq.netSignal.getAx())
-%                 [~, ch, ~, ~] = this.plotReq.netSignal.getRequest();
-%                 this.displayResults(this.plotReq.netSignal,...
-%                                     this.timing.tSigVec*1e6,...
-%                                     data(ch, :)',...
-%                                     sprintf('Net Signal, ch: %d', ch), 't[\mus]', 'Voltage')
-%             end
+            if this.graphics.gReq.validStruct.netSignal
+                this.graphics.obj.plotSelectedSignals('netSignal', this.timing.tSigVec*1e6, data);
+            end
             
             if this.uVars.exportRawData
                 this.timeTable.CopyNetSignal1 = tic;
@@ -427,14 +382,9 @@ classdef Algo < handle
                 this.timeTable.copyReshaped = toc(this.timeTable.copyReshaped);
             end
            
-%             if this.plotReq.reshapedSignal.getIsValid() && isgraphics(this.plotReq.reshapedSignal.getAx())
-%                 [~, ch, pos, ~] = this.plotReq.reshapedSignal.getRequest();
-%                 this.displayResults(this.plotReq.reshapedSignal,...
-%                                     this.timing.tPosVec*1e6,...
-%                                     reshapedData(ch, :, pos)',...
-%                                     sprintf('Reshaped Signal, ch: %d, pos idx: %d',ch, pos), ...
-%                                      't[\mus]', 'Voltage');
-%             end
+            if this.graphics.gReq.validStruct.reshapedSignal
+                this.graphics.obj.plotSelectedSignals('reshapedSignal', this.timing.tPosVec*1e6, reshapedData);
+            end
 
         end
         
@@ -461,7 +411,22 @@ classdef Algo < handle
             this.timeTable.ChAvg = tic;
             this.res.phi = permute(mean(this.res.phiCh,1), [2,1]);    
             this.timeTable.ChAvg = toc(this.timeTable.ChAvg);   
-           
+            
+                       
+            if this.graphics.gReq.validStruct.FFT
+                this.graphics.obj.plotFFT('FFT', this.freq.frequencyBarShifted*1e-6, abs(data),...
+                    this.freq.frequencyBar(this.freq.fSinIdx)*1e-6, abs(data(:, this.freq.fSinIdx, :)));
+            end
+            
+            if this.graphics.gReq.validStruct.phiCh
+                this.graphics.obj.plotMultipleSignals('phiCh', this.len.zVecUSRes*1e3, this.res.phiCh) 
+            end
+            
+            if this.graphics.gReq.validStruct.phi
+                this.graphics.obj.plotSingleSignal('phi', this.len.zVecUSRes*1e3, this.res.phi);
+            end
+            
+            
 %             if this.plotReq.FFT.getIsValid() && isgraphics(this.plotReq.FFT.getAx())
 %                 [~, ch, pos, ~] = this.plotReq.FFT.getRequest();
 %                 this.displayResults(this.plotReq.FFT, this.freq.frequencyBarShifted*1e6,...
@@ -505,7 +470,7 @@ classdef Algo < handle
             this.res=struct();
         end
         
-        function setGraphicsDefaultValues(this)
+        function setGraphicsStaticVars(this)
 %             this.graphics.setGeneral(internal, valid, type);
 %             this.graphics.setStrings(title, xlabel, ylabel, legend);
 %             this.graphics.setValues(pos, ch, posDim, chDim, dataDim);
@@ -514,83 +479,77 @@ classdef Algo < handle
 %             this.graphics.setFonts(type, titleSize, labelsSize, axisSize);
             
             % extClk
-            this.graphics.setGeneral(this.graphicsNames{1}, true, false, 'stem');
-            this.graphics.setStrings(this.graphicsNames{1}, "External Clk (Sampling Clock)", "t[\mu s]", "Amp", []);
-            this.graphics.setValues(this.graphicsNames{1}, [], [], [], [], 1);
-%             this.graphics.setMarkers(this.graphicsNames{1}, false, [], []);
-%             this.graphics.setLims(this.graphicsNames{1}, [], [], []);
-%             this.graphics.setFonts(this.graphicsNames{1}, [], 18, 18, 18);
+            this.graphics.obj.setType(this.graphics.graphicsNames{1}, 'stem');
+            this.graphics.obj.setStrings(this.graphics.graphicsNames{1}, "External Clk (Sampling Clock)", "t[\mus]", "Amp", []);
+            this.graphics.obj.setDims(this.graphics.graphicsNames{1}, [], [], 1);
             
             % usSignal
-            this.graphics.setGeneral(this.graphicsNames{1}, true, false, 'stem');
-            this.graphics.setStrings(this.graphicsNames{1}, "Ultrasound Pulse", "t[\mu s]", "Amp", []);
-            this.graphics.setValues(this.graphicsNames{1}, [], [], [], [], 1);
-%             this.graphics.setMarkers(this.graphicsNames{1}, false, [], []);
-%             this.graphics.setLims(this.graphicsNames{1}, [], [], []);
-%             this.graphics.setFonts(this.graphicsNames{1}, [], 18, 18, 18);
+            this.graphics.obj.setType(this.graphics.graphicsNames{2}, 'stem');
+            this.graphics.obj.setStrings(this.graphics.graphicsNames{2}, "Ultrasound Pulse", "t[\mus]", "Amp", []);
+            this.graphics.obj.setDims(this.graphics.graphicsNames{2}, [], [], 1);
            
             % fullSignal [ch x samplesPerAcq]
-            this.graphics.setGeneral(this.graphicsNames{1}, true, false, 'stem');
-            this.graphics.setStrings(this.graphicsNames{1}, "Full Signal Channel: %d", "t[\mu s]", "Amp[V]", []);
-            this.graphics.setValues(this.graphicsNames{1}, [], 1, [], 1, 2);
-%             this.graphics.setMarkers(this.graphicsNames{1}, false, [], []);
-%             this.graphics.setLims(this.graphicsNames{1}, [], [], []);
-%             this.graphics.setFonts(this.graphicsNames{1}, [], 18, 18, 18);
+            this.graphics.obj.setType(this.graphics.graphicsNames{3}, 'stem');
+            this.graphics.obj.setStrings(this.graphics.graphicsNames{3}, "Full Signal Channel: %d", "t[\mus]", "Amp[V]", []);
+            this.graphics.obj.setDims(this.graphics.graphicsNames{3}, [], 1, 2);
 
             % measSamples [ch x samplesPerMeas]
-            this.graphics.setGeneral(this.graphicsNames{1}, true, false, 'stem');
-            this.graphics.setStrings(this.graphicsNames{1}, "Measured Signal Channel: %d", "t[\mu s]", "Amp[V]", []);
-            this.graphics.setValues(this.graphicsNames{1}, [], 1, [], 1, 2);
-%             this.graphics.setMarkers(this.graphicsNames{1}, false, [], []);
-%             this.graphics.setLims(this.graphicsNames{1}, [], [], []);
-%             this.graphics.setFonts(this.graphicsNames{1}, [], 18, 18, 18);
+            this.graphics.obj.setType(this.graphics.graphicsNames{4}, 'stem');
+            this.graphics.obj.setStrings(this.graphics.graphicsNames{4}, "Measured Signal Channel: %d", "t[\mus]", "Amp[V]", []);
+            this.graphics.obj.setDims(this.graphics.graphicsNames{4}, [], 1, 2);
             
             % netSignal [ch x samplesPerSignal]
-            this.graphics.setGeneral(this.graphicsNames{1}, true, false, 'stem');
-            this.graphics.setStrings(this.graphicsNames{1}, "Net Signal Channel: %d", "t[\mu s]", "Amp[V]", []);
-            this.graphics.setValues(this.graphicsNames{1}, [], 1, [], 1, 2);
-%             this.graphics.setMarkers(this.graphicsNames{1}, false, [], []);
-%             this.graphics.setLims(this.graphicsNames{1}, [], [], []);
-%             this.graphics.setFonts(this.graphicsNames{1}, [], 18, 18, 18);
+            this.graphics.obj.setType(this.graphics.graphicsNames{5}, 'stem');
+            this.graphics.obj.setStrings(this.graphics.graphicsNames{5}, "Net Signal Channel: %d", "t[\mus]", "Amp[V]", []);
+            this.graphics.obj.setDims(this.graphics.graphicsNames{5}, [], 1, 2);
 
             % reshapedSignal [ch x samplesPerPos x numOfPos]
-            this.graphics.setGeneral(this.graphicsNames{1}, true, false, 'stem');
-            this.graphics.setStrings(this.graphicsNames{1}, "Reshaped Signal Channel: %d, Pos: %.2f[mm] (idx:(%d))", "t[\mu s]", "Amp[V]", []);
-            this.graphics.setValues(this.graphicsNames{1}, 1, 1, 3, 1, 2);
-%             this.graphics.setMarkers(this.graphicsNames{1}, false, [], []);
-%             this.graphics.setLims(this.graphicsNames{1}, [], [], []);
-%             this.graphics.setFonts(this.graphicsNames{1}, [], 18, 18, 18);
+            this.graphics.obj.setType(this.graphics.graphicsNames{6}, 'stem');
+            this.graphics.obj.setStrings(this.graphics.graphicsNames{6}, "Reshaped Signal Channel: %d, Pos: %.2f[mm] (idx:(%d))", "t[\mu s]", "Amp[V]", []);
+            this.graphics.obj.setDims(this.graphics.graphicsNames{6}, 3, 1, 2);
                         
             %FFT [ch x samplesPerPos x numOfPos]
-            this.graphics.setGeneral(this.graphicsNames{1}, true, false, 'stem');
-            this.graphics.setStrings(this.graphicsNames{1}, "FFT Pos: %.2f[mm] (idx:(%d))", "f[MHz]", "Power Spectrum", "Ch %d");
-            this.graphics.setValues(this.graphicsNames{1}, 1, [], 3, 1, 2);
-            this.graphics.setMarkers(this.graphicsNames{1}, true, [], []);
-%             this.graphics.setLims(this.graphicsNames{1}, [], [], []);
-%             this.graphics.setFonts(this.graphicsNames{1}, [], 18, 18, 18);
+            this.graphics.obj.setType(this.graphics.graphicsNames{7}, 'plot');
+            this.graphics.obj.setStrings(this.graphics.graphicsNames{7}, "FFT Pos: %.2f[mm] (idx:(%d))", "f[MHz]", "Power Spectrum", "Ch %d");
+            this.graphics.obj.setDims(this.graphics.graphicsNames{7}, 3, 1, 2);
+            this.graphics.obj.setMarkersEnable(this.graphics.graphicsNames{7}, true);
             
             % phiCh [ch x numOfPos]
-            this.graphics.setGeneral(this.graphicsNames{1}, true, false, 'stem');
-            this.graphics.setStrings(this.graphicsNames{1}, "\phi_{ch}", "z[mm]", "\phi", "Ch %d");
-            this.graphics.setValues(this.graphicsNames{1}, 1, [], 2, 1, 2);
-%             this.graphics.setMarkers(this.graphicsNames{1}, false, [], []);
-%             this.graphics.setLims(this.graphicsNames{1}, [], [], []);
-%             this.graphics.setFonts(this.graphicsNames{1}, [], 18, 18, 18);
+            this.graphics.obj.setType(this.graphics.graphicsNames{8}, 'stem');
+            this.graphics.obj.setStrings(this.graphics.graphicsNames{8}, "\\phi_{ch}", "z[mm]", "\phi", "Ch %d");
+            this.graphics.obj.setDims(this.graphics.graphicsNames{8}, 2, 1, 2);
             
-            % phiCh [numOfPos]
-            this.graphics.setGeneral(this.graphicsNames{1}, true, false, 'stem');
-            this.graphics.setStrings(this.graphicsNames{1}, "\phi", "z[mm]", "\phi", []);
-%             this.graphics.setValues(this.graphicsNames{1}, 1, [], 1, [], 1);
-%             this.graphics.setMarkers(this.graphicsNames{1}, false, [], []);
-%             this.graphics.setLims(this.graphicsNames{1}, [], [], []);
-%             this.graphics.setFonts(this.graphicsNames{1}, [], 18, 18, 18);
+            % phi [numOfPos]
+            this.graphics.obj.setType(this.graphics.graphicsNames{9}, 'stem');
+            this.graphics.obj.setStrings(this.graphics.graphicsNames{9}, "\\phi", "z[mm]", "\phi", []);
+            this.graphics.obj.setDims(this.graphics.graphicsNames{1}, 1, [], 1);
+
         end
         
-        function serGraphicsUserValues(this)
+        function setGraphicsDynamicVars(this)
+            this.graphics.obj.setChAndPos(this.graphics.gReq.ch, this.graphics.gReq.pos)
+            
+            z = this.len.zVecUSRes(this.graphics.gReq.ch)*1e3;
+            ch = this.digitizer.channels;
+            fSin = this.usSignal.fSin;
             
             
+            this.graphics.obj.setTitleVariables(this.graphics.graphicsNames{1}, []);
+            this.graphics.obj.setTitleVariables(this.graphics.graphicsNames{2}, []);
+            this.graphics.obj.setTitleVariables(this.graphics.graphicsNames{3}, [this.graphics.gReq.ch]);              % fullSignal 
+            this.graphics.obj.setTitleVariables(this.graphics.graphicsNames{4}, [this.graphics.gReq.ch]);              % measSamples
+            this.graphics.obj.setTitleVariables(this.graphics.graphicsNames{5}, [this.graphics.gReq.ch]);              % netSignal
+            this.graphics.obj.setTitleVariables(this.graphics.graphicsNames{6}, [this.graphics.gReq.ch, z, this.graphics.gReq.pos]); % reshapedSignal
+            this.graphics.obj.setTitleVariables(this.graphics.graphicsNames{7}, [z, this.graphics.gReq.pos]);          % FFT
+            this.graphics.obj.setTitleVariables(this.graphics.graphicsNames{8}, []);
+            this.graphics.obj.setTitleVariables(this.graphics.graphicsNames{9}, []);
             
+            this.graphics.obj.setLegendVariables(this.graphics.graphicsNames{7}, 1:ch);
+            this.graphics.obj.setLegendVariables(this.graphics.graphicsNames{8}, 1:ch);
+             
+            this.graphics.obj.setLimits(this.graphics.graphicsNames{7}, (fSin + fSin*[-0.01, 0.01])*1e-6, []);
+            
+            this.graphics.obj.updateGraphicsConstruction()
         end
     end
 end
-
