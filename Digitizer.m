@@ -10,6 +10,10 @@ classdef Digitizer < handle
         TS
         CS
         
+        bufferDataOut
+        uData
+        Data;
+
         timeTable
         alazarDefs
     end
@@ -117,6 +121,24 @@ classdef Digitizer < handle
 
             % --- Create pointers to CPU memory Buffers ---
             status = allocateBuffers(this);
+            this.allocateBufferOutMemory();
+            
+        end
+        
+        function allocateBufferOutMemory(this)
+            this.timeTable.allocMemoryBuffers = tic;
+            this.bufferDataOut = [];
+            this.Data = [];
+            this.uData = [];
+            if this.vars.useGPU
+                this.bufferDataOut = gpuArray(single(zeros(1, this.TS.samplesPerBufferAllCh)));
+                this.Data          = gpuArray(single(zeros(this.vars.channels,  this.vars.samplesPerAcq)));
+            else
+                this.bufferDataOut = uint16(zeros(this.TS.numOfBuffers, this.TS.samplesPerBufferAllCh));
+                this.uData         = single(zeros(this.vars.channels,  this.vars.samplesPerAcq));
+                this.Data          = single(zeros(this.vars.channels,  this.vars.samplesPerAcq));
+            end
+            this.timeTable.allocMemoryBuffers = toc(this.timeTable.allocMemoryBuffers);  
         end
         
         function status = connect(this)
@@ -311,29 +333,14 @@ classdef Digitizer < handle
             this.timeTable.armBoard = toc(this.timeTable.armBoard);
         end
         
-        function [castedRawData] = convertUnsignedSampleToVolts(this, rawData)
-            this.timeTable.convertUnsignedSampleToVolts = tic;
-            
-            shiftFact = 2;
-            bitsRange = 2^16/2; 
-            castedRawData =  cast(rawData, 'double');
-            castedRawData = (castedRawData - bitsRange) * this.system.voltsRange / (bitsRange * shiftFact);
-            
-            this.timeTable.convertUnsignedSampleToVolts = toc(this.timeTable.convertUnsignedSampleToVolts);
+        function data = getData(this)
+           data = this.bufferDataOut;
+%            this.bufferDataOut = [];
         end
         
-
-        
-        function [bufferDataOut, status] = acquireDataTS(this)
+        function [dataOut, status] = acquireDataTS(this)
             this.timeTable.fullAcquisition = tic;
-%             AlazarDefs;
-            
-            if this.vars.useGPU
-                bufferDataOut = gpuArray(uint16(zeros(this.TS.numOfBuffers, this.TS.samplesPerBufferAllCh)));
-            else
-                bufferDataOut = uint16(zeros(this.TS.numOfBuffers, this.TS.samplesPerBufferAllCh));
-            end
-                    
+           
             %----- Configure AutoDMA -----
             status = this.setADMA(); if(~status); return; end
              
@@ -375,8 +382,14 @@ classdef Digitizer < handle
                 
                 if bufferFull
                     %cast Data and save it to RAM
-                    setdatatype(bufferOut, 'uint16Ptr', 1, this.TS.samplesPerBufferAllCh); 
-                    bufferDataOut(buf,:) = bufferOut.Value; 
+                    setdatatype(bufferOut, 'uint16Ptr', 1, this.TS.samplesPerBufferAllCh);
+                    if this.vars.useGPU
+                        this.bufferDataOut(:) = cast(bufferOut.Value, 'single'); %TODO: check that curData is still gpuArray 
+                        this.convertUnsignedSampleToVoltsGPU();
+                        this.rawDataDeMultiplexingGPU(buf);
+                    else
+                        this.bufferDataOut(buf,:) = bufferOut.Value;
+                    end
                     buf = buf +1;
 
                     a = tic;
@@ -391,23 +404,54 @@ classdef Digitizer < handle
                         captureDone = true;
                     end
                 end
-                
             end
             this.timeTable.netAcquisition = toc(this.timeTable.netAcquisition); 
-            
-            bufferDataOut = this.convertUnsignedSampleToVolts(bufferDataOut);
-            bufferDataOut = this.rawDataDeMultiplexing(bufferDataOut);
-            
+            if ~this.vars.useGPU
+                this.convertUnsignedSampleToVolts();
+                this.rawDataDeMultiplexing();
+            end
+            dataOut = this.Data;
             this.timeTable.fullAcquisition = toc(this.timeTable.fullAcquisition); 
         end
+
+        function convertUnsignedSampleToVolts(this)
+            this.timeTable.convertUnsignedSampleToVolts = tic;
+            
+            shiftFact = 2;
+            bitsRange = 2^16/2;
+
+            this.uData = (cast(this.bufferDataOut, 'single') - bitsRange) * this.system.voltsRange / (bitsRange * shiftFact);
+            
+            this.timeTable.convertUnsignedSampleToVolts = toc(this.timeTable.convertUnsignedSampleToVolts);
+        end
         
-        function bufferDataOut = rawDataDeMultiplexing(this, bufferDataOut)
+        function rawDataDeMultiplexing(this)
             % bufferDataOut(input)  - [numOfBuffers x samplesPerBufferAllCh]
             % bufferDataOut(output) - [ch x samplesPerAcq]
             this.timeTable.rawDataDeMultiplexing = tic;
+
+            this.Data = reshape(reshape(this.uData', this.vars.samplesPerAcqAllCh, 1),...
+                                      this.vars.channels,  this.vars.samplesPerAcq);
+
+            this.timeTable.rawDataDeMultiplexing = toc(this.timeTable.rawDataDeMultiplexing);             
+        end
+
+        function convertUnsignedSampleToVoltsGPU(this)
+            this.timeTable.convertUnsignedSampleToVolts = tic;
             
-            bufferDataOut = bufferDataOut';
-            bufferDataOut = reshape(bufferDataOut(:), this.vars.channels,  this.vars.samplesPerAcq);
+            shiftFact = 2;
+            bitsRange = 2^16/2;
+
+            this.bufferDataOut = (this.bufferDataOut - bitsRange) * this.system.voltsRange / (bitsRange * shiftFact);
+            
+            this.timeTable.convertUnsignedSampleToVolts = toc(this.timeTable.convertUnsignedSampleToVolts);
+        end
+        
+        function rawDataDeMultiplexingGPU(this, buf)
+            this.timeTable.rawDataDeMultiplexing = tic;
+            
+            this.Data(:, ((buf-1)*this.vars.samplesPerBuffer+1) : buf*this.vars.samplesPerBuffer) =...
+                            reshape(this.bufferDataOut', this.vars.channels,  this.vars.samplesPerBuffer);
             
             this.timeTable.rawDataDeMultiplexing = toc(this.timeTable.rawDataDeMultiplexing);             
         end

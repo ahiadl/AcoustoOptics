@@ -1,7 +1,7 @@
 close all;
 clear all;
 
-uVars = Consistency.uVarsCreate();
+uVars = scan2d.uVarsCreate();
 
 uVarsAcoustoOptics = acoustoOptics.uVarsCreate();
 
@@ -14,13 +14,13 @@ uVarsAcoustoOptics.phantomDepth      = 4.2e-2;
 uVarsAcoustoOptics.distFromPhantom   = 0;
 uVarsAcoustoOptics.fExtClk           = 5e6; %fs
 uVarsAcoustoOptics.fSclk             = 100e6;     %update in fGen
-uVarsAcoustoOptics.timeToSample      = 6;
+uVarsAcoustoOptics.timeToSample      = 0.5;
 uVarsAcoustoOptics.extClkDcyc        = 50; % [%]
 uVarsAcoustoOptics.IOPort            = 1;
 uVarsAcoustoOptics.IOLine            = 1;
 uVarsAcoustoOptics.useHadamard       = false;
 uVarsAcoustoOptics.fastAnalysis      = false;
-uVarsAcoustoOptics.useGPU            = false; %algo, digitizer;
+uVarsAcoustoOptics.useGPU            = true; %algo, digitizer;
 uVarsAcoustoOptics.exportRawData     = true;
 
 uVarsAcoustoOptics.gReq.ch  = 4;
@@ -28,7 +28,7 @@ uVarsAcoustoOptics.gReq.pos = 1;
 uVarsAcoustoOptics.gReq.intExt = 'int';
 names = fieldnames(uVarsAcoustoOptics.gReq.validStruct);
 for i=1:length(names)
-    uVarsAcoustoOptics.gReq.validStruct.(names{i}) = true;
+    uVarsAcoustoOptics.gReq.validStruct.(names{i}) = false;
 end
 
 uVars.acoustoOptics = uVarsAcoustoOptics;
@@ -43,12 +43,19 @@ uVars.fileSystem.saveReducedData = false;
 uVars.fileSystem.saveFigs = false;
 uVars.fileSystem.saveResults  = false;
 
-uVars.scan.startTime = 0.5;
-uVars.scan.stride = 0.5;
-uVars.scan.endTime = 2;
+uVars.stages.startX  = 50;
+uVars.stages.startY  = 0;
+uVars.stages.endX    = 51;
+uVars.stages.endY    = 1;
+uVars.stages.strideX = 0.25;
+uVars.stages.strideY = 0.25;
+
+uVars.stages.firstAxis = 'X';
+
 uVars.scan.useQuant = false;
-uVars.scan.quantTime = 0.25;
-uVars.scan.numOfSets = 4;
+uVars.scan.quantTime = 0;
+uVars.scan.timeToSample = 0.5;
+uVars.scan.repeats = 1;
 
 uVars.gReq.ch  = 1;
 uVars.gReq.pos = 1;
@@ -62,10 +69,6 @@ acoustoOptics = acoustoOptics();
 acoustoOptics.init();
 stages = stages('COM3');
 
-acoustoOptics.setMeasVars(uVarsAcoustoOptics);
-acoustoOptics.configPeripherals();
-resAO = acoustoOptics.measureAndAnlayse();
-
-consistency = Consistency(acoustoOptics, stages, []);
-consistency.init();
-consistency.startScan(uVars);
+s2d = scan2d(acoustoOptics, stages, []);
+s2d.init();
+s2d.startScan(uVars);

@@ -1,4 +1,4 @@
-classdef Consistency < scanObj
+classdef ConsistencyNew < scanObj
     %CONSISTENCYOBJ Summary of this class goes here
     %   Detailed explanation goes here
     
@@ -28,30 +28,30 @@ classdef Consistency < scanObj
             uVars.scan.quantTime   = [];
             uVars.scan.numOfSets   = [];
             
-            uVars.gReq = Consistency.createGraphicRequest();
+            uVars.gReq = ConsistencyNew.createGraphicRequest();
             
         end
         
         function gReq = createGraphicRequest()
-            gReq = consGraphics.createGraphicsRunVars();
+            gReq = consGraphicsNew.createGraphicsRunVars();
         end
         
     end
     
     methods
         
-        function this = Consistency(acoustoOpticHandle, stagesHandle, owner)
+        function this = ConsistencyNew(acoustoOpticHandle, stagesHandle, owner)
             %Pass arguments to father constructor
             this@scanObj(acoustoOpticHandle, stagesHandle, owner); 
             
             %Set Strings:
-            this.strings.scan = "Done Scan for (F,S,Q) = (%8.3f, %d, %d)\n";
-            this.strings.timeTable = "F%dS%dQ%d";
+            this.strings.scan = "Done Scan for (F,S) = (%8.3f, %d)\n";
+            this.strings.timeTable = "F%dS%d";
 
             %Init Graphics
-            this.graphics.graphicsNames = consGraphics.getGraphicsNames();
-            this.graphics.obj = consGraphics(); 
-            this.graphics.gReq = consGraphics.createGraphicsRunVars();
+            this.graphics.graphicsNames = consGraphicsNew.getGraphicsNames();
+            this.graphics.obj = consGraphicsNew(); 
+            this.graphics.gReq = consGraphicsNew.createGraphicsRunVars();
             this.graphics.ownerGraphUpdate = true;
             
             %Init Control Vars
@@ -64,14 +64,6 @@ classdef Consistency < scanObj
             this.scan.quantTime   = uVars.quantTime;
             this.scan.useQuant    = uVars.useQuant;
             this.scan.numOfSets   = uVars.numOfSets;
-            
-            if this.scan.useQuant
-                this.scan.numOfQuant   = ceil(this.scan.timeFrames / this.scan.quantTime);
-                this.scan.timeToSample = ones(1, this.scan.numOfFrames) * this.scan.quantTime; 
-            else 
-                this.scan.numOfQuant   = ones(1, this.scan.numOfFrames);
-                this.scan.timeToSample = this.scan.timeFrames;
-            end
         end
         
         function setStagesUserVars(this, uVars) 
@@ -90,14 +82,22 @@ classdef Consistency < scanObj
             this.results.phiFrameStd = zeros(this.scan.zIdxLen, this.scan.numOfFrames);
         end
         
+        function calcQuantNum(this, uVars)
+            for i = 1:length(this.scan.timeFrames)
+                uVars.acoustoOptics.timeToSample = this.scan.timeFrames(i);
+                this.acoustoOptics.obj.setMeasVars(uVars.acoustoOptics)
+                this.scan.numOfQuant(i) = this.acoustoOptics.obj.measVars.algo.samples.numOfQuant;
+            end
+        end
+        
         function startScan(this, uVars)
             this.setUserVars(uVars); % in the consistency space
+            this.calcQuantNum(uVars);
             this.resetTimeTable();
             this.initResultsArrays();
             this.setGraphicsDynamicVars();
             
             if this.owned
-%                 this.owner.updateConsGeneralData(this.scan, this.acoustoOptics.vars.len.zVecUSRes)
                 this.owner.initConsData(this.results, this.scan, this.acoustoOptics.vars.algoVars.len.zVecUSRes)
             end
             this.stages.obj.moveStageAbs(...
@@ -106,85 +106,60 @@ classdef Consistency < scanObj
                                       
             this.curScan = zeros(1,3);
             if this.scan.useQuant
-                this.acoustoOptics.vars.uVars.timeToSample = this.scan.timeToSample(1);
+                this.acoustoOptics.vars.uVars.timeToSample = this.scan.quantTime;
                 setAcoustoOpticsUserVars(this, this.acoustoOptics.vars.uVars);
             end
             
             for i = 1:this.scan.numOfFrames
                 this.printStr(sprintf("------------------Starting a New Time Frame----------------------\n"), true);
                 
-                if ~(this.scan.useQuant)
-                    this.acoustoOptics.vars.uVars.timeToSample = this.scan.timeFrames(i);
-                    setAcoustoOpticsUserVars(this, this.acoustoOptics.vars.uVars); %set & update            
-                end
+                this.acoustoOptics.vars.uVars.timeToSample = this.scan.timeFrames(i);
+                setAcoustoOpticsUserVars(this, this.acoustoOptics.vars.uVars); %set & update            
                 
                 this.curScan(1) = i;
                 for j=1:this.scan.numOfSets
                     this.printStr(sprintf("------------------Starting a New Set----------------------\n"), true);
                     this.curScan(2) =  j;
+                    k = this.scan.numOfQuant(i);
                     
                     this.graphics.obj.setCurrentFrameAndSet(this.curScan(1), this.curScan(2));
                     
-                    for k=1:this.scan.numOfQuant(i)
-                        this.curScan(3) = k;
-                        this.startScanTime('singleQuant');
+                    this.startScanTime('netAcoustoOptics');
+                    res = this.acoustoOptics.obj.measureAndAnlayse();
+                    this.stopScanTime('netAcoustoOptics');
                         
-                        this.startScanTime('netAcoustoOptics');
-                        res = this.acoustoOptics.obj.measureAndAnlayse();
-                        this.stopScanTime('netAcoustoOptics');
-                        
-                        this.startScanTime('copyTime');
-                        this.results.phiCh(:,i,j,k,:)  = permute(gather(res.phiCh), [2,3,4,5,1]);
-                        this.results.phiQuant(:,i,j,k) = gather(res.phi);
-                        this.stopScanTime('copyTime');
-                        
-%                         if (this.scan.useQuant)
-%                             this.shiftSpeckle();
-%                         end
-
-                        this.stopScanTime('singleQuant');
-                        this.storeAcoustoOpricTimeTable();
-                        this.printStr(sprintf(this.strings.scan, this.curScan(1), this.curScan(2), this.curScan(3)), true);
-                        
-                        if this.owned
-                            this.owner.updateConsistencyPhiQuant(this.results.phiQuant, this.curScan);
-                            notify(this.owner, 'updateQuant');
-                            notify(this.owner, 'timeTable');
-                        elseif this.graphics.gReq.validStruct.curSet && this.scan.useQuant
-                            this.graphics.obj.dispCurrentSet('curSet', 1:this.scan.numOfQuant, this.results.phiQuant, [])
-                        end
-                        
-                    end
-                    
-                    this.startScanTime('setMean');
-                    this.results.phiSets(:,i,j)    = mean(this.results.phiQuant(:,i,j,1:this.scan.numOfQuant(i)), 4);
-                    this.results.phiSetsStd(:,i,j) = std(this.results.phiQuant(:,i,j,1:this.scan.numOfQuant(i)), 0, 4);
-                    this.stopScanTime('setMean');
-                    
-                    % Update Plots
+                    this.startScanTime('copyTime');
+                    this.results.phiCh(:,i,j,1:k,:)  = permute(gather(res.phiCh), [3,4,5,6,1,2]);
+                    this.results.phiQuant(:,i,j,1:k) = permute(gather(res.phiQuant), [2,3,4,5,1]);
+                    this.results.phiSets(:,i,j)      = gather(res.phi);
+                    this.results.phiSetsStd(:,i,j)   = gather(res.phiStd);
+                    this.stopScanTime('copyTime');
                     
                     if this.owned
-                    	this.owner.updateConsistencyPhiSet(this.results.phiSets, this.results.phiSetsStd, this.curScan);
-                    	notify(this.owner, 'updateSet');
-                    elseif this.graphics.gReq.validStruct.curFrame
-                        this.graphics.obj.dispCurrentFrame('curFrame', 1:this.scan.numOfSets, this.results.phiSets, this.results.phiSetsStd)
+                        this.owner.updateConsistencyPhiSet(this.results.phiQuant, this.results.phiSets, this.results.phiSetsStd, this.curScan);
+                        notify(this.owner, 'updateSet');
+                        notify(this.owner, 'timeTable');
+                    elseif this.graphics.gReq.validStruct.curSet && this.scan.useQuant
+                        this.graphics.obj.dispCurrentSet(1:this.scan.numOfQuant, this.results.phiQuant, [])
+                        this.graphics.obj.dispCurrentFrame(1:this.scan.numOfSets, this.results.phiSets, this.results.phiSetsStd)
                     end
-
+                    
+                    this.storeAcoustoOpricTimeTable();
+                    this.printStr(sprintf(this.strings.scan, this.curScan(1), this.curScan(2)), true);
+                    
+                    this.saveData(true);
                 end
                 
                 this.startScanTime('frameMean');
                 this.results.phiFrame(:,i)    = mean(this.results.phiSets(:,i,:), 3);
-                this.results.phiFrameStd(:,i) = std(this.results.phiQuant(:,i,:), 0, 3);
+                this.results.phiFrameStd(:,i) = std(this.results.phiSets(:,i,:), 0, 3);
                 this.stopScanTime('frameMean');
-                
-                % UpdatePlots parameters
-%                 this.setGraphicsDynamicVars();
                 
                 if this.owned
                     this.owner.updateConsistencyPhiFrame(this.results.phiFrame, this.results.phiFrameStd, this.curScan);
                     notify(this.owner, 'updateFrame');
                 elseif  this.graphics.gReq.validStruct.allFrames && this.graphics.ownerGraphUpdate
-                    this.graphics.obj.dispTotalFrame('allFrames', this.scan.timeFrames, this.results.phiFrame, this.results.phiFrameStd)
+                    this.graphics.obj.dispTotalFrame( this.scan.timeFrames, this.results.phiFrame, this.results.phiFrameStd)
                 end
                 
                 % release buffers before reconfiguring the digitizer
@@ -196,8 +171,6 @@ classdef Consistency < scanObj
         end
         
         function setGraphicsDynamicVars(this)
-%             curFrame = this.scan.timeFrames(this.curScan(1));
-%             curSet = this.curScan(2);
             
             if this.scan.useQuant
                 this.graphics.obj.setType(this.graphics.graphicsNames{4}, 'errorbar')
@@ -206,12 +179,9 @@ classdef Consistency < scanObj
                 this.graphics.obj.setType(this.graphics.graphicsNames{2}, 'stem')
                 this.graphics.obj.setType(this.graphics.graphicsNames{4}, 'stem')
             end
-            this.graphics.obj.setChAndPos(this.graphics.gReq.ch, this.graphics.gReq.zIdx);
+            this.graphics.obj.setChAndPos(this.graphics.gReq.ch, this.graphics.gReq.zIdx, this.graphics.gReq.quant);
             this.graphics.obj.setTimeFramesAndQuants(this.scan.timeFrames, this.scan.numOfQuant); 
             this.graphics.obj.setCurrentFrameAndSet(1, 1);
-%             this.graphics.obj.setTitleVariables(this.graphics.graphicsNames{1}, {[]});
-%             this.graphics.obj.setTitleVariables(this.graphics.graphicsNames{2}, {[curFrame]});
-%             this.graphics.obj.setTitleVariables(this.graphics.graphicsNames{3}, {[curSet]});
             
             this.graphics.obj.updateGraphicsConstruction()
         end

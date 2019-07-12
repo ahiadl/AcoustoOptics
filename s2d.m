@@ -1,4 +1,4 @@
-classdef scan2d < scanObj
+classdef s2d < scanObj
     %SCAN2D Summary of this class goes here
     %   Detailed explanation goes here
     
@@ -26,27 +26,29 @@ classdef scan2d < scanObj
             uVars.stages.strideY = 0;
             uVars.stages.firstAxis = 'Y';
             
-            uVars.scan.useQuant = false;
-            uVars.scan.speckleTime = 0;
+            this.scan.timeToSample = 0;
+            this.scan.quantTime    = 0;
+            this.scan.useQuant     = false;
+            this.scan.repeats      = 1;
             
-            uVars.gReq = scan2d.createGraphicRequest();
+            uVars.gReq = s2d.createGraphicRequest();
         end
         
         function gReq = createGraphicRequest()
-            gReq = scan2dGraphics.createGraphicsRunVars();
+            gReq = scan2dGraphics2.createGraphicsRunVars();
         end
     end
     
     methods
-        function this = scan2d(acoustoOpticHandle, stagesHandle, owner)
+        function this = s2d(acoustoOpticHandle, stagesHandle, owner)
             this@scanObj(acoustoOpticHandle, stagesHandle, owner);
             
-            this.strings.scan = "Done Scan for (R,X,Y,Q) = (%d, %.2f, %.2f, %d)";
+            this.strings.scan = "Done Scan for (R,X,Y) = (%d, %.2f, %.2f)";
             this.strings.timeTable = "R%dX%.2fY%.2fQ%d";
             
-            this.graphics.graphicsNames = scan2dGraphics.getGraphicsNames();
-            this.graphics.obj           = scan2dGraphics(); 
-            this.graphics.gReq          = scan2dGraphics.createGraphicsRunVars();
+            this.graphics.graphicsNames = scan2dGraphics2.getGraphicsNames();
+            this.graphics.obj           = scan2dGraphics2(); 
+            this.graphics.gReq          = scan2dGraphics2.createGraphicsRunVars();
             this.graphics.ownerGraphUpdate = true;
         end
         
@@ -55,14 +57,7 @@ classdef scan2d < scanObj
             this.scan.quantTime    = uVars.quantTime;
             this.scan.useQuant     = uVars.useQuant;
             this.scan.repeats      = uVars.repeats;
-            
-            if this.scan.useQuant
-                this.scan.numOfQuant   = ceil(this.scan.timeToSample / uVars.quantTime);
-                this.scan.timeToSample = this.scan.quantTime;
-            else 
-                this.scan.numOfQuant   = 1;
-                this.scan.timeToSample = this.scan.timeToSample;
-            end
+            this.scan.numOfQuant   = this.acoustoOptics.vars.algoVars.samples.numOfQuant;
         end
         
         function initResultsArrays(this)
@@ -73,7 +68,7 @@ classdef scan2d < scanObj
             this.results.phi       = zeros(this.stages.vars.xIdxLen, this.stages.vars.yIdxLen, this.scan.zIdxLen);
             this.results.phiStd    = zeros(this.stages.vars.xIdxLen, this.stages.vars.yIdxLen, this.scan.zIdxLen);
             
-            this.curScan = zeros(1,4);
+            this.curScan = zeros(1,3);
         end
             
         function initTimeTable(this)
@@ -95,22 +90,20 @@ classdef scan2d < scanObj
                     this.scan.numOfQuant);
             end
             
-            this.stages.obj.moveStageAbs([this.stages.vars.firstVec(1), this.stages.vars.secondVec(1)]);
+            this.stages.obj.moveStageAbs([this.stages.vars.secondVec(1), this.stages.vars.firstVec(1)]);
             for r = 1:this.scan.repeats
                 this.curScan(1) = r;
                 for i=1:this.stages.vars.secondIdxLen
                     
                     if strcmp(this.stages.vars.firstAxis, 'Y') 
-                        this.graphics.obj.updateCurScan([r,i,1,0])
+                        this.graphics.obj.updateCurScan([r,i,1])
                     elseif strcmp(this.stages.vars.firstAxis, 'X')
-                        this.graphics.obj.updateCurScan([r,1,i,0])
+                        this.graphics.obj.updateCurScan([r,1,i])
                     end
 
                     if this.owned
                         this.owner.updatePhi(this.results.phi, this.results.phiStd);
                         notify(this.owner, 'updatePhiEvent');
-%                         this.graphics.obj.dispCurMainAxisRep(this.results.phi, this.results.phiStd)
-%                         this.graphics.obj.dispCurMainPlainRep(this.results.phi)
                     else
                         if this.graphics.gReq.validStruct.curMainAxis
                             this.graphics.obj.dispCurMainAxisRep(this.results.phi, this.results.phiStd)
@@ -130,59 +123,30 @@ classdef scan2d < scanObj
 
                         this.printStr(sprintf("Scaninng on Position: (%.2f, %.2f)", this.stages.vars.firstVec(j), this.stages.vars.secondVec(i)), true);
                         this.startScanTime('singlePos');
-
-                        for q=1:this.scan.numOfQuant
-                            this.curScan(4) = q;
-                            this.printStr(sprintf("Quant number: %d", q), true);
-                            this.startScanTime('singleQuant');
-
-                            this.startScanTime('netAcoustoOptics');
-                            res = this.acoustoOptics.obj.measureAndAnlayse();
-                            this.stopScanTime('netAcoustoOptics');
-
-                            this.startScanTime('copyTime');
-                            % keep the data in the same arrays axes no matter what is the scan primary scan axis
-                            if strcmp(this.stages.vars.firstAxis, 'Y') 
-                                this.results.phiCh(i,j,:,r,q,:)  = permute(gather(res.phiCh), [3,2,4,5,1]);
-                                this.results.phiQuant(i,j,:,r,q) = gather(res.phi);
-                            elseif strcmp(this.stages.vars.firstAxis, 'X')
-                                this.results.phiCh(j,i,:,r,q,:)  = permute(gather(res.phiCh), [2,3,4,5,1]);
-                                this.results.phiQuant(j,i,:,r,q) = gather(res.phi);
-                            end
-                            this.stopScanTime('copyTime');
-
-%                             if (this.scan.useQuant)
-%                                 this.shiftSpeckle();
-%                             end
-
-                            this.stopScanTime('singleQuant');
-                            this.printStr(sprintf(this.strings.scan, this.curScan), true);
-                            
-                            if strcmp(this.stages.vars.firstAxis, 'Y') 
-                                this.graphics.obj.updateCurScan([r,i,j,q])
-                            elseif strcmp(this.stages.vars.firstAxis, 'X')
-                                this.graphics.obj.updateCurScan([r,j,i,q])
-                            end
-                            
-                        end
-                        this.curScan(4) = 0; % for timetable to succeed
-
-                        this.startScanTime('quantMean');
-                        if strcmp(this.stages.vars.firstAxis, 'Y')
-                            this.results.phiRep(i,j,:,r) = mean(this.results.phiQuant(i,j,:,r,:), 5);
-                            this.results.phiRepStd(i,j,:,r) = std(this.results.phiQuant(i,j,:,r,:), 0, 5);
+                        
+                        this.startScanTime('netAcoustoOptics');
+                        res = this.acoustoOptics.obj.measureAndAnlayse();
+                        this.stopScanTime('netAcoustoOptics');
+                        
+                        this.startScanTime('copyTime');
+                        % keep the data in the same arrays axes no matter what is the scan primary scan axis
+                        if strcmp(this.stages.vars.firstAxis, 'Y') 
+                            this.results.phiCh(i,j,:,r,:,:)  = permute(gather(res.phiCh),    [4, 5, 3, 6, 1, 2]);
+                            this.results.phiQuant(i,j,:,r,:) = permute(gather(res.phiQuant), [3, 4, 2, 5, 1]);
+                            this.results.phiRep(i,j,:,r)     = permute(gather(res.phi),      [1, 3, 2, 4]);
+                            this.results.phiRepStd(i,j,:,r)  = permute(gather(res.phiStd),   [1, 3, 2, 4]);
                         elseif strcmp(this.stages.vars.firstAxis, 'X')
-                            this.results.phiRep(j,i,:,r) = mean(this.results.phiQuant(j,i,:,r,:), 5);
-                            this.results.phiRepStd(j,i,:,r) = std(this.results.phiQuant(j,i,:,r,:), 0, 5);
+                            this.results.phiCh(j,i,:,r,q,:)  = permute(gather(res.phiCh),    [4, 5, 3, 6, 1, 2]);
+                            this.results.phiQuant(j,i,:,r,q) = permute(gather(res.phiQuant), [3, 4, 2, 5, 1]);
+                            this.results.phiRep(j,i,:,r)     = permute(gather(res.phi),      [1, 3, 2, 4]);
+                            this.results.phiRepStd(j,i,:,r)  = permute(gather(res.phiStd),   [1, 3, 2, 4]);
                         end
-                        this.stopScanTime('quantMean');
+                        this.stopScanTime('copyTime');
                         
                         if this.owned
                             this.owner.updatePhiRep(this.results.phiRep, this.results.phiRepStd, this.curScan);
                             notify(this.owner, 'updatePhiRepEvent');
                             notify(this.owner, 'timeTable');
-%                             this.graphics.obj.dispCurMainAxis(this.results.phiRep, this.results.phiRepStd)
-%                             this.graphics.obj.dispCurMainPlain(this.results.phiRep)
                         else
                             if this.graphics.gReq.validStruct.curMainAxis
                                 this.graphics.obj.dispCurMainAxis(this.results.phiRep, this.results.phiRepStd)
@@ -210,7 +174,6 @@ classdef scan2d < scanObj
                 if this.owned
                     this.owner.updatePhi(this.results.phi, this.results.phiStd);
                     notify(this.owner, 'updatePhiEvent');
-%                     this.graphics.obj.dispCurMainAxisRep(this.results.phi, this.results.phiStd)
                 elseif this.graphics.gReq.validStruct.curMainAxis
                     this.graphics.obj.dispCurMainAxisRep(this.results.phi, this.results.phiStd)
                 end
@@ -219,7 +182,6 @@ classdef scan2d < scanObj
             if this.owned
                 this.owner.updatePhi(this.results.phi, this.results.phiStd);
                 notify(this.owner, 'updatePhiEvent');
-%                 this.graphics.obj.dispCurMainAxisRep(this.results.phi, this.results.phiStd)
             elseif this.graphics.gReq.validStruct.curMainAxis
                 this.graphics.obj.dispCurMainAxisRep(this.results.phi, this.results.phiStd)
             end

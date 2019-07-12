@@ -8,15 +8,23 @@ classdef stages < handle
         devices
     
         vars
+        
+        connected
     end
     
     methods
         function this = stages(port)
             this.vars.port = port;
+            this.connected = false;
         end
         
         function connect(this)
-            [this.vars.ZaberPort, this.devices, this.vars.stepSize] = Zaber_Start(this.vars.port);
+%             if this.connected
+%                 fprintf("Stages are already connected.\n");
+%             else
+                [this.vars.ZaberPort, this.devices, this.vars.stepSize] = Zaber_Start(this.vars.port);
+                this.connected = true;
+%             end
         end
         
         function moveStageRel(this, Range)

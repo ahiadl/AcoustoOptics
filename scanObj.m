@@ -7,30 +7,47 @@ classdef scanObj < handle
         stages    
         laserCtrl
         owner
-
+        owned
+        
         results
         timeTable
         
         scan
-        curPos      
+        curPos
+        curScan
         fileSystem
         
         strings
-        plotReq
         graphics
     end
     
     methods
         
-        function this = scanObj(owner)
+        function this = scanObj(acoustoOpticHandle, stagesHandle, owner)
             printStr(this, "----Creating Scan Object----", true);
+            
             printStr(this, "1. Acousto Optics Object", true);
-            this.acoustoOptics.obj = acoustoOptics();
+            if ~isempty(acoustoOpticHandle)
+                this.acoustoOptics.obj = acoustoOpticHandle;
+                this.acoustoOptics.intExt = 'ext';
+            else
+                this.acoustoOptics.obj = acoustoOptics();
+                this.acoustoOptics.intExt = 'int';
+            end
+            
             printStr(this, "2. Stages Object", true);
-            this.stages.obj = stages('COM3');
-            if nargin == 1
+            if ~isempty(stagesHandle)
+                this.stages.obj = stagesHandle;
+                this.stages.intExt = 'ext';
+            else
+                this.stages.obj = stages('COM3');
+                this.stages.intExt = 'int';
+            end
+            
+            this.owned = false;
+            if ~isempty(owner)
                 this.owner = owner;
-                this.owned = 1;
+                this.owned = true;
             end
         end
         
@@ -39,25 +56,32 @@ classdef scanObj < handle
             printStr(this, "1. Connecting to Acousto Optics Peripherals", true);
             this.acoustoOptics.obj.init();
             printStr(this, "2. Connecting to Arduino uController", true);
-            this.laserCtrl.Device = arduino('COM7', 'Uno');
-            this.laserCtrl.ch = 'D3';
+%             this.laserCtrl.Device = arduino('COM7', 'Uno');
+%             this.laserCtrl.ch = 'D3';
             printStr(this, "3. Connecting to Stages", true);
             this.stages.obj.connect();
         end
         
         function setUserVars (this, uVars)
             this.setFileSystemUserVars(uVars.fileSystem);
-            this.setScanUserVars(uVars.scan);
             this.setAcoustoOpticsUserVars(uVars.acoustoOptics);
+            this.setScanUserVars(uVars.scan);
             this.setStagesUserVars(uVars.stages);
             this.updateGeneralScanVars();
+            this.setGReq(uVars.gReq);
+%             this.setGraphicsDynamicVars();
+        end
+        
+        function setGReq(this, gReq)
+            this.graphics.gReq = gReq;
+            this.graphics.obj.setGlobalReq(gReq);
         end
         
         function setAcoustoOpticsUserVars(this, uVars)
             this.acoustoOptics.vars.uVars = uVars;
-            this.acoustoOptics.vars.uVars.algo.timeToSample = this.scan.timeToSample(1);
-            this.acoustoOptics.obj.updateUserVars(this.acoustoOptics.vars.uVars);
+            this.acoustoOptics.obj.setMeasVars(this.acoustoOptics.vars.uVars);
             this.acoustoOptics.vars.algoVars = this.acoustoOptics.obj.getAlgoVars();
+            this.acoustoOptics.obj.configPeripherals();
         end
         
         function setScanUserVars(this, uVars)
@@ -71,7 +95,7 @@ classdef scanObj < handle
         end
         
         function updateGeneralScanVars(this)
-            this.scan.channels = this.acoustoOptics.vars.uVars.digitizer.channels;
+            this.scan.channels = this.acoustoOptics.vars.uVars.channels;
             this.scan.zIdx     = this.acoustoOptics.vars.algoVars.len.zIdx; 
             this.scan.zIdxLen  = this.acoustoOptics.vars.algoVars.len.zIdxLen;
         end 
@@ -79,7 +103,9 @@ classdef scanObj < handle
         function vars = getVars(this)
 %            vars.timeTable = this.timeTable;
            vars.acoustoOptics = this.acoustoOptics.vars;
+           vars.acoustoOptics.uVars.gReq = [];
            vars.stages = this.stages.vars;
+           vars.scan = this.scan;
         end
         
         function results = readResults(this)
@@ -110,7 +136,7 @@ classdef scanObj < handle
 
         function setFileSystemUserVars(this, uVars)
             this.fileSystem = uVars;
-            saveData = uVars.saveFullData || uVars.saveReducedData || saveFigs || saveResults;
+            saveData = uVars.saveFullData || uVars.saveReducedData || uVars.saveFigs || uVars.saveResults;
             if saveData
                 dateStr = strrep(['Results-',datestr(datetime('now'))], ':', '-');
                 this.fileSystem.resDir = [this.fileSystem.resDirPath, '\', dateStr,'-',this.fileSystem.scanName];
@@ -123,15 +149,26 @@ classdef scanObj < handle
             this.turnLogFileOn()
         end
         
-        function saveData(this, res)
-            saveData = uVars.saveFullData || uVars.saveReducedData || saveFigs;
+        
+        function saveReducedVars(this, name)
+            curVars = this.getVars();
+            curVars.acoustoOptics.algoVars.timing.tSigVec = [];
+            curVars.acoustoOptics.algoVars.timing.tMeasVec = [];
+            curVars.acoustoOptics.algoVars.timing.tAcqVec = [];
+            curVars.acoustoOptics.algoVars.timing.tQuantVec = [];
+            curVars.acoustoOptics.algoVars.timing.tPosVec = [];
+            save([this.fileSystem.rawDataDir, '\', name(1:end-1)], 'curVars', '-v7.3');
+        end
+        
+        function saveData(this, saveReducedVars)
+            saveData = this.fileSystem.saveFullData || this.fileSystem.saveReducedData || this.fileSystem.saveFigs;
             if saveData
                 startScanTime(this, 'saveData');
-                rawDataName = printStr('F%.2f-S=%d-Q%d-rawData.mat', this.curScanPos(1), this.curScanPos(2), this.curScanPos(3));
-                varsName = printStr('F%.2f-S=%d-Q%d-vars.mat', this.curScanPos(1), this.curScanPos(2), this.curScanPos(3));
+                rawDataName = sprintf("F%.2fS%d-rawData.mat", this.scan.timeFrames(this.curScan(1)), this.curScan(2)); 
+                varsName    = sprintf("F%.2fS%d-vars.mat", this.scan.timeFrames(this.curScan(1)), this.curScan(2));
                 if this.fileSystem.saveFullData
-                    save([this.fileSystem.rawDataDir, '\' , rawDataName],  'res', '-v7.3');
-                    this.saveVars(varsName)
+                    res = this.acoustoOptics.obj.rawData;
+                    save([this.fileSystem.rawDataDir, '\' , rawDataName(1:end-1)],  'res', '-v7.3');
                 elseif this.fileSystem.saveReducedData
                     for i = 1:length(this.fileSystem.fieldsToSave)
                         if reducedSaveMask(i)
@@ -143,14 +180,18 @@ classdef scanObj < handle
                     this.saveVars(varsName)
                     stopScanTime(this, 'saveData');
                 end
+                if saveReducedVars
+                    this.saveReducedVars(varsName)
+                end
                 stopScanTime(this, 'saveData');  
             end
         end
         
         function saveResults(this)
-            if uVars.saveResults
-                this.saveVars()
-                save([this.fileSystem.resDir, '\Results.mat'], 'this.results', '-v7.3');
+            if this.fileSystem.saveResults
+                res = this.results;
+                this.saveVars([this.fileSystem.resDir, '\Vars.mat'])
+                save([this.fileSystem.resDir, '\Results.mat'], 'res', '-v7.3');
                 this.turnLogFileOff();  
             end   
         end
@@ -161,7 +202,7 @@ classdef scanObj < handle
         end
         
         function turnLogFileOn(this)
-            diary([this.fileSystem.resDir, '\log.txt'])
+            diary([this.fileSystem.resDirPath, '\log.txt'])
             diary on
         end
         
@@ -170,7 +211,7 @@ classdef scanObj < handle
         end
         
         function totStr = printStr(this, str, dispStr)
-            totStr = sprintf('%s: %s\n', datestr(datetime('now'), 'HH:MM:SS.FFF'), str);
+            totStr = sprintf('%s-%s\n', datestr(datetime('now'), 'HH:MM:SS.FFF'), str);
             if dispStr
                 fprintf(totStr)
             end
@@ -191,29 +232,47 @@ classdef scanObj < handle
         end
 
         function  startScanTime(this, str)
-            meas = sprintf(this.strings.timeTable, this.curScan(1), this.curScan(2), this.curScan(3));
+            meas = sprintf(this.strings.timeTable, this.curScan);
             meas = strrep(meas, '.' , '');
             this.timeTable.scan.(meas).(str) = tic;
         end
         
         function  stopScanTime(this, str)
-            meas = sprintf(this.strings.timeTable, this.curScan(1), this.curScan(2), this.curScan(3));
+            meas = sprintf(this.strings.timeTable, this.curScan);
             meas = strrep(meas, '.' , '');
             this.timeTable.scan.(meas).(str) = toc(this.timeTable.scan.(meas).(str));
         end
         
         function storeAcoustoOpricTimeTable(this)
-            meas = sprintf(this.strings.timeTable, this.curScan(1), this.curScan(2), this.curScan(3));
+            meas = sprintf(this.strings.timeTable, this.curScan);
             meas = strrep(meas, '.' , '');
             tmp = this.acoustoOptics.obj.getTimeTable();
             this.timeTable.scan.(meas).algo = tmp.algo;
             this.timeTable.scan.(meas).digitizer = tmp.digitizer;
             this.timeTable.scan.(meas).acq = tmp.acq;
-            this.timeTable
         end
                
         function timeTable = getTimeTable(this)
            timeTable = this.timeTable;
+        end
+        
+        function gH = getGraphicsHandle(this)
+           gH = this.graphics.obj; 
+        end
+        
+        function setOwnerObjectGraphicsUpdate(this)
+            % sets the owner object to update the graphics - performance
+            % considerations
+            this.ownerGraphUpdate = true;
+        end
+        
+        function setExtOwnerGraphicsUpdate(this)
+            % sets the object to update the graphics (instead of owner)
+            this.ownerGraphUpdate = false;
+        end
+        
+        function restartStages(this)
+           this.stages.obj.connect(); 
         end
 
     end

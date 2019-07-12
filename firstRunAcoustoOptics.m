@@ -6,6 +6,7 @@ clc;
 
 uVars = acoustoOptics.uVarsCreate();
 
+uVars.c                 = 1500;
 uVars.fSin              = 1.25e6;              
 uVars.fTrain            = 19e3;
 uVars.cycInPulse        = 4; 
@@ -47,7 +48,7 @@ acoustoOptics.fullMeasureAndAnalyse(uVars);
 
 timeTable = acoustoOptics.getTimeTable();
 
-acoustoOptics.fGen.disableAllOutputs()
+% acoustoOptics.fGen.disableAllOutputs()
 % clear acoustoOptics
 
 

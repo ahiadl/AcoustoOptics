@@ -1,4 +1,4 @@
-classdef Algo < handle
+classdef AlgoNew < handle
     %ALGO Summary of this class goes here
     %   Detailed explanation goes here
     
@@ -46,25 +46,28 @@ classdef Algo < handle
             uVars.fSclk             = [];
             uVars.timeToSample      = [];
             uVars.extClkDcyc        = []; % [%]
+            uVars.quantTime         = [];
+            uVars.useQuant          = false;
             uVars.fastAnalysis      = false;
             uVars.useGPU            = false;
             uVars.exportRawData     = true;
+            uVars.useHadamard       = false;
             uVars.gReq              = Algo.createGraphicRequest();
         end
        
         function gReq = createGraphicRequest()
-            gReq = algoGraphics.createGraphicsRunVars();
+            gReq = algoGraphics.createGraphicsRunVars(Algo.getGraphicsNames());
         end
         
     end
     
     methods
-        function this = Algo()
+        function this = AlgoNew()
             this.initTimeTable();
             
             this.graphics.graphicsNames = this.getGraphicsNames();
             this.graphics.obj  = algoGraphics(this.graphics.graphicsNames);
-            this.graphics.gReq = algoGraphics.createGraphicsRunVars(this.graphics.graphicsNames);
+            this.graphics.gReq = algoGraphics.createGraphicsRunVars();
             this.graphics.obj.setGraphicsStaticVars();
             
             this.tryNew = false;
@@ -73,6 +76,8 @@ classdef Algo < handle
         function initTimeTable(this)
             this.timeTable.copyFullRawData   = 0;
 
+            this.timeTable.reshapeQuant      = 0;
+            this.timeTable.permuteQuant      = 0;
             this.timeTable.Reshape1          = 0;
             this.timeTable.Reshape2          = 0;
             this.timeTable.permuteReshape    = 0;
@@ -112,9 +117,12 @@ classdef Algo < handle
            this.uVars.fSclk             = user.fSclk;
            this.uVars.fExtClk           = user.fExtClk; %raw fs
            this.uVars.extClkDcyc        = user.extClkDcyc;
+           this.uVars.useQuant          = user.useQuant;
+           this.uVars.quantTime         = user.quantTime;
            this.uVars.fastAnalysis      = user.fastAnalysis;
            this.uVars.useGPU            = user.useGPU;
            this.uVars.exportRawData     = user.exportRawData;
+           this.uVars.useHadamard       = user.useHadamard;
            % tmp - in order to check new reshape algorith, performance
            this.tryNew = false;
            
@@ -122,7 +130,7 @@ classdef Algo < handle
            
            this.graphics.gReq = user.gReq;
            this.graphics.obj.setGlobalReq(user.gReq);
-           this.setGraphicsDynamicVars()
+           this.setGraphicsDynamicVars();
            
         end
         
@@ -145,9 +153,9 @@ classdef Algo < handle
             this.reshapedData = [];
             if ~this.tryNew
                 if this.uVars.useGPU
-                    this.reshapedData = gpuArray(single(zeros(this.digitizer.channels, this.samples.samplesPerPos, this.samples.numOfPos)));
+                    this.reshapedData = gpuArray(single(zeros(this.samples.numOfQuant, this.digitizer.channels, this.samples.samplesPerPos, this.samples.numOfPos)));
                 else
-                    this.reshapedData = zeros(this.digitizer.channels, this.samples.samplesPerPos, this.samples.numOfPos);
+                    this.reshapedData = zeros(this.samples.numOfQuant, this.digitizer.channels, this.samples.samplesPerPos, this.samples.numOfPos);
                 end
             end
         end
@@ -209,27 +217,39 @@ classdef Algo < handle
         end
         
         function calcSamples(this)
-            this.samples.samplesPerSin         = this.digitizer.fs / this.usSignal.fSin;
-            this.samples.samplesPerPulse       = this.samples.samplesPerSin * this.usSignal.cycInPulse;
-            this.samples.samplesPerTrain       = this.digitizer.fs / this.usSignal.fTrain;
-            this.samples.numOfTrains           = ceil(this.uVars.timeToSample * this.usSignal.fTrain);
-            this.samples.prePhantomSamples     = ceil( (this.geometry.distFromPhantom / this.geometry.c) * this.digitizer.fs );
-            this.samples.samplesPerSignal      = this.samples.samplesPerTrain * this.samples.numOfTrains;
-            this.samples.samplesPerMeas        = this.uVars.preTriggerSamples + this.samples.prePhantomSamples + this.samples.samplesPerSignal;
-            this.samples.samplesPerSignalAllCh = this.samples.samplesPerSignal * this.uVars.channels;
-            this.samples.samplesPerMeasAllCh   = this.samples.samplesPerMeas   * this.uVars.channels;
-
-            this.samples.samplesPerPos   = this.samples.samplesPerPulse * this.samples.numOfTrains;
-            this.samples.numOfPos        = this.samples.samplesPerTrain / this.samples.samplesPerPulse;
-            this.samples.samplesPerZAxis = this.samples.numOfPos * this.samples.samplesPerPulse;  
+                if ~this.uVars.useQuant
+                    this.uVars.quantTime = this.uVars.timeToSample;
+                end
+            
+                this.samples.samplesPerSin         = this.digitizer.fs / this.usSignal.fSin;
+                this.samples.samplesPerPulse       = this.samples.samplesPerSin * this.usSignal.cycInPulse;
+                this.samples.samplesPerTrain       = this.digitizer.fs / this.usSignal.fTrain;
+                
+                this.samples.numOfTrains     = ceil(this.uVars.timeToSample * this.usSignal.fTrain);
+                this.samples.trainsPerQuant  = ceil(this.uVars.quantTime *this.usSignal.fTrain);
+                this.samples.numOfTrains     = ceil(this.samples.numOfTrains/this.samples.trainsPerQuant)*this.samples.trainsPerQuant;
+                this.samples.numOfQuant      = this.samples.numOfTrains / this.samples.trainsPerQuant;
+                
+                this.samples.samplesPerQuant       = this.samples.trainsPerQuant*this.samples.samplesPerTrain;
+                this.samples.samplesPerPos         = this.samples.samplesPerPulse * this.samples.trainsPerQuant;
+                this.samples.prePhantomSamples     = ceil( (this.geometry.distFromPhantom / this.geometry.c) * this.digitizer.fs );
+                this.samples.samplesPerSignal      = this.samples.samplesPerTrain * this.samples.numOfTrains;
+                this.samples.samplesPerMeas        = this.uVars.preTriggerSamples + this.samples.prePhantomSamples + this.samples.samplesPerSignal;
+                this.samples.samplesPerSignalAllCh = this.samples.samplesPerSignal * this.uVars.channels;
+                this.samples.samplesPerMeasAllCh   = this.samples.samplesPerMeas   * this.uVars.channels;
+            
+                this.samples.numOfPos        = this.samples.samplesPerTrain / this.samples.samplesPerPulse;
+                this.samples.samplesPerZAxis = this.samples.numOfPos * this.samples.samplesPerPulse;
         end
         
         function calcTiming(this)
             this.timing.tSin  = 1/this.usSignal.fSin;                         %[s], duration of one period of the sin
             this.timing.tPulse = this.usSignal.cycInPulse * this.timing.tSin; %[s], duration of the pulse
             this.timing.tTrain = 1/this.usSignal.fTrain;                       %[s], duration of one period of the train
+            
             this.timing.dts    = 1/this.digitizer.fs;                          %[s], duration of a single sample
-
+            
+            this.timing.tQuant            = this.samples.samplesPerQuant*this.timing.dts;
             this.timing.timeOfSample      = this.timing.dts*this.samples.samplesPerSignal; %  should it be samplesPerSignal -1?
             this.timing.actualSampledTime = this.digitizer.samplesPerAcq * this.timing.dts;
             
@@ -239,6 +259,7 @@ classdef Algo < handle
             this.timing.tMeasVec   = (0:1:this.samples.samplesPerMeas   - 1)*this.timing.dts;
             this.timing.tPosVec    = (0:1:this.samples.samplesPerPos    - 1)*this.timing.dts;
             this.timing.tAcqVec    = (0:1:this.digitizer.samplesPerAcq  - 1)*this.timing.dts;
+            this.timing.tQuantVec  = (0:1:this.samples.samplesPerQuant  - 1)*this.timing.dts;
         end
         
         function calcDigitizerParams(this)
@@ -260,7 +281,7 @@ classdef Algo < handle
             this.len.pulseLen = this.geometry.c*this.timing.tPulse;
             this.len.zRes     = this.len.pulseLen; 
             this.len.trainLen = this.geometry.c*this.timing.tTrain;
-
+            
             this.len.zLen =  this.samples.samplesPerZAxis * this.len.dzs; 
             this.len.zVec = (0:1:(this.samples.samplesPerZAxis-1))*this.len.dzs;
             this.len.zVecUSRes = (0:1:(this.samples.numOfPos-1)) * this.len.zRes;
@@ -327,12 +348,14 @@ classdef Algo < handle
             this.timeTable.OverallReshape = tic;
             this.reshapeSignal();
             this.timeTable.OverallReshape = toc(this.timeTable.OverallReshape);
-            
+
             this.timeTable.SignalProcessing = tic;
             this.signalProcessing();
             this.timeTable.SignalProcessing = toc(this.timeTable.SignalProcessing);
-            
-            res = this.res; %all data in res is CPU
+
+            res = this.res;
+
+             %all data in res is CPU
             this.data = [];
             this.timeTable.FullAnalysis = toc(this.timeTable.FullAnalysis);
             
@@ -381,25 +404,41 @@ classdef Algo < handle
         function reshapeSignal(this)
            % signal(input)  - [ch x samplesPerSignal]
            % signal(output) - [ch x samplesPerPos x numOfPos]
-            if this.tryNew
-                this.timeTable.Reshape1 = tic;
+%             this.tryNew = false;
+%             if this.tryNew
+                % Separate into Quants
+                this.timeTable.ReshapeQuant = tic;
                 this.data = reshape(this.data, this.digitizer.channels,...
-                                                        this.samples.samplesPerPulse,...
-                                                        this.samples.numOfTrains * this.samples.numOfPos);
+                                               this.samples.samplesPerQuant, ...
+                                               this.samples.numOfQuant);
+                this.timeTable.ReshapeQuant = toc(this.timeTable.ReshapeQuant);
+                
+                %Bring quant-dim to be first (averaging convinient)
+                this.timeTable.permuteQuant = tic;
+                this.data = permute(this.data, [3,1,2]);
+                this.timeTable.permuteQuant = toc(this.timeTable.permuteQuant);
+                
+                this.timeTable.Reshape1 = tic;
+                this.data = reshape(this.data, this.samples.numOfQuant,...
+                                               this.digitizer.channels,...
+                                               this.samples.samplesPerPulse,...
+                                               this.samples.trainsPerQuant * this.samples.numOfPos);
                 this.timeTable.Reshape1 = toc(this.timeTable.Reshape1);
                 
                 this.timeTable.Reshape2 = tic;
-                this.data = reshape(this.data, this.digitizer.channels,... 
+                this.data = reshape(this.data, this.samples.numOfQuant,...
+                                               this.digitizer.channels,... 
                                                this.samples.samplesPerPulse,...
-                                               this.samples.numOfPos,this.samples.numOfTrains);
+                                               this.samples.numOfPos,this.samples.trainsPerQuant);
                 this.timeTable.Reshape2 = toc(this.timeTable.Reshape2); 
                 
                 this.timeTable.permuteReshape = tic;
-                this.data = permute(this.data, [1,2,4,3]);
+                this.data = permute(this.data, [1,2,3,5,4]);
                 this.timeTable.permuteReshape = toc(this.timeTable.permuteReshape); 
                 
                 this.timeTable.Reshape3 = tic;
-                this.data = reshape(this.data, this.digitizer.channels,...
+                this.data = reshape(this.data, this.samples.numOfQuant,...
+                                               this.digitizer.channels,...
                                                this.samples.samplesPerPos,...
                                                this.samples.numOfPos);
                 this.timeTable.Reshape3 = toc(this.timeTable.Reshape3);                           
@@ -414,66 +453,68 @@ classdef Algo < handle
                     this.graphics.obj.plotReshapedSignal('reshapedSignal', this.timing.tPosVec*1e6, this.data);
                 end
 
-            else
-                
-                this.timeTable.Reshape1 = tic;
-                this.data = reshape(this.data, this.digitizer.channels,...
-                                                  this.samples.samplesPerTrain,...
-                                                  this.samples.numOfTrains);
-                this.timeTable.Reshape1 = toc(this.timeTable.Reshape1);
-
-                this.timeTable.Reshape2 = tic;
-
-                for i=1:this.samples.numOfPos
-                    this.reshapedData(:,:,i) = reshape(this.data(:, ((i-1)*this.samples.samplesPerPulse+1) : (i*this.samples.samplesPerPulse), :),...
-                                 this.digitizer.channels,...
-                                 this.samples.samplesPerPos,...
-                                 1);
-                end
-            
-                this.timeTable.Reshape2 = toc(this.timeTable.Reshape2);
-                this.data = this.reshapedData;
-                
-                if this.uVars.exportRawData 
-                    this.timeTable.copyReshaped = tic;
-                    this.res.reshapedSignal = gather(this.reshapedData);
-                    this.timeTable.copyReshaped = toc(this.timeTable.copyReshaped);
-                end
-                
-                if this.graphics.gReq.validStruct.reshapedSignal
-                    this.graphics.obj.plotReshapedSignal('reshapedSignal', this.timing.tPosVec*1e6, this.reshapedData);
-                end
-            end
-
-%             if this.uVars.exportRawData 
-%                 this.timeTable.copyReshaped = tic;
-%                 this.res.reshapedSignal = gather(this.reshapedData);
-%                 this.timeTable.copyReshaped = toc(this.timeTable.copyReshaped);
-%             end
-
-%             if this.graphics.gReq.validStruct.reshapedSignal
-%                 this.graphics.obj.plotSelectedSignals('reshapedSignal', this.timing.tPosVec*1e6, this.reshapedData);
-%             end
-            
+%             else
+%                 %separate quants
+%                 this.timeTable.ReshapeQuant = tic;
+%                 this.data = reshape(this.data, this.digitizer.channels,...
+%                                                   this.samples.samplesPerQuant,...
+%                                                   this.samples.numOfQuant);
+%                 this.timeTable.ReshapeQuant = toc(this.timeTable.ReshapeQuant);
+%                 
+%                 %Bring quant-dim to be first (averaging convinient)
+%                 this.timeTable.permuteQuant = tic;
+%                 this.data = permute(this.data, [3,1,2]);
+%                 this.timeTable.permuteQuant = toc(this.timeTable.permuteQuant);
+%                 
+%                 %separate trains
+%                 this.timeTable.Reshape1 = tic;
+%                 this.data = reshape(this.data, this.samples.numOfQuant,...
+%                                                this.digitizer.channels,...
+%                                                this.samples.samplesPerTrain,...
+%                                                this.samples.trainsPerQuant);
+%                 this.timeTable.Reshape1 = toc(this.timeTable.Reshape1);
+% 
+%                 this.timeTable.Reshape2 = tic;
+%                 for i=1:this.samples.numOfPos
+%                     this.reshapedData(:,:,:,i) = reshape(this.data(:, :, ((i-1)*this.samples.samplesPerPulse+1) : (i*this.samples.samplesPerPulse), :),...
+%                                  this.samples.numOfQuant,...
+%                                  this.digitizer.channels,...
+%                                  this.samples.samplesPerPos,...
+%                                  1);
+%                 end
+%                 this.timeTable.Reshape2 = toc(this.timeTable.Reshape2);
+%                 
+%                 this.data = this.reshapedData;
+%                 
+%                 if this.uVars.exportRawData 
+%                     this.timeTable.copyReshaped = tic;
+%                     this.res.reshapedSignal = gather(this.reshapedData);
+%                     this.timeTable.copyReshaped = toc(this.timeTable.copyReshaped);
+%                 end
+%                 
+%                 if this.graphics.gReq.validStruct.reshapedSignal
+%                     this.graphics.obj.plotReshapedSignal('reshapedSignal', this.timing.tPosVec*1e6, this.reshapedData);
+%                 end
+%             end        
         end
         
         function signalProcessing(this)
-            % signal(input)  - [ch x samplesPerPos x numOfPos]
-            % fftRes(output) - [ch x samplesPerPos x numOfPos]
-            % phiCh(output)  - [ch x numOfPos] 
-            % phi(output)    - [numOfPos x 1]
+            % signal(input)  - [quants x ch x samplesPerPos x numOfPos]
+            % fftRes(output) - [quants x ch x samplesPerPos x numOfPos]
+            % phiCh(output)  - [quants x ch x numOfPos] 
+            % phi(output)    - [quants x numOfPos]
             
             if this.uVars.fastAnalysis
                this.timeTable.totalFastAnalysis = tic; 
                 for i=1:this.samples.numOfPos
                     a = tic;
-                    this.res.phiCh(:,i) = (2./this.samples.samplesPerPos) * abs(this.data(:,:,i) * this.Wn);
+                    this.res.phiCh(:,:,i) = (2./this.samples.samplesPerPos) * abs(this.data(:,:,:,i) * this.Wn);
                     this.timeTable.fastAnalysis(i) = toc(a);
                 end
                 this.timeTable.totalFastAnalysis = toc(this.timeTable.totalFastAnalysis);
             else
                 this.timeTable.FFT = tic;
-                this.data = (2./this.samples.samplesPerPos) * fft(cast(this.data, 'single'),[],2);
+                this.data = (2./this.samples.samplesPerPos) * fft(cast(this.data, 'single'),[],3); %casting is not needed, already single
                 this.timeTable.FFT = toc(this.timeTable.FFT); 
 
                 if this.uVars.exportRawData
@@ -485,15 +526,15 @@ classdef Algo < handle
                 this.timeTable.PowerSpectrunm = tic;
 
                 this.timeTable.extractFreq = tic;
-                this.res.phiCh = this.data(:,this.freq.fSinIdx,:);
+                this.res.phiCh = this.data(:,:,this.freq.fSinIdx,:);
                 this.timeTable.extractFreq = toc(this.timeTable.extractFreq);
 
                 this.timeTable.squeeze = tic;
-                this.res.phiCh = squeeze(this.res.phiCh);
+                this.res.phiCh = permute(this.res.phiCh, [1,2,4,3]);
                 this.timeTable.squeeze = toc(this.timeTable.squeeze);
                 
                 this.timeTable.absolute = tic;
-                this.res.phiCh = abs(this.res.phiCh);
+                this.res.phiCh = abs(this.res.phiCh); %TODO: square?
                 this.timeTable.absolute = toc(this.timeTable.absolute);
 
                 this.timeTable.PowerSpectrunm = toc(this.timeTable.PowerSpectrunm);
@@ -505,9 +546,14 @@ classdef Algo < handle
             end
 
             this.timeTable.ChAvg = tic;
-            this.res.phi = permute(mean(this.res.phiCh,1), [2,1]);    
+            this.res.phiQuant = permute(mean(this.res.phiCh,2), [1,3,2]);    
             this.timeTable.ChAvg = toc(this.timeTable.ChAvg);   
-
+            
+            this.timeTable.QuantAvg = tic;
+            this.res.phi    = squeeze(mean(this.res.phiQuant,1));
+            this.res.phiStd = squeeze(std(this.res.phiQuant, 0 ,1)); 
+            this.timeTable.QuantAvg = toc(this.timeTable.QuantAvg);
+      
             if this.graphics.gReq.validStruct.phiCh
                 this.graphics.obj.plotPhiCh('phiCh', this.len.zVecUSRes*1e3, this.res.phiCh) 
             end
@@ -537,7 +583,7 @@ classdef Algo < handle
         end
         
         function setGraphicsDynamicVars(this)
-            this.graphics.obj.setChAndPos(this.graphics.gReq.ch, this.graphics.gReq.zIdx)
+            this.graphics.obj.setChAndPos(this.graphics.gReq.ch, this.graphics.gReq.zIdx, this.graphics.gReq.quant)
             
             z = this.len.zVecUSRes(this.graphics.gReq.ch)*1e3;
             ch = this.digitizer.channels;
@@ -561,6 +607,11 @@ classdef Algo < handle
             this.graphics.obj.setLimits(this.graphics.graphicsNames{7}, (fSin + fSin*[-0.001, 0.001])*1e-6, []);
             
             this.graphics.obj.updateGraphicsConstruction()
+            if this.uVars.useQuant
+                this.graphics.obj.setType(this.graphics.graphicsNames{9}, 'errorBar');
+            else
+                this.graphics.obj.setType(this.graphics.graphicsNames{9}, 'stem');
+            end
         end
         
         function setRawData (this, rawData)

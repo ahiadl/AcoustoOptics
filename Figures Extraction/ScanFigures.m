@@ -2,16 +2,15 @@ close all;
 clear all;
 clc;
 
-wSpeckleShift = load ('C:\Users\sahiadl.EED\OneDrive - Technion\Masters\AcoustoOpticSystem\Code\Measurements\Results-20-Feb-2019 16-33-08-Scan-SpeckleShifting-WideArea\paramsAndTotalResults.mat');
+twoSec = load ('D:\Results\Results-11-Jun-2019 13-04-11-Scan-100mW-500Hz-20VPV-0.5mm\paramsAndTotalResults.mat');
 
 % User parameters:
 
-noSpeckleShift = load('C:\Users\sahiadl.EED\OneDrive - Technion\Masters\AcoustoOpticSystem\Code\Results\Results-17-Feb-2019 16-05-20.mat');
+fourSec = load('D:\Results\Results-11-Jun-2019 15-38-22-Scan-100mW-500Hz-20VpV-0.5mm-4s\paramsAndTotalResults.mat');
 
-wSpeckleShiftNarrow = load('C:\Users\sahiadl.EED\OneDrive - Technion\Masters\AcoustoOpticSystem\Code\Measurements\Results-21-Feb-2019 13-51-42-ShiftingSpeckle-NarrowArea\paramsAndTotalResults.mat');
 
-upLim =  max(  [max(max(max(noSpeckleShift.I))), max(max(max(wSpeckleShift.I)))]);
-dLim =  min(  [min(min(min(noSpeckleShift.I))), min(min(min(wSpeckleShift.I)))]);
+upLim =  max(  [max(max(max(fourSec.I))), max(max(max(twoSec.I)))]);
+dLim =  min(  [min(min(min(fourSec.I))), min(min(min(twoSec.I)))]);
 limits = [dLim, upLim];
 
 zCoor = 10;
@@ -20,47 +19,47 @@ axesFontSize = 18;
 titleFontSize = 18;
 labelFontSize = 18;
 
-depthX = abs(noSpeckleShift.params.Stages.Xpos(end)-noSpeckleShift.params.Stages.Xpos(1));
-lX =length(noSpeckleShift.params.Stages.Xpos);
-[M, idx] = min(abs(wSpeckleShift.params.Stages.Xpos-(wSpeckleShift.params.Stages.Xpos(1)-depthX)));
+depthX = abs(fourSec.params.Stages.Xpos(end)-fourSec.params.Stages.Xpos(1));
+lX =length(fourSec.params.Stages.Xpos);
+[M, idx] = min(abs(twoSec.params.Stages.Xpos-(twoSec.params.Stages.Xpos(1)-depthX)));
 
 figure();
-imagesc('XData', noSpeckleShift.params.Stages.Ypos, 'YData', noSpeckleShift.params.Stages.Xpos, ...
-        'CData', permute(noSpeckleShift.I(:,:,zCoor), [2,1,3]));
+imagesc('XData', fourSec.params.Stages.Ypos, 'YData', fourSec.params.Stages.Xpos, ...
+        'CData', permute(fourSec.I(:,:,zCoor), [2,1,3]));
 set(gca, 'FontSize', axesFontSize);
-title("No Speckle Shift", 'FontSize', titleFontSize)
+title("4 Seconds of Sampling", 'FontSize', titleFontSize)
 caxis(limits)
 axis equal
 axis tight
 colorbar;
 
-zCoor = 11;
+zCoor = 10;
 
 figure()
-imagesc('XData', wSpeckleShift.params.Stages.Ypos, 'YData', wSpeckleShift.params.Stages.Xpos(1:idx), ...
-        'CData', permute(wSpeckleShift.I(:,1:idx,zCoor), [2,1,3]));
+imagesc('XData', twoSec.params.Stages.Ypos, 'YData', twoSec.params.Stages.Xpos(1:idx), ...
+        'CData', permute(twoSec.I(:,1:idx,zCoor), [2,1,3]));
 set(gca, 'FontSize', axesFontSize);
-title("With Speckle Shift")
+title("2 Seconds Of Sampling")
 caxis(limits)
 colorbar;
 axis equal
 axis tight
+% 
+% figure()
+% imagesc('XData', twoSec.params.Stages.Ypos, 'YData', twoSec.params.Stages.Xpos(1:idx), ...
+%         'CData', permute(twoSec.I(:,1:idx,zCoor), [2,1,3]));
+% set(gca, 'FontSize', axesFontSize);
+% title("With Speckle Shift - Scaled Colors")
+% % caxis(limits)
+% colorbar;
+% axis equal
+% axis tight
 
-figure()
-imagesc('XData', wSpeckleShift.params.Stages.Ypos, 'YData', wSpeckleShift.params.Stages.Xpos(1:idx), ...
-        'CData', permute(wSpeckleShift.I(:,1:idx,zCoor), [2,1,3]));
-set(gca, 'FontSize', axesFontSize);
-title("With Speckle Shift - Scaled Colors")
-% caxis(limits)
-colorbar;
-axis equal
-axis tight
-
-figure()
-imagesc('XData', wSpeckleShiftNarrow.params.Stages.Ypos, 'YData', wSpeckleShiftNarrow.params.Stages.Xpos, ...
-        'CData', permute(wSpeckleShiftNarrow.I(:,:,zCoor), [2,1,3]));
-set(gca, 'FontSize', axesFontSize);
-title("With Speckle Shift - Fine Scan")
-colorbar;
-axis equal;
-axis tight;
+% figure()
+% imagesc('XData', wSpeckleShiftNarrow.params.Stages.Ypos, 'YData', wSpeckleShiftNarrow.params.Stages.Xpos, ...
+%         'CData', permute(wSpeckleShiftNarrow.I(:,:,zCoor), [2,1,3]));
+% set(gca, 'FontSize', axesFontSize);
+% title("With Speckle Shift - Fine Scan")
+% colorbar;
+% axis equal;
+% axis tight;
