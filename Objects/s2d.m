@@ -26,16 +26,16 @@ classdef s2d < scanObj
             uVars.stages.strideY = 0;
             uVars.stages.firstAxis = 'Y';
             
-            this.scan.timeToSample = 0;
-            this.scan.quantTime    = 0;
-            this.scan.useQuant     = false;
-            this.scan.repeats      = 1;
+            uVars.scan.timeToSample = 0;
+%             uVars.scan.quantTime    = 0;
+%             uVars.scan.useQuant     = false;
+            uVars.scan.repeats      = 1;
             
             uVars.gReq = s2d.createGraphicRequest();
         end
         
         function gReq = createGraphicRequest()
-            gReq = scan2dGraphics2.createGraphicsRunVars();
+            gReq = scan2dGraphics.createGraphicsRunVars();
         end
     end
     
@@ -44,11 +44,11 @@ classdef s2d < scanObj
             this@scanObj(acoustoOpticHandle, stagesHandle, owner);
             
             this.strings.scan = "Done Scan for (R,X,Y) = (%d, %.2f, %.2f)";
-            this.strings.timeTable = "R%dX%.2fY%.2fQ%d";
+            this.strings.timeTable = "R%dX%.2fY%.2f";
             
-            this.graphics.graphicsNames = scan2dGraphics2.getGraphicsNames();
-            this.graphics.obj           = scan2dGraphics2(); 
-            this.graphics.gReq          = scan2dGraphics2.createGraphicsRunVars();
+            this.graphics.graphicsNames = scan2dGraphics.getGraphicsNames();
+            this.graphics.obj           = scan2dGraphics(); 
+            this.graphics.gReq          = scan2dGraphics.createGraphicsRunVars();
             this.graphics.ownerGraphUpdate = true;
         end
         

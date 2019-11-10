@@ -99,6 +99,12 @@ classdef Digitizer < handle
             end 
         end
         
+        function vars = getVars(this)
+           vars.system = this.system;
+           vars.system.boardHandle = [];
+           vars.vars = this.vars;
+        end
+        
         function initTimeTable(this)
             this.timeTable = struct();
         end

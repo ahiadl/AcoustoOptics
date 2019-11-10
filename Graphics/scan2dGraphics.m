@@ -1,4 +1,4 @@
-classdef scan2dGraphics2 < Graphics
+classdef scan2dGraphics < Graphics
     %SACN2DGRAPHICS Summary of this class goes here
     %   Detailed explanation goes here
     
@@ -106,7 +106,7 @@ classdef scan2dGraphics2 < Graphics
     end
     
     methods
-        function this = scan2dGraphics2()
+        function this = scan2dGraphics()
             this@Graphics(scan2dGraphics.getGraphicsNames())
             this.requests     = scan2dGraphics.getGraphicsRequest();
             this.globalReqOld = scan2dGraphics.createGraphicsRunVars();

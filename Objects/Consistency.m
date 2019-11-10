@@ -1,4 +1,4 @@
-classdef ConsistencyNew < scanObj
+classdef Consistency < scanObj
     %CONSISTENCYOBJ Summary of this class goes here
     %   Detailed explanation goes here
     
@@ -28,19 +28,19 @@ classdef ConsistencyNew < scanObj
             uVars.scan.quantTime   = [];
             uVars.scan.numOfSets   = [];
             
-            uVars.gReq = ConsistencyNew.createGraphicRequest();
+            uVars.gReq = Consistency.createGraphicRequest();
             
         end
         
         function gReq = createGraphicRequest()
-            gReq = consGraphicsNew.createGraphicsRunVars();
+            gReq = consGraphics.createGraphicsRunVars();
         end
         
     end
     
     methods
         
-        function this = ConsistencyNew(acoustoOpticHandle, stagesHandle, owner)
+        function this = Consistency(acoustoOpticHandle, stagesHandle, owner)
             %Pass arguments to father constructor
             this@scanObj(acoustoOpticHandle, stagesHandle, owner); 
             
@@ -49,9 +49,9 @@ classdef ConsistencyNew < scanObj
             this.strings.timeTable = "F%dS%d";
 
             %Init Graphics
-            this.graphics.graphicsNames = consGraphicsNew.getGraphicsNames();
-            this.graphics.obj = consGraphicsNew(); 
-            this.graphics.gReq = consGraphicsNew.createGraphicsRunVars();
+            this.graphics.graphicsNames = consGraphics.getGraphicsNames();
+            this.graphics.obj = consGraphics(); 
+            this.graphics.gReq = consGraphics.createGraphicsRunVars();
             this.graphics.ownerGraphUpdate = true;
             
             %Init Control Vars

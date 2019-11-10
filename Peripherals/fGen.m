@@ -6,6 +6,7 @@ classdef fGen < handle
         ChVars
         ChData
         valVars
+        connected
     end
     
     methods (Static)       
@@ -45,6 +46,7 @@ classdef fGen < handle
             this.ChVars{2} = this.getChVarsStruct();
 
             this.valVars = false;
+            this.connected = false;
         end
         
         function init(this)
@@ -62,9 +64,11 @@ classdef fGen < handle
             end
             this.me.blocksize = 10000;
             set(this.inst, 'OutputBufferSize', this.me.blocksize);
-            
-            fopen(this.inst);
-            if strcmp(this.inst.Status,'close')
+            try
+                fopen(this.inst);
+                this.connected = true;
+            catch
+                this.connected = false;
                 fprintf("Could not open fGen. please check device is ON and CONNECTED.")
             end
         end
@@ -80,15 +84,23 @@ classdef fGen < handle
         end
         
         function setProperties(this, ch1, ch2)
-           this.ChVars{1} = ch1;
-           this.ChVars{2} = ch2;
+            if this.connected
+                this.ChVars{1} = ch1;
+                this.ChVars{2} = ch2;
+            else
+                fprintf("ERROR: AFG is not connected. Channels were not configured")
+            end
         end
         
         function setData(this, ch1, ch2)
-           this.ChData{1}.data    = ch1.data;
-           this.ChData{1}.dataLen = ch1.dataLen;
-           this.ChData{2}.data    = ch2.data;
-           this.ChData{2}.dataLen = ch2.dataLen;
+            if this.connected
+                this.ChData{1}.data    = ch1.data;
+                this.ChData{1}.dataLen = ch1.dataLen;
+                this.ChData{2}.data    = ch2.data;
+                this.ChData{2}.dataLen = ch2.dataLen;
+            else
+                fprintf("ERROR: AFG is not connected. Channels were not configured")
+            end
         end
         
         function configChannel(this, i)

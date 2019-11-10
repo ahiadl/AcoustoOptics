@@ -8,6 +8,7 @@ classdef acoustoOptics < handle
         digitizer;
         IO;
         algo;
+        FS;
         graphics;
 
         % Data
@@ -57,6 +58,13 @@ classdef acoustoOptics < handle
             redVars.exportRawData     = [];
             
             redVars.gReq              = Algo.createGraphicRequest();
+            
+            redVars.saveFullData = [];
+            redVars.saveFigs     = [];
+            redVars.saveResults  = [];
+            redVars.resDirPath   = [];
+            redVars.scanName     = [];
+            
         end
         
         function newExtVars = extVarsCreate()
@@ -111,7 +119,9 @@ classdef acoustoOptics < handle
             fprintf(" 3. Creating an IO Object\n")
             this.IO = IO();
             fprintf(" 4. Creating an Algorithm Object\n")
-            this.algo = AlgoNew();
+            this.algo = Algo();
+            fprintf(" 5. Creating a File System Object\n")
+            this.FS = fileSystem();
             
             this.redVars = this.uVarsCreate();
             this.extVars = this.extVarsCreate();
@@ -228,11 +238,21 @@ classdef acoustoOptics < handle
             digitizerVars.samplesPerAcqAllCh    = this.measVars.algo.digitizer.samplesPerAcqAllCh;
             digitizerVars.samplesPerBufferAllCh = this.measVars.algo.digitizer.samplesPerBufferAllCh;
            
+            % FileSystem Vars
+            fileSystemVars.saveFullData = reducedVars.fs.saveFullData;
+            fileSystemVars.saveFigs     = reducedVars.fs.saveFigs;
+            fileSystemVars.saveResults  = reducedVars.fs.saveResults;
+            fileSystemVars.resDirPath   = reducedVars.fs.resDirPath;
+            fileSystemVars.scanName     = reducedVars.fs.scanName;
+            fileSystemVars.saveAny      = reducedVars.fs.saveFullData || reducedVars.fs.saveFigs ||  reducedVars.fs.saveResults;
+            
             % Writing Extended Vars to Acousto Optics Object
             newExtVars.algo      = algoVars;
             newExtVars.fGen      = fGenVars;
             newExtVars.digitizer = digitizerVars;
             newExtVars.IO        = IOVars;
+            newExtVars.FS        = fileSystemVars;
+            
 
             fprintf(" 6. Checking For Changes,\n")
             this.changeLog = this.checkParamsChanged(this.extVars, newExtVars);
@@ -255,6 +275,7 @@ classdef acoustoOptics < handle
             if this.changeLog.digitizer
                 fprintf(" ** Configuring Digitizer\n")
                 this.configDigitizer();
+                this.measVars.digitizer = this.digitizer.getVars;
             end
             
             % Config the IO
@@ -263,10 +284,13 @@ classdef acoustoOptics < handle
                 this.configIO()
             end
             
+            % Config the FS
+            this.FS.setUserVars(this.extVars.FS);
+            
             fprintf(" ** Done configuring Peripherals\n")
         end
 
-        function res = measureAndAnlayse(this)
+        function res = measureAndAnlayse(this)      
             fprintf ("Acquiring...\n")
             this.timeTable.acq = tic;
             this.IO.open();
@@ -289,6 +313,12 @@ classdef acoustoOptics < handle
             inTimeTable = this.getInnerTimeTables();
             this.timeTable.algo = inTimeTable.algo;
             this.timeTable.digitizer = inTimeTable.digitizer;
+            
+            if this.extVars.FS.saveAny
+                fprintf("Saving Results To Disk\n")
+                this.FS.saveResults(this.result, getMeasVars(this)) 
+            end
+            
             fprintf ("Done AO\n")
         end
         
@@ -324,7 +354,8 @@ classdef acoustoOptics < handle
         end
         
         function configIO(this)
-           this.IO.allocPorts(this.extVars.IO); 
+           this.IO.allocPorts(this.extVars.IO);
+           this.measVars.IO = this.extVars.IO;
         end
         
         function resetDigitizerMem(this)
@@ -348,7 +379,7 @@ classdef acoustoOptics < handle
         end
 
         function measVars = getMeasVars(this)
-            fprintf("------- Downloading Measurement Vars ----------\n")
+%             fprintf("------- Downloading Measurement Vars ----------\n")
             measVars.algo      = this.measVars.algo;
             measVars.fGen      = this.measVars.fGen;
             measVars.digitizer = this.measVars.digitizer;

@@ -2,11 +2,12 @@ function [SQR] = createSMatrix(order, type)
 %----------------------------------
 % Quadratic Residue
 %----------------------------------
-m = 0:1000;
+m = 0:10000;
 possibleOrders = 4*m+3;
+possiblePrimeOrders = possibleOrders(isprime(possibleOrders));
 % userOrder = 19 ; %19 - 4 cycles, 76 - 1 cycle
-I = find(possibleOrders >= order);
-n = possibleOrders(I(1));
+I = find(possiblePrimeOrders >= order);
+n = possiblePrimeOrders(I(1));
 d =  (1:((n-1)/2)).^2;
 qr = mod(d,n);
 

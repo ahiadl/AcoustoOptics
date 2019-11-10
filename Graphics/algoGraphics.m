@@ -11,9 +11,10 @@ classdef algoGraphics < Graphics
             graphReq.ch    = 1;
             graphReq.quant = 1;
             
-            graphReq.fBar = [];
-            graphReq.fIdx = [];
-            graphReq.zVec = [];
+            graphReq.fBar      = [];
+            graphReq.fBarShift = [];
+            graphReq.fIdx      = [];
+            graphReq.zVec      = [];
             
             graphReq.intExt  = [];
             
@@ -49,13 +50,14 @@ classdef algoGraphics < Graphics
         end 
         
         function gReq = createGraphicsRunVars() %for Reduced Operation
-            gNames = AlgoNew.getGraphicsNames();
+            gNames = Algo.getGraphicsNames();
             
             gReq.ch    = 1;
             gReq.zIdx  = 1;
             gReq.quant = 1;
              
             gReq.fBar = [];
+            gReq.fBarShift = [];
             gReq.fIdx = [];
             gReq.zVec = [];
             
@@ -91,9 +93,10 @@ classdef algoGraphics < Graphics
             this.requests.(gName).dims.dataDim = dataDim;
         end
         
-        function setFrequencyBar(this, fBar, fIdx)
-            this.requests.fBar = fBar;
-            this.requests.fIdx = fIdx;            
+        function setFrequencyBar(this, fBar, fBarShift, fIdx)
+            this.requests.fBar      = fBar;
+            this.requests.fBarShift = fBarShift;
+            this.requests.fIdx      = fIdx;            
         end
         
         function setGraphicsStaticVars(this)
@@ -157,18 +160,30 @@ classdef algoGraphics < Graphics
         
         % Disply Functions
         
-        function quickPlot(this, gName, xData, yData, markerX, markerY, hIdx) 
+        function quickPlot(this, gName, xData, yData, std, markerX, markerY, hIdx) 
             if ~exist('hIdx', 'var')
                 hIdx = 1;
             end
-            set(this.requests.(gName).handles.cur.plot(hIdx), 'XData', xData, 'YData', gather(yData));
+            switch this.requests.(gName).type
+                case 'stem'
+                    set(this.requests.(gName).handles.cur.plot(hIdx),...
+                        'XData', xData,...
+                        'YData', gather(yData));
+                case 'plot'
+                    set(this.requests.(gName).handles.cur.plot(hIdx), 'XData',...
+                        xData,...
+                        'YData', gather(yData));
+                case 'errorbar'
+                    set(this.requests.(gName).handles.cur.plot(hIdx),...
+                        'XData', xData,...
+                        'YData', yData,...
+                        'YPositiveDelta', std,...
+                        'YNegativeDelta', std);
+            end
             if this.requests.(gName).markers.plotMark
                 set(this.requests.(gName).handles.cur.plotMarker(hIdx), 'XData', markerX, 'YData', gather(markerY));
             end
             set(this.requests.(gName).handles.cur.title, 'String', this.requests.(gName).strings.title);
-%             tic
-%             drawnow();
-%             toc
         end
         
         function plotAFGSignals(this, gName, xData, yData)
@@ -190,18 +205,19 @@ classdef algoGraphics < Graphics
                 end
                 setStringsToPlot(this, gName)
             else
-                quickPlot(this, gName, xData, yData, [], [])
+                quickPlot(this, gName, xData, yData,[], [], [])
                 drawnow();
             end
         end
                 
-        function plotPhi(this, gName, xData, yData)
+        function plotPhi(this, gName, xData, yData, std)
             %yData - [samples per pos, 1]
             
             if ~isgraphics(this.requests.(gName).handles.cur.ax)
                return
             end
-            if ~isgraphics(this.requests.(gName).handles.cur.plot)
+            if ~isgraphics(this.requests.(gName).handles.cur.plot) ||...
+                ~strcmp(this.requests.(gName).type, this.requests.(gName).handles.cur.plot.Type)  
                 switch this.requests.(gName).type
                     case 'stem'
                        this.requests.(gName).handles.cur.plot = ...
@@ -210,11 +226,15 @@ classdef algoGraphics < Graphics
                     case 'plot'
                        this.requests.(gName).handles.cur.plot = ...
                            plot(this.requests.(gName).handles.cur.ax,...
-                           xData, yData);  
+                           xData, yData);
+                   case 'errorbar'
+                       this.requests.(gName).handles.cur.plot = ...
+                           errorbar(this.requests.(gName).handles.cur.ax,...
+                           xData, yData, std);
                 end
                 setStringsToPlot(this, gName)
             else
-                quickPlot(this, gName, xData, yData, [], []);
+                quickPlot(this, gName, xData, gather(yData), gather(std), [], []);
                 drawnow();
             end
         end
@@ -225,25 +245,27 @@ classdef algoGraphics < Graphics
                return
             end
             
+            quant = this.requests.quant;
+                        
             if ~isgraphics(this.requests.(gName).handles.cur.plot)
                 hold(this.requests.(gName).handles.cur.ax, 'on');
-                for i = 1:size(yData, 1)
+                for i = 1:size(yData, 2)
                     switch this.requests.(gName).type
                         case 'stem'
                            this.requests.(gName).handles.cur.plot(i) = ...
                                stem(this.requests.(gName).handles.cur.ax,...
-                               xData, yData(i, :));    
+                               xData, squeeze(yData(quant, i, :)));    
                         case 'plot'
                            this.requests.(gName).handles.cur.plot(i) = ...
                                plot(this.requests.(gName).handles.cur.ax,...
-                               xData, yData(i, :));  
+                               xData, squeeze(yData(quant, i, :)));  
                     end
                 end
                 hold(this.requests.(gName).handles.cur.ax, 'off');
                 this.setStringsToPlot(gName);
             else
-                for i = 1:size(yData, 1)
-                    quickPlot(this, gName, xData, yData(i, :), [], [])
+                for i = 1:size(yData, 2)
+                    quickPlot(this, gName, xData, squeeze(yData(quant, i, :)),[], [], [])
                 end
                 drawnow();
             end
@@ -271,7 +293,7 @@ classdef algoGraphics < Graphics
                 end
                 this.setStringsToPlot(gName);
             else
-                quickPlot(this, gName, xData, gather(yData(ch, :)), [], [])
+                quickPlot(this, gName, xData, gather(yData(ch, :)),[], [], [])
                 drawnow();
             end
         end
@@ -285,58 +307,73 @@ classdef algoGraphics < Graphics
      
             ch  = this.requests.ch;
             zIdx = this.requests.zIdx;
+            quant = this.requests.quant;
+            
+            yData = permute( yData(quant ,ch, :, zIdx), [2,3,1,4]);
             
             if ~isgraphics(this.requests.(gName).handles.cur.plot)
                 switch this.requests.(gName).type
                     case 'stem'
                        this.requests.(gName).handles.cur.plot = ...
                            stem(this.requests.(gName).handles.cur.ax,...
-                           xData, yData(ch, :, zIdx));    
+                           xData, yData);    
                     case 'plot'
                        this.requests.(gName).handles.cur.plot = ...
                            plot(this.requests.(gName).handles.cur.ax,...
-                           xData, yData(ch, :, zIdx));  
+                           xData, yData);  
                 end
                 this.setStringsToPlot(gName);
             else
-                quickPlot(this, gName, xData, gather(yData(ch, :, zIdx)), [], [])
+                quickPlot(this, gName, xData, gather(yData),[], [], [])
                 drawnow()
             end
         end
         
-        function plotFFT(this, gName, xData, yData, markerX, markerY)
+        function plotFFT(this, gName, xData, yData, markerX, markerYIdx)
             if ~isgraphics(this.requests.(gName).handles.cur.ax)
                return
             end
             
-            zIdx = this.requests.zIdx;
-            fidxs =  this.requests.fIdx-200:this.requests.fIdx+200;
-            zVec = this.requests.zVec;
+            zIdx  = this.requests.zIdx;
+            if length(xData) > 800
+                fidxs =  this.requests.fIdx-200:this.requests.fIdx+200;
+                this.requests.(gName).lims.xlims = ...
+                    [this.requests.fBar(fidxs(1)), this.requests.fBar(fidxs(end))];
+                xDataReduced = this.requests.fBar(fidxs);
+            else
+                fidxs = 1:length(xData);
+                this.requests.(gName).lims.xlims = ...
+                    [this.requests.fBarShift(1), this.requests.fBarShift(end)];
+                xDataReduced = this.requests.fBarShift;
+            end
             
-            xDataReduced = xData(fidxs);
-            yDataReduced = yData(:, fidxs, zIdx);
+            zVec  = this.requests.zVec;
+            quant = this.requests.quant;
             
-            this.requests.(gName).lims.xlims = ...
-                [this.requests.fBar(fidxs(1)), this.requests.fBar(fidxs(end))];
+%             xDataReduced = xData(fidxs);
+            yDataReduced = squeeze(yData(quant, :, fidxs, zIdx));
+            
             this.setTitleVariables(gName, {[zVec(zIdx)*1e3, zIdx]});          % FFT
+            
+            markerY = squeeze(yData(quant, :, this.requests.fIdx, zIdx));
             
             if ~isgraphics(this.requests.(gName).handles.cur.plot(1))
             	hold(this.requests.(gName).handles.cur.ax, 'on');
-                for i = 1:size(yData, 1)
+                for i = 1:size(yDataReduced, 1)
                     switch this.requests.(gName).type
                         case 'stem'
                            this.requests.(gName).handles.cur.plot(i) = ...
                                stem(this.requests.(gName).handles.cur.ax,...
-                               xDataReduced, yDataReduced(i, :, :));    
+                               xDataReduced, yDataReduced( i, :, :));    
                         case 'plot'
                            this.requests.(gName).handles.cur.plot(i) = ...
                                plot(this.requests.(gName).handles.cur.ax,...
-                               xDataReduced, yDataReduced(i, :, :));  
+                               xDataReduced, yDataReduced( i, :, :));  
                     end
                 end
                 
-                for i = 1:size(yData, 1)            
-                    this.plotMarkers(gName, markerX, markerY(i, zIdx), i)
+                for i = 1:length(markerY)            
+                    this.plotMarkers(gName, markerX, markerY(i), i)
                 end
                 hold(this.requests.(gName).handles.cur.ax, 'off');
                 
@@ -344,8 +381,8 @@ classdef algoGraphics < Graphics
                 this.setLimsToPlot(gName)
             else
 
-                for i = 1:size(yData, 1)
-                    this.quickPlot(gName, xDataReduced, yDataReduced(i, :, :), markerX, markerY(i, zIdx), i)
+                for i = 1:size(yData, 2)
+                    this.quickPlot(gName, xDataReduced, yDataReduced(i, :, :),[], markerX, markerY(i), i)
 %                     this.quickPlot(gName, xData(fidxs), yData(i, fidxs, zIdx), markerX, markerY(i, zIdx), i)
                 end
                 this.setLimsToPlot(gName)

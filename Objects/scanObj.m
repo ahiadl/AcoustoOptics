@@ -138,7 +138,7 @@ classdef scanObj < handle
             this.fileSystem = uVars;
             saveData = uVars.saveFullData || uVars.saveReducedData || uVars.saveFigs || uVars.saveResults;
             if saveData
-                dateStr = strrep(['Results-',datestr(datetime('now'))], ':', '-');
+                dateStr = strrep([datestr(datetime('now'))], ':', '-');
                 this.fileSystem.resDir = [this.fileSystem.resDirPath, '\', dateStr,'-',this.fileSystem.scanName];
                 this.fileSystem.rawDataDir = [this.fileSystem.resDir, '\rawData'];
                 this.fileSystem.figsDir = [this.fileSystem.resDir, '\Figures'];
@@ -157,7 +157,7 @@ classdef scanObj < handle
             curVars.acoustoOptics.algoVars.timing.tAcqVec = [];
             curVars.acoustoOptics.algoVars.timing.tQuantVec = [];
             curVars.acoustoOptics.algoVars.timing.tPosVec = [];
-            save([this.fileSystem.rawDataDir, '\', name(1:end-1)], 'curVars', '-v7.3');
+            save(sprintf("%s%s%s",this.fileSystem.rawDataDir,'\', name), 'curVars', '-v7.3');
         end
         
         function saveData(this, saveReducedVars)
@@ -168,7 +168,7 @@ classdef scanObj < handle
                 varsName    = sprintf("F%.2fS%d-vars.mat", this.scan.timeFrames(this.curScan(1)), this.curScan(2));
                 if this.fileSystem.saveFullData
                     res = this.acoustoOptics.obj.rawData;
-                    save([this.fileSystem.rawDataDir, '\' , rawDataName(1:end-1)],  'res', '-v7.3');
+                    save(sprintf("%s%s%s", this.fileSystem.rawDataDir,'\', rawDataName),  'res', '-v7.3');
                 elseif this.fileSystem.saveReducedData
                     for i = 1:length(this.fileSystem.fieldsToSave)
                         if reducedSaveMask(i)

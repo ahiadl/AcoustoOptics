@@ -1,4 +1,4 @@
-classdef consGraphicsNew < Graphics
+classdef consGraphics < Graphics
     %CONSGRAPHICS Summary of this class goes here
     %   Detailed explanation goes here
     
@@ -63,7 +63,7 @@ classdef consGraphicsNew < Graphics
         end 
         
         function gReq = createGraphicsRunVars() %for Reduced Operation
-            gNames = consGraphicsNew.getGraphicsNames();
+            gNames = consGraphics.getGraphicsNames();
             
             gReq.ch  = 1;
             gReq.zIdx = 1;
@@ -89,12 +89,12 @@ classdef consGraphicsNew < Graphics
         
     end
     methods
-        function this = consGraphicsNew()
+        function this = consGraphics()
             this@Graphics(consGraphics.getGraphicsNames())
             
-            this.requests     = consGraphicsNew.getGraphicsRequest();
-            this.globalReqOld = consGraphicsNew.createGraphicsRunVars();
-            this.globalReq    = consGraphicsNew.createGraphicsRunVars();
+            this.requests     = consGraphics.getGraphicsRequest();
+            this.globalReqOld = consGraphics.createGraphicsRunVars();
+            this.globalReq    = consGraphics.createGraphicsRunVars();
             
             this.setGraphicsStaticVars();
         end

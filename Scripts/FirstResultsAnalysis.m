@@ -1,5 +1,9 @@
-A = load('D:\Results\Results-09-Jul-2019 15-46-52-2DScan-Quants-0.05-t-2\Results.mat');
-B = load('D:\Results\Results-09-Jul-2019 15-46-52-2DScan-Quants-0.05-t-2\Vars.mat');
+% In this file:
+% first banana shape
+% consistency fit analysis
+
+A = load('D:\ResultsToKeep\Scan-Quants-0.05-t-2\Results.mat');
+B = load('D:\ResultsToKeep\Scan-Quants-0.05-t-2\Vars.mat');
 
 figure();
 subplot(2,1,1)
@@ -22,13 +26,13 @@ axis tight
 
 
 %% show naive results
-A = load('D:\Results\Results-11-Jul-2019 01-17-59-Consistency-Laser-2s-rawDara\Results.mat');
-B = load('D:\Results\Results-11-Jul-2019 01-17-59-Consistency-Laser-2s-rawDara\Vars.mat');
+A = load('D:\ResultsToKeep\Consistency-Laser-2s-rawData\Results.mat');
+B = load('D:\ResultsToKeep\Consistency-Laser-2s-rawData\Vars.mat');
 
 figure()
-yyaxis left
+% yyaxis left
 errorbar(B.curVars.scan.timeFrames, A.res.phiFrame(8,:), A.res.phiFrameStd(9,:));hold on
-yyaxis right
+% yyaxis right
 errorbar(B.curVars.scan.timeFrames, A.res.phiFrame(1,:), A.res.phiFrameStd(9,:));
 title('Consistency Results');
 legend('Strongest Point', 'Weakest Point');
@@ -84,15 +88,18 @@ title('Set 10')
 subplot(2,2,4)
 stem(squeeze(A.res.phiQuant(8,10,20,:)))
 title('Set 20')
+
+naiveData = A;
+naiveVars = B;
 %%
 %Find speckle decorrelation time: Mean of fft and fit to lorentzian
-A = load('D:\Results\Results-11-Jul-2019 01-17-59-Consistency-Laser-2s-rawDara\rawData\F20.00S1-rawData.mat');
-B = load('D:\Results\Results-11-Jul-2019 01-17-59-Consistency-Laser-2s-rawDara\rawData\F20.00S1-Vars.mat');
+A = load('D:\ResultsToKeep\Consistency-Laser-2s-rawData\rawData\F20.00S1-rawData.mat');
+B = load('D:\ResultsToKeep\Consistency-Laser-2s-rawData\rawData\F20.00S1-Vars.mat');
 
 ao = acoustoOptics();
 uVars = ao.uVarsCreate();
 uVars = B.curVars.acoustoOptics.uVars;
-uVars.quantTime = 0.5;
+uVars.quantTime = 0.25;
 uVars.exportRawData = true;
 
 gReq = algoGraphics.createGraphicsRunVars();
@@ -109,6 +116,13 @@ end
 uVars.gReq = gReq;
 uVars.useHadamard = false;
 
+uVars.fs.saveFullData = false;
+uVars.fs.saveFigs     = false;
+uVars.fs.saveResults  = false;
+uVars.fs.resDirPath   = false;
+uVars.fs.scanName     = false;
+uVars.fs.saveAny      = false;
+
 ao.setMeasVars(uVars);
 algoVars = ao.getAlgoVars;
 
@@ -123,28 +137,117 @@ fIdx = algoVars.freq.fSinIdx;
 fBar = algoVars.freq.frequencyBar*1e-6;
 
 figure()
-plot(abs(squeeze(C(1,1,:,9))))
+plot(abs(squeeze(C(1,1,:,8))))
 xlim([fIdx+[-100 +100]]);
 
-idxs = fIdx+(-25:25); 
-data = squeeze(C(1,1,idxs,9));
-data = data - min(data);
-[YPRIME, PARAMS, RESNORM, RESIDUAL,] = lorentzfit(fBar(idxs)*1e6, double(data'));
-Gamma(1) = PARAMS(1)*2;
-data = squeeze(C(1,2,idxs,9));
-data = data - min(data);
-[YPRIME, PARAMS, RESNORM, RESIDUAL,] = lorentzfit(fBar(idxs)*1e6, double(data'));
-Gamma(2) = PARAMS(1)*2;
-data = squeeze(C(1,3,idxs,9));
-data = data - min(data);
-[YPRIME, PARAMS, RESNORM, RESIDUAL,] = lorentzfit(fBar(idxs)*1e6, double(data'));
-Gamma(3) = PARAMS(1)*2;
-data = squeeze(C(1,4,idxs,9));
-data = data - min(data);
-[YPRIME, PARAMS, RESNORM, RESIDUAL,] = lorentzfit(fBar(idxs)*1e6, double(data'));
-Gamma(4) = PARAMS(1)*2;
+env = [5, 10, 15, 20, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 50, 60, 70, 85, 100];
+figure()
+ax(1) = subplot(2,2,1);
+ax(2) = subplot(2,2,2);
+ax(3) = subplot(2,2,3);
+ax(4) = subplot(2,2,4);
 
-IdealQuantTime = 1/mean(Gamma);
+figure()
+axS = axes();
+
+for i = 1:length(env)
+%     figure()
+    idxs = fIdx+(-env(i):env(i));
+    residual = 0;
+    
+    data = squeeze(C(1,1,idxs,8));
+    data = data - min(data);
+    [YPRIME, PARAMS, RESNORM, RESIDUAL,] = lorentzfit(fBar(idxs)*1e6, double(data'));
+    Gamma(i,1) = PARAMS(1)*2;
+    residual(i,1) = sum(RESIDUAL);
+    plot(ax(1), fBar(idxs), data, 'x'); hold(ax(1), 'on')
+    plot(ax(1), fBar(idxs), YPRIME, 'r-');hold(ax(1), 'off')
+    title(ax(1), num2str(env(i)));
+
+    data = squeeze(C(1,2,idxs,8));
+    data = data - min(data);
+    [YPRIME, PARAMS, RESNORM, RESIDUAL,] = lorentzfit(fBar(idxs)*1e6, double(data'));
+    Gamma(i,2) = PARAMS(1)*2;
+    residual(i,2) = mean(RESIDUAL);
+    plot(ax(2), fBar(idxs), data, 'x');hold(ax(2), 'on')
+    plot(ax(2), fBar(idxs), YPRIME, 'r-'); hold(ax(2), 'off')
+
+    data = squeeze(C(1,3,idxs,8));
+    data = data - min(data);
+    [YPRIME, PARAMS, RESNORM, RESIDUAL,] = lorentzfit(fBar(idxs)*1e6, double(data'));
+    Gamma(i,3) = PARAMS(1)*2;
+    residual(i,3) =  mean(RESIDUAL);
+    plot(ax(3), fBar(idxs), data, 'x'); hold(ax(3), 'on')
+    plot(ax(3), fBar(idxs), YPRIME, 'r-'); hold(ax(3), 'off')
+
+    data = squeeze(C(1,4,idxs,8));
+    data = data - min(data);
+    [YPRIME, PARAMS, RESNORM, RESIDUAL,] = lorentzfit(fBar(idxs)*1e6, double(data'));
+    Gamma(i,4) = PARAMS(1)*2;
+    residual(i,4) = mean(RESIDUAL);
+    plot(ax(4), fBar(idxs), data, 'x');hold(ax(4), 'on')
+    plot(ax(4), fBar(idxs), YPRIME, 'r-'); hold(ax(4), 'off')
+
+%     figure()
+    stem(axS, residual(i,:))
+    xlim(axS,[0,5])
+    title(num2str(env(i)));
+
+    meanRes(i) = mean(residual(i,:));
+    stdRes(i) = std(residual(i,:));
+
+    IdealQuantTimeVec(i) = 1/mean(Gamma(i,:))
+    
+    pause(1)
+end
+
+figure();
+subplot(1,2,1)
+errorbar(env, log(abs(meanRes)), log(stdRes))
+title('Mean Residue Value (log)')
+xlim([20, 50])
+subplot(1,2,2)
+stem(env, IdealQuantTimeVec)
+title('Quant time vs. Fit Enviroment Size')
+
+[~, idealEnvIdx] = min( stdRes);
+
+idealQuantTime = IdealQuantTimeVec(idealEnvIdx);
+
+idxs = fIdx+(-env(idealEnvIdx):env(idealEnvIdx));
+
+figure();
+subplot(2,2,1)
+data = squeeze(C(1,1,idxs,8));
+data = data - min(data);
+[YPRIME, PARAMS, RESNORM, RESIDUAL,] = lorentzfit(fBar(idxs)*1e6, double(data'));
+plot(fBar(idxs), data, 'x'); hold on
+plot(fBar(idxs), YPRIME, 'r-');hold off
+title('ch1')
+
+subplot(2,2,2)
+data = squeeze(C(1,2,idxs,8));
+data = data - min(data);
+[YPRIME, PARAMS, RESNORM, RESIDUAL,] = lorentzfit(fBar(idxs)*1e6, double(data'));
+plot(fBar(idxs), data, 'x'); hold on
+plot(fBar(idxs), YPRIME, 'r-');hold off
+title('ch2')
+
+subplot(2,2,3)
+data = squeeze(C(1,3,idxs,8));
+data = data - min(data);
+[YPRIME, PARAMS, RESNORM, RESIDUAL,] = lorentzfit(fBar(idxs)*1e6, double(data'));
+plot(fBar(idxs), data, 'x'); hold on
+plot(fBar(idxs), YPRIME, 'r-'); hold off
+title('ch3')
+
+subplot(2,2,4)
+data = squeeze(C(1,4,idxs,8));
+data = data - min(data);
+[YPRIME, PARAMS, RESNORM, RESIDUAL,] = lorentzfit(fBar(idxs)*1e6, double(data'));
+plot(fBar(idxs), data, 'x'); hold on
+plot(fBar(idxs), YPRIME, 'r-');  hold off
+title('ch4')
 
 figure(); 
 subplot(1,2,1)
@@ -155,7 +258,7 @@ xlabel('f [MHz]')
 ylabel('Amp[v]')
 
 subplot(1,2,2)
-stem(Gamma)
+stem(Gamma(idealEnvIdx, :))
 title('Gamma Vs. Channels')
 xlabel('Channel')
 ylabel('Gamma')
@@ -174,7 +277,7 @@ for i = 1:10
         B = load(sprintf("%s%s", dirName, varsName));
         
         uVars = B.curVars.acoustoOptics.uVars;
-        uVars.quantTime = IdealQuantTime;
+        uVars.quantTime = idealQuantTime;
         uVars.exportRawData = true;
         uVars.useHadamard = false;
         uVars.gReq = gReq;
@@ -201,14 +304,28 @@ end
 
 
 figure(); 
-errorbar(2:2:20, results.phiFrame(9, 2:2:20), results.phiFrameStd(9, 2:2:20)); hold on;
-errorbar(2:2:20, results.phiFrame(9, 2:2:20), results.phiFrameStd(9, 2:2:20));
+errorbar(naiveVars.curVars.scan.timeFrames, naiveData.res.phiFrame(8,:), naiveData.res.phiFrameStd(8,:));hold on;
+errorbar(2:2:20, results.phiFrame(8, :), results.phiFrameStd(8, :));
 legend('before Quant opt', 'after Quant opt')
+xlim([0, 22])
+xlabel('Frame Duration[s]')
+ylabel ('Amp[v]');
+title('Consistency Results - Comparison')
 
-SNRIdeal =  results.phiFrame(9, 2:2:20).^2 ./ results.phiFrameStd(9, 2:2:20).^2;
+SNRIdeal =  results.phiFrame.^2 ./ results.phiFrameStd.^2;
 
 figure();
-plot(2:2:20, SNRIdeal, '-+')
-plot(2:2:20, SNRIdeal, '-+');
+plot(2:2:20, log(SNR(8,:)), '-+'); hold on ;
+plot(2:2:20, log(SNRIdeal(8, :)), '-+');
 xlabel ('Frame time [s]')
 ylabel ('SNR')
+legend('before quant opti', 'after quant opt')
+title('SNR Comparison (log Scale)')
+xlim([0, 22])
+
+figure();
+stem(2:2:20, results.phiFrameStd(8, :))
+title('Std Trendline')
+xlabel('Frame Duration')
+ylabel('STD')
+xlim([0, 22])
