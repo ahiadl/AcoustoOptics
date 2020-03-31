@@ -6,6 +6,7 @@ classdef IO < handle
         vars
         deviceString
         s
+        hardwareAvailable
     end
     
     methods (Static)
@@ -28,7 +29,12 @@ classdef IO < handle
         
         function connect(this)
             this.deviceString = daq.getDevices;
-            this.s = daq.createSession('ni');
+            if ~isempty(this.deviceString)
+                this.s = daq.createSession('ni');
+                this.hardwareAvailable = true;
+            else
+                this.hardwareAvailable = false;
+            end
         end
         
         function allocPorts(this, uVars)

@@ -16,6 +16,7 @@ classdef Digitizer < handle
 
         timeTable
         alazarDefs
+        hardwareAvailable
     end
     
     methods (Static)
@@ -47,8 +48,6 @@ classdef Digitizer < handle
             this.system.bufferCount  = 4;
             
             this.buffers = cell(1, this.system.bufferCount);
-            
-            this.initDefs();
         end
         
         function initDefs(this)
@@ -96,7 +95,9 @@ classdef Digitizer < handle
                 case 'CS'
                     this.TS = [];
                     this.NPT = [];
-            end 
+            end
+            
+            retVars = this.vars;
         end
         
         function vars = getVars(this)
@@ -148,11 +149,26 @@ classdef Digitizer < handle
         end
         
         function status = connect(this)
+            status = true;
             this.timeTable.Connect = tic;
             
-            status = true; 
-%             AlazarDefs;
-            if ~alazarLoadLibrary(); fprintf('Error: ATSApi library not loaded\n'); status = false; return; end
+            try
+                this.initDefs();
+                this.system.hardwareAvailable = true;
+            catch
+                fprintf("DIGITIZER: No DEFS found, Assuming no digitizer on that system.\n");
+                this.system.hardwareAvailable = false;
+                status = false;
+                return;
+            end
+            
+            if ~alazarLoadLibrary() 
+                fprintf('DIGITIZER: Error: ATSApi library not loaded\n'); 
+                status = false;
+                this.system.hardwareAvailable = false;
+                return; 
+            end
+            
             this.system.boardHandle = AlazarGetBoardBySystemID(this.system.systemId, this.system.boardId);
             setdatatype(this.system.boardHandle, 'voidPtr', 1, 1);
             
@@ -169,7 +185,7 @@ classdef Digitizer < handle
                                             this.alazarDefs.SAMPLE_RATE_USER_DEF,     ... % U32 -- sample rate id
                                             this.alazarDefs.CLOCK_EDGE_RISING,        ... % U32 -- clock edge id
                                             0);                          % U32 -- clock decimation                                
-            if retCode ~= this.alazarDefs.ApiSuccess; fprintf('Error: AlazarSetCaptureClock failed -- %s\n', errorToText(retCode)); status = false; return; end
+            if retCode ~= this.alazarDefs.ApiSuccess; fprintf('DIGITIZER: Error: AlazarSetCaptureClock failed -- %s\n', errorToText(retCode)); status = false; return; end
             
             this.timeTable.confExtClk = toc(this.timeTable.confExtClk);
         end
@@ -184,37 +200,37 @@ classdef Digitizer < handle
             successCode = this.alazarDefs.ApiSuccess;
             
             retCode = AlazarInputControlEx( this.system.boardHandle, this.alazarDefs.CHANNEL_A, coupling, inputRange, impedance);
-            if (retCode ~= successCode); fprintf('Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
+            if (retCode ~= successCode); fprintf('DIGITIZER: Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
             retCode = AlazarInputControlEx( this.system.boardHandle, this.alazarDefs.CHANNEL_B, coupling, inputRange, impedance);
-            if (retCode ~= successCode); fprintf('Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
+            if (retCode ~= successCode); fprintf('DIGITIZER: Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
             retCode = AlazarInputControlEx( this.system.boardHandle, this.alazarDefs.CHANNEL_C, coupling, inputRange, impedance);
-            if (retCode ~= successCode); fprintf('Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
+            if (retCode ~= successCode); fprintf('DIGITIZER: Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
             retCode = AlazarInputControlEx( this.system.boardHandle, this.alazarDefs.CHANNEL_D, coupling, inputRange, impedance);
-            if (retCode ~= successCode); fprintf('Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
+            if (retCode ~= successCode); fprintf('DIGITIZER: Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
             retCode = AlazarInputControlEx( this.system.boardHandle, this.alazarDefs.CHANNEL_E, coupling, inputRange, impedance);
-            if (retCode ~= successCode); fprintf('Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
+            if (retCode ~= successCode); fprintf('DIGITIZER: Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
             retCode = AlazarInputControlEx( this.system.boardHandle, this.alazarDefs.CHANNEL_F, coupling, inputRange, impedance);
-            if (retCode ~= successCode); fprintf('Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
+            if (retCode ~= successCode); fprintf('DIGITIZER: Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
             retCode = AlazarInputControlEx( this.system.boardHandle, this.alazarDefs.CHANNEL_G, coupling, inputRange, impedance);
-            if (retCode ~= successCode); fprintf('Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
+            if (retCode ~= successCode); fprintf('DIGITIZER: Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
             retCode = AlazarInputControlEx( this.system.boardHandle, this.alazarDefs.CHANNEL_H, coupling, inputRange, impedance);
-            if (retCode ~= successCode); fprintf('Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
+            if (retCode ~= successCode); fprintf('DIGITIZER: Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
             retCode = AlazarInputControlEx( this.system.boardHandle, this.alazarDefs.CHANNEL_I, coupling, inputRange, impedance);
-            if (retCode ~= successCode); fprintf('Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
+            if (retCode ~= successCode); fprintf('DIGITIZER: Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
             retCode = AlazarInputControlEx( this.system.boardHandle, this.alazarDefs.CHANNEL_J, coupling, inputRange, impedance);
-            if (retCode ~= successCode); fprintf('Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
+            if (retCode ~= successCode); fprintf('DIGITIZER: Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
             retCode = AlazarInputControlEx( this.system.boardHandle, this.alazarDefs.CHANNEL_K, coupling, inputRange, impedance);
-            if (retCode ~= successCode); fprintf('Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
+            if (retCode ~= successCode); fprintf('DIGITIZER: Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
             retCode = AlazarInputControlEx( this.system.boardHandle, this.alazarDefs.CHANNEL_L, coupling, inputRange, impedance);
-            if (retCode ~= successCode); fprintf('Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
+            if (retCode ~= successCode); fprintf('DIGITIZER: Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
             retCode = AlazarInputControlEx( this.system.boardHandle, this.alazarDefs.CHANNEL_M, coupling, inputRange, impedance);
-            if (retCode ~= successCode); fprintf('Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
+            if (retCode ~= successCode); fprintf('DIGITIZER: Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
             retCode = AlazarInputControlEx( this.system.boardHandle, this.alazarDefs.CHANNEL_N, coupling, inputRange, impedance);
-            if (retCode ~= successCode); fprintf('Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
+            if (retCode ~= successCode); fprintf('DIGITIZER: Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
             retCode = AlazarInputControlEx( this.system.boardHandle, this.alazarDefs.CHANNEL_O, coupling, inputRange, impedance);
-            if (retCode ~= successCode); fprintf('Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
+            if (retCode ~= successCode); fprintf('DIGITIZER: Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
             retCode = AlazarInputControlEx( this.system.boardHandle, this.alazarDefs.CHANNEL_P, coupling, inputRange, impedance);
-            if (retCode ~= successCode); fprintf('Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
+            if (retCode ~= successCode); fprintf('DIGITIZER: Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
 
             this.system.channelMask = 0;
             for i = 1:this.vars.channels
@@ -234,19 +250,19 @@ classdef Digitizer < handle
                                                 this.alazarDefs.TRIG_ENGINE_J, this.alazarDefs.TRIG_EXTERNAL,...
                                                 this.alazarDefs.TRIGGER_SLOPE_POSITIVE, this.system.triggerLevel_code,... %
                                                 this.alazarDefs.TRIG_ENGINE_K, this.alazarDefs.TRIG_DISABLE, this.alazarDefs.TRIGGER_SLOPE_POSITIVE, 128 );                                                    
-            if retCode ~= this.alazarDefs.ApiSuccess ; fprintf('Error: AlazarSetTriggerOperation failed -- %s\n', errorToText(retCode)); status = false; return; end
+            if retCode ~= this.alazarDefs.ApiSuccess ; fprintf('DIGITIZER: Error: AlazarSetTriggerOperation failed -- %s\n', errorToText(retCode)); status = false; return; end
 
             % Set External trigger Configurations
             retCode = AlazarSetExternalTrigger( this.system.boardHandle, this.alazarDefs.DC_COUPLING, this.alazarDefs.ETR_TTL );
-            if retCode ~= this.alazarDefs.ApiSuccess; fprintf('Error: AlazarSetExternalTrigger failed -- %s\n', errorToText(retCode)); status = false; return; end
+            if retCode ~= this.alazarDefs.ApiSuccess; fprintf('DIGITIZER: Error: AlazarSetExternalTrigger failed -- %s\n', errorToText(retCode)); status = false; return; end
 
             % Trigger Delay set to 0
             retCode = AlazarSetTriggerDelay(this.system.boardHandle, this.system.triggerDelay_samples);
-            if retCode ~= this.alazarDefs.ApiSuccess; fprintf('Error: AlazarSetTriggerDelay failed -- %s\n', errorToText(retCode)); status = false; return; end
+            if retCode ~= this.alazarDefs.ApiSuccess; fprintf('DIGITIZER: Error: AlazarSetTriggerDelay failed -- %s\n', errorToText(retCode)); status = false; return; end
 
             % Set Trigger Timeout 
             retCode = AlazarSetTriggerTimeOut(this.system.boardHandle, this.system.triggerTimeout_clocks); % U32 -- timeout_sec / 10.e-6 (0 == wait forever)       
-            if retCode ~= this.alazarDefs.ApiSuccess; fprintf('Error: AlazarSetTriggerTimeOut failed -- %s\n', errorToText(retCode)); status = false; return; end    
+            if retCode ~= this.alazarDefs.ApiSuccess; fprintf('DIGITIZER: Error: AlazarSetTriggerTimeOut failed -- %s\n', errorToText(retCode)); status = false; return; end    
             
             this.timeTable.confExtTrig = toc(this.timeTable.confExtTrig);
         end
@@ -264,7 +280,7 @@ classdef Digitizer < handle
                  admaFlags = this.alazarDefs.ADMA_EXTERNAL_STARTCAPTURE + this.alazarDefs.ADMA_NPT; % Select AutoDMA flags as required
                  retCode = AlazarBeforeAsyncRead(this.system.boardHandle, this.system.channelMask, -int32(this.NPT.preTriggerSamples), this.NPT.samplesPerRecord, this.NPT.recordsPerBuffer, hex2dec('7FFFFFFF'), admaFlags);
             end
-            if retCode ~= this.alazarDefs.ApiSuccess; fprintf('Error: AlazarBeforeAsyncRead failed -- %s\n', errorToText(retCode)); status = false; return; end
+            if retCode ~= this.alazarDefs.ApiSuccess; fprintf('DIGITIZER: Error: AlazarBeforeAsyncRead failed -- %s\n', errorToText(retCode)); status = false; return; end
             
             this.timeTable.setADMA = toc(this.timeTable.setADMA);
         end
@@ -276,7 +292,7 @@ classdef Digitizer < handle
             status = true;
             for j = 1 : this.system.bufferCount
                 pbuffer = AlazarAllocBuffer(this.system.boardHandle, this.vars.bufferSizeBytes);
-                if pbuffer == 0; fprintf('Error: AlazarAllocBuffer %u samples failed\n', SamplingCard.samplesPerBuffer); status = false; return; end
+                if pbuffer == 0; fprintf('DIGITIZER: Error: AlazarAllocBuffer %u samples failed\n', SamplingCard.samplesPerBuffer); status = false; return; end
                 this.buffers(1, j) = { pbuffer };
             end
             
@@ -288,7 +304,7 @@ classdef Digitizer < handle
             status = true;
             if strcmp(this.system.mode, 'NPT')
                 retCode = AlazarSetRecordSize(this.system.boardHandle, this.NPT.preTriggerSamples, this.NPT.postTriggerSamples);
-                if retCode ~= this.alazarDefs.ApiSuccess; fprintf('Error: AlazarSetRecordSize failed -- %s\n', errorToText(retCode)); status = false; return; end
+                if retCode ~= this.alazarDefs.ApiSuccess; fprintf('DIGITIZER: Error: AlazarSetRecordSize failed -- %s\n', errorToText(retCode)); status = false; return; end
             end
         end
         
@@ -313,7 +329,7 @@ classdef Digitizer < handle
             for bufferIndex = 1 : this.system.bufferCount
                 pbuffer = this.buffers{1, bufferIndex};
                 retCode = AlazarPostAsyncBuffer(this.system.boardHandle, pbuffer, this.vars.bufferSizeBytes);
-                if retCode ~= this.alazarDefs.ApiSuccess; fprintf('Error: AlazarPostAsyncBuffer failed -- %s\n', errorToText(retCode)); status = false; return; end
+                if retCode ~= this.alazarDefs.ApiSuccess; fprintf('DIGITIZER: Error: AlazarPostAsyncBuffer failed -- %s\n', errorToText(retCode)); status = false; return; end
             end
             
             this.timeTable.postBuffersToBoard = toc(this.timeTable.postBuffersToBoard);
@@ -324,7 +340,7 @@ classdef Digitizer < handle
             
             status = true;
             retCode = AlazarPostAsyncBuffer(this.system.boardHandle, pbuffer, this.vars.bufferSizeBytes);
-            if retCode ~= this.alazarDefs.ApiSuccess; fprintf('Error: AlazarPostAsyncBuffer failed -- %s\n', errorToText(retCode)); status = false; end 
+            if retCode ~= this.alazarDefs.ApiSuccess; fprintf('DIGITIZER: Error: AlazarPostAsyncBuffer failed -- %s\n', errorToText(retCode)); status = false; end 
         end
         
         function status = armBoard(this)
@@ -333,7 +349,7 @@ classdef Digitizer < handle
             status = true;
             % startTime = tic;
             retCode = AlazarStartCapture(this.system.boardHandle);
-            if retCode ~= this.alazarDefs.ApiSuccess; fprintf('Error: AlazarStartCapture failed -- %s\n', errorToText(retCode)); status = false; return; end
+            if retCode ~= this.alazarDefs.ApiSuccess; fprintf('DIGITIZER: Error: AlazarStartCapture failed -- %s\n', errorToText(retCode)); status = false; return; end
             % startTime = toc(startTime);
             
             this.timeTable.armBoard = toc(this.timeTable.armBoard);
@@ -376,12 +392,12 @@ classdef Digitizer < handle
                 elseif retCode == this.alazarDefs.ApiWaitTimeout
                     % The wait timeout expired before this buffer was filled.
                     % The board may not be triggering, or the timeout period may be too short.
-                    fprintf('Error: AlazarWaitAsyncBufferComplete timeout -- Verify trigger!\n');
+                    fprintf('DIGITIZER: Error: AlazarWaitAsyncBufferComplete timeout -- Verify trigger!\n');
                     bufferFull = false;
                     captureDone = true;
                 else
                     % The acquisition failed
-                    fprintf('Error: AlazarWaitAsyncBufferComplete failed -- %s\n', errorToText(retCode));
+                    fprintf('DIGITIZER: Error: AlazarWaitAsyncBufferComplete failed -- %s\n', errorToText(retCode));
                     bufferFull = false;
                     captureDone = true;
                 end
@@ -467,7 +483,7 @@ classdef Digitizer < handle
                 pbuffer =  this.buffers{1, bufferIndex};
                 retCode = AlazarFreeBuffer(this.system.boardHandle, pbuffer);
                 if retCode ~= this.alazarDefs.ApiSuccess
-                    fprintf('Error: AlazarFreeBuffer failed -- %s\n', errorToText(retCode));
+                    fprintf('DIGITIZER: Error: AlazarFreeBuffer failed -- %s\n', errorToText(retCode));
                 end
                 clear pbuffer;
             end

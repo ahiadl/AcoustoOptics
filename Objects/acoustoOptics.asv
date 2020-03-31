@@ -319,12 +319,6 @@ classdef acoustoOptics < handle
             
             % Set Graphics variables
             fprintf("AOI:  9. Sets Graphic Request.\n")
-            
-            if uVars.fastAnalysis
-                uVars.figs.validStruct.FFT     = false;
-                uVars.figs.validStruct.qAvgFFT = false;
-            end
-
             this.measVars.figs = uVars.figs;
             this.graphics.setUserVars(this.measVars.figs);
             
@@ -465,7 +459,7 @@ classdef acoustoOptics < handle
             res = this.results;
         end
 
-        function res = liveAcoustoOptics(this)
+        function liveAcoustoOptics(this)
             %live acousto optics cannot be called by scan object and
             %configurePeripherals is being called each time it is called
             %and therefore it can use the values of xPos yPos in uVars.
@@ -513,7 +507,7 @@ classdef acoustoOptics < handle
                 end
                 fprintf("AOI: Live AO was STOPPED.\n");
             end
-            res = this.result;           
+            
         end
         
         function res = measureAndAnalyse(this)
@@ -685,16 +679,6 @@ classdef acoustoOptics < handle
                  end
             end
             
-            if this.measVars.figs.validStruct.qAvgFFT
-                 if ~isfield(this.result, 'qAvgFFT')
-                    fprintf("AOI: You asked to display quant averaged FFT, but qAvgFFT isn't available in reults.\n");
-                 else
-                    this.graphics.plotFFT('qAvgFFT', this.measVars.algo.freq.frequencyBar*1e-6, this.result.qAvgFFT,...
-                                          this.measVars.algo.freq.frequencyBar(this.measVars.algo.freq.fSinIdx)*1e-6,...
-                                          this.measVars.algo.freq.fSinIdx);
-                 end
-            end
-            
             if this.measVars.figs.validStruct.phiCh
                 if ~isfield(this.result, 'phiCh')
                     fprintf("AOI: You asked to display Phi Channel, but phiCh isn't available in reults.\n");
@@ -719,7 +703,7 @@ classdef acoustoOptics < handle
         function setFigsVars(this, figs)
             this.graphics.setUserVars(figs);
             this.graphics.setGraphicsDynamicVars(this.measVars.algo)
-            this.plotAll();
+            
         end
         % Saved data Operation
         % The following 3 functions should be called consecutively in order
@@ -798,7 +782,11 @@ classdef acoustoOptics < handle
             
             % Setup graphics
             this.graphics.setGraphicsDynamicVars(this.measVars.algo);
-            this.measVars.fileSystem = this.fileSystem.configFileSystem();
+             
+            if this.measVars.fileSystem.saveAny
+                fprintf("AOI: Saving Results To Disk\n");
+                this.fileSystem.saveData(this.result) 
+            end 
 
             if this.measVars.fileSystem.saveVars
                 this.fileSystem.saveVarsToDisk(this.getAOVars, "");

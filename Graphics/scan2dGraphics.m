@@ -538,7 +538,8 @@ classdef scan2dGraphics < Graphics
                 quickPlot(this, 'navPlainRep', xData, yData, cData)
             end    
         end
-          
+        
+        %Controlling Functions
         function updateCurScan(this, curScan)
             this.requests.curRep   = curScan(1);
             this.requests.curXidx  = curScan(2);

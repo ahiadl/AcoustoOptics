@@ -7,6 +7,7 @@ classdef fGen < handle
         ChData
         valVars
         connected
+        hardwareAvailable
     end
     
     methods (Static)       
@@ -50,14 +51,26 @@ classdef fGen < handle
         end
         
         function init(this)
-            this.connect();
-            this.reset()
+            try
+                this.connect();
+                this.hardwareAvailable = true;
+                this.reset()
+            catch
+                fprintf("FGEN: Can't connect to fGen.")
+                this.hardwareAvailable = false;
+            end
+            
         end
         
         function connect(this)
             this.inst = instrfind('Type', 'gpib', 'BoardIndex', 8, 'PrimaryAddress', 4, 'Tag', '');
             if isempty(this.inst)
-                this.inst = gpib('AGILENT', 8, 4);
+                try
+                    this.inst = gpib('AGILENT', 8, 4);
+                catch
+                    this.hardwareAvailable = false;
+                    return
+                end
             else
                 fclose(this.inst);
                 this.inst = this.inst(1);
@@ -67,9 +80,11 @@ classdef fGen < handle
             try
                 fopen(this.inst);
                 this.connected = true;
+                this.hardwareAvailable = true;
             catch
                 this.connected = false;
-                fprintf("Could not open fGen. please check device is ON and CONNECTED.")
+                this.hardwareAvailable = false;
+                fprintf("FGEN: Could not open fGen. please check device is ON and CONNECTED.")
             end
         end
         
@@ -88,7 +103,7 @@ classdef fGen < handle
                 this.ChVars{1} = ch1;
                 this.ChVars{2} = ch2;
             else
-                fprintf("ERROR: AFG is not connected. Channels were not configured")
+                fprintf("FGEN: ERROR: AFG is not connected. Channels were not configured")
             end
         end
         
@@ -99,7 +114,7 @@ classdef fGen < handle
                 this.ChData{2}.data    = ch2.data;
                 this.ChData{2}.dataLen = ch2.dataLen;
             else
-                fprintf("ERROR: AFG is not connected. Channels were not configured")
+                fprintf("FGEN: ERROR: AFG is not connected. Channels were not configured")
             end
         end
         
@@ -179,7 +194,7 @@ classdef fGen < handle
                 pause(0.1);
                 for k=1:num_blocks
                     pause(0.2);
-                    fprintf('downloading chunk %d\n', k);
+                    fprintf('FGEN: downloading chunk %d\n', k);
                     fwrite(this.inst, this.ChData{i}.readyData((k-1)*this.me.blocksize+1:min(n,k*this.me.blocksize)), 'uint8');
                 end
                 pause(0.1);

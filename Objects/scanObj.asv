@@ -18,6 +18,7 @@ classdef scanObj < handle
         owned
         curPos
         curScan
+
         strings
         
     end

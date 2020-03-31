@@ -17,6 +17,7 @@ classdef s2d < scanObj
             uVars.fileSystem.saveFullData    = false;
             uVars.fileSystem.saveReducedData = false;
             uVars.fileSystem.saveFigs        = false;
+            uVars.fileSystem.savePhiChCmplx  = false;
            
             uVars.stages.startX  = 0;
             uVars.stages.startY  = 0;
@@ -40,7 +41,7 @@ classdef s2d < scanObj
     end
     
     methods
-        function this = s2d(acoustoOpticHandle, stagesHandle, owner)
+        function this = s2d(acoustoOpticHandle, owner)
             this@scanObj(acoustoOpticHandle, stagesHandle, owner);
             
             this.strings.scan = "Done Scan for (R,X,Y) = (%d, %.2f, %.2f)";
@@ -61,12 +62,13 @@ classdef s2d < scanObj
         end
         
         function initResultsArrays(this)
-            this.results.phiCh     = zeros(this.stages.vars.xIdxLen, this.stages.vars.yIdxLen, this.scan.zIdxLen, this.scan.repeats, this.scan.numOfQuant, this.scan.channels);
-            this.results.phiQuant  = zeros(this.stages.vars.xIdxLen, this.stages.vars.yIdxLen, this.scan.zIdxLen, this.scan.repeats, this.scan.numOfQuant);
-            this.results.phiRepStd = zeros(this.stages.vars.xIdxLen, this.stages.vars.yIdxLen, this.scan.zIdxLen, this.scan.repeats);
-            this.results.phiRep    = zeros(this.stages.vars.xIdxLen, this.stages.vars.yIdxLen, this.scan.zIdxLen, this.scan.repeats);
-            this.results.phi       = zeros(this.stages.vars.xIdxLen, this.stages.vars.yIdxLen, this.scan.zIdxLen);
-            this.results.phiStd    = zeros(this.stages.vars.xIdxLen, this.stages.vars.yIdxLen, this.scan.zIdxLen);
+%             this.results.phiChCmplx = zeros(this.stages.vars.xIdxLen, this.stages.vars.yIdxLen, this.scan.zIdxLen, this.scan.repeats, this.scan.numOfQuant, this.scan.channels);
+            this.results.phiCh      = zeros(this.stages.vars.xIdxLen, this.stages.vars.yIdxLen, this.scan.zIdxLen, this.scan.repeats, this.scan.numOfQuant, this.scan.channels);
+            this.results.phiQuant   = zeros(this.stages.vars.xIdxLen, this.stages.vars.yIdxLen, this.scan.zIdxLen, this.scan.repeats, this.scan.numOfQuant);
+            this.results.phiRepStd  = zeros(this.stages.vars.xIdxLen, this.stages.vars.yIdxLen, this.scan.zIdxLen, this.scan.repeats);
+            this.results.phiRep     = zeros(this.stages.vars.xIdxLen, this.stages.vars.yIdxLen, this.scan.zIdxLen, this.scan.repeats);
+            this.results.phi        = zeros(this.stages.vars.xIdxLen, this.stages.vars.yIdxLen, this.scan.zIdxLen);
+            this.results.phiStd     = zeros(this.stages.vars.xIdxLen, this.stages.vars.yIdxLen, this.scan.zIdxLen);
             
             this.curScan = zeros(1,3);
         end
@@ -78,7 +80,7 @@ classdef s2d < scanObj
         function startScan(this,uVars)
             this.setUserVars(uVars);
             this.initResultsArrays();
-            this.setGraphicsDynamicVars();
+            %this.setGraphicsDynamicVars(); % TODO: should it be comment out?
             this.initTimeTable();
             
             if this.owned
@@ -130,12 +132,14 @@ classdef s2d < scanObj
                         
                         this.startScanTime('copyTime');
                         % keep the data in the same arrays axes no matter what is the scan primary scan axis
-                        if strcmp(this.stages.vars.firstAxis, 'Y') 
+                        if strcmp(this.stages.vars.firstAxis, 'Y')
+%                             this.results.phiChCmplx(i,j,:,r,:,:) = permute(gather(res.phiChCmplx), [4, 5, 3, 6, 1, 2]);
                             this.results.phiCh(i,j,:,r,:,:)  = permute(gather(res.phiCh),    [4, 5, 3, 6, 1, 2]);
                             this.results.phiQuant(i,j,:,r,:) = permute(gather(res.phiQuant), [3, 4, 2, 5, 1]);
                             this.results.phiRep(i,j,:,r)     = permute(gather(res.phi),      [1, 3, 2, 4]);
                             this.results.phiRepStd(i,j,:,r)  = permute(gather(res.phiStd),   [1, 3, 2, 4]);
                         elseif strcmp(this.stages.vars.firstAxis, 'X')
+%                             this.results.phiChCmplx(j,i,:,r,:,:) = permute(gather(res.phiChCmplx), [4, 5, 3, 6, 1, 2]);
                             this.results.phiCh(j,i,:,r,q,:)  = permute(gather(res.phiCh),    [4, 5, 3, 6, 1, 2]);
                             this.results.phiQuant(j,i,:,r,q) = permute(gather(res.phiQuant), [3, 4, 2, 5, 1]);
                             this.results.phiRep(j,i,:,r)     = permute(gather(res.phi),      [1, 3, 2, 4]);
@@ -187,6 +191,7 @@ classdef s2d < scanObj
             end
             
             this.saveResults();
+          
         end
         
         % Stages Variables Code
@@ -292,6 +297,12 @@ classdef s2d < scanObj
         function gH = getGraphicsHandle(this)
             gH = this.graphics.obj;
         end
+        
+%         function savePhiCmplx(this)
+%             res = this.acoustoOptics.obj.result.phiChCmplx;
+%             dataName = sprintf("phiChCmplx-R%dX%.2fY%.2f.mat", this.curScan(1), this.curScan(2), this.curScan(3));
+%             save(sprintf("%s%s%s", this.fileSystem.rawDataDir,'\', dataName),  'res', '-v7.3'); 
+%         end
     end
 end
 

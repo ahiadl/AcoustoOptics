@@ -1,14 +1,17 @@
 classdef Graphics < handle
     %GRAPHICS Summary of this class goes here
-    %   Detailed explanation goes here
+    % Detailed explanation goes here
     
     properties
-        requests
-        globalReq
-        globalReqOld
-        extUpdate
-        numOfGraphs
-        graphNames
+        figs
+        
+        uVars
+        uVarsOld
+        
+        extUpdate % what this is for?
+        
+        numOfFigs
+        figsNames
     end
     
     methods(Static)
@@ -23,133 +26,140 @@ classdef Graphics < handle
     end
     
     methods
-        function this = Graphics(plotNames)
-            this.graphNames = plotNames;
-            this.numOfGraphs = length(this.graphNames);
-            this.extUpdate = true;
+        function this = Graphics()
+%             this.graphNames = plotNames;
+%             this.numOfGraphs = length(this.graphNames);
+            this.extUpdate = true; %what this is for?
         end
         
         % Static Vars set functions
         function setType(this, gName, type)
-            this.requests.(gName).type = type;
+            this.figs.(gName).type = type;
         end
         
         function setStrings(this, gName, title, xlabel, ylabel, legend)
-            this.requests.(gName).strings.titleModel  = title;
-            this.requests.(gName).strings.xlabel = xlabel;
-            this.requests.(gName).strings.ylabel = ylabel;
-            this.requests.(gName).strings.xlabelModel = xlabel;
-            this.requests.(gName).strings.ylabelModel = ylabel;
-            this.requests.(gName).strings.legendModel = legend;
+            this.figs.(gName).strings.titleModel  = title;
+            this.figs.(gName).strings.xlabel = xlabel;
+            this.figs.(gName).strings.ylabel = ylabel;
+            this.figs.(gName).strings.xlabelModel = xlabel;
+            this.figs.(gName).strings.ylabelModel = ylabel;
+            this.figs.(gName).strings.legendModel = legend;
         end        
         
         function setChAndPos(this, ch, zIdx, quant)
-            this.requests.zIdx  = zIdx;
-            this.requests.ch    = ch;
-            this.requests.quant = quant;
+            this.figs.zIdx  = zIdx;
+            this.figs.ch    = ch;
+            this.figs.quant = quant;
         end
         
         function setMarkersEnable(this, gName, enDis)
-             this.requests.(gName).markers.plotMark = enDis;
+             this.figs.(gName).markers.plotMark = enDis;
         end
         
         % Dynamic Vars set functions
         function setTitleVariables(this, gName, titleVars)
-            for i = 1:length(this.requests.(gName).strings.titleModel)
-                str{i} = sprintf(this.requests.(gName).strings.titleModel{i}, titleVars{i});
+            str = cell(1,length(this.figs.(gName).strings.titleModel));
+            for i = 1:length(this.figs.(gName).strings.titleModel)
+                str{i} = sprintf(this.figs.(gName).strings.titleModel{i}, titleVars{i});
             end
-            this.requests.(gName).strings.title  = str;
+            this.figs.(gName).strings.title  = str;
         end
         
         function setLimits(this, gName, xlims, ylims)
-            this.requests.(gName).lims.xlims  = xlims;
-            this.requests.(gName).lims.ylims  = ylims;
+            this.figs.(gName).lims.xlims  = xlims;
+            this.figs.(gName).lims.ylims  = ylims;
         end
         
         function setLegendVariables(this, gName, legendVars)
             for i=1:length(legendVars)
-                this.requests.(gName).strings.legend{i}  =...
-                    sprintf(this.requests.(gName).strings.legendModel, legendVars(i));
+                this.figs.(gName).strings.legend{i}  =...
+                    sprintf(this.figs.(gName).strings.legendModel, legendVars(i));
             end
         end
         
         % Set Global Request functions
-        function setGlobalReq(this, newGlobalReq)
-           this.globalReqOld = this.globalReq;
-           this.globalReq = newGlobalReq;
+        function setUserVars(this, uVars)
+           this.uVarsOld = this.uVars;
+           this.uVars    = uVars;
            
-           this.requests.zIdx = this.globalReq.zIdx;
-           this.requests.ch  = this.globalReq.ch;
-           this.requests.quant = this.globalReq.quant;
+           this.setChAndPos(uVars.ch, uVars.zIdx, uVars.quant);
+%            this.figs.zIdx     = this.globalReq.zIdx;
+%            this.requests.ch    = this.globalReq.ch;
+%            this.requests.quant = this.globalReq.quant;
         end
         
         function updateGraphicsConstruction(this)
-            if (strcmp(this.globalReq.intExt, 'int')) 
-                for i = 1:this.numOfGraphs
-                    if strcmp(this.globalReqOld.intExt, 'ext') % backup current handles
-                        this.requests.(this.graphNames{i}).handles.ext       = this.requests.(this.graphNames{i}).handles.cur;
-                    elseif strcmp(this.globalReqOld.intExt, 'int')
-                        this.requests.(this.graphNames{i}).handles.int       = this.requests.(this.graphNames{i}).handles.cur;
+            if (strcmp(this.uVars.intExt, 'int')) 
+                for i = 1:this.numOfFigs
+                    if strcmp(this.uVarsOld.intExt, 'ext') % backup current handles
+                        this.figs.(this.figsNames{i}).handles.ext       = this.figs.(this.figsNames{i}).handles.cur;
+                    elseif strcmp(this.uVarsOld.intExt, 'int')
+                        this.figs.(this.figsNames{i}).handles.int       = this.figs.(this.figsNames{i}).handles.cur;
                     end
-                    if this.globalReq.validStruct.(this.graphNames{i})
-                        if ~isgraphics(this.requests.(this.graphNames{i}).handles.int.ax)  % check if you can use the old figures, if not, open a new one
-                            this.requests.(this.graphNames{i}).handles.int.fig = figure();  
-                            this.requests.(this.graphNames{i}).handles.int.ax  = axes();
-                            this.requests.(this.graphNames{i}).handles.int.plot = NaN;
+                    if this.uVars.validStruct.(this.figsNames{i})
+                        if ~isgraphics(this.figs.(this.figsNames{i}).handles.int.ax)  % check if you can use the old figures, if not, open a new one
+                            this.figs.(this.figsNames{i}).handles.int.fig = figure();  
+                            this.figs.(this.figsNames{i}).handles.int.ax  = axes();
+                            this.figs.(this.figsNames{i}).handles.int.plot = NaN;
                         end
                         % and update cur with the new/old handles
-                        this.requests.(this.graphNames{i}).handles.cur = this.requests.(this.graphNames{i}).handles.int;
+                        this.figs.(this.figsNames{i}).handles.cur = this.figs.(this.figsNames{i}).handles.int;
                     else
-                        this.requests.(this.graphNames{i}).handles.cur.fig  = NaN;
-                        this.requests.(this.graphNames{i}).handles.cur.ax   = NaN;
-                        this.requests.(this.graphNames{i}).handles.cur.plot = NaN;
+                        this.figs.(this.figsNames{i}).handles.cur.fig  = NaN;
+                        this.figs.(this.figsNames{i}).handles.cur.ax   = NaN;
+                        this.figs.(this.figsNames{i}).handles.cur.plot = NaN;
                     end
                 end
             else %if current is external
-                for i = 1:this.numOfGraphs
+                for i = 1:this.numOfFigs
                     if this.extUpdate % if its the first external copy the handles.
-                        this.requests.(this.graphNames{i}).handles.ext.fig = this.globalReq.extH.(this.graphNames{i}).fig;
-                        this.requests.(this.graphNames{i}).handles.ext.ax  = this.globalReq.extH.(this.graphNames{i}).ax;
+                        this.figs.(this.figsNames{i}).handles.ext.fig = this.uVars.extH.(this.figsNames{i}).fig;
+                        this.figs.(this.figsNames{i}).handles.ext.ax  = this.uVars.extH.(this.figsNames{i}).ax;
                     end
-                    if strcmp(this.globalReqOld.intExt, 'int') % if previous was internal, copy the handles
-                        this.requests.(this.graphNames{i}).handles.int  = this.requests.(this.graphNames{i}).handles.cur;
-                    elseif strcmp(this.globalReqOld.intExt, 'ext')
-                        this.requests.(this.graphNames{i}).handles.ext  = this.requests.(this.graphNames{i}).handles.cur;
+                    if strcmp(this.uVarsOld.intExt, 'int') % if previous was internal, copy the handles
+                        this.figs.(this.figsNames{i}).handles.int  = this.figs.(this.figsNames{i}).handles.cur;
+                    elseif strcmp(this.uVarsOld.intExt, 'ext')
+                        this.figs.(this.figsNames{i}).handles.ext  = this.figs.(this.figsNames{i}).handles.cur;
                     end
-                    this.requests.(this.graphNames{i}).handles.cur = this.requests.(this.graphNames{i}).handles.ext;
-                    this.requests.(this.graphNames{i}).fonts.titleSize  = this.globalReq.fonts.titleSize;
-                    this.requests.(this.graphNames{i}).fonts.labelsSize = this.globalReq.fonts.labelsSize;
-                    this.requests.(this.graphNames{i}).fonts.axisSize   = this.globalReq.fonts.axisSize;
+                    this.figs.(this.figsNames{i}).handles.cur = this.figs.(this.figsNames{i}).handles.ext;
+                    this.figs.(this.figsNames{i}).fonts.titleSize  = this.uVars.fonts.titleSize;
+                    this.figs.(this.figsNames{i}).fonts.labelsSize = this.uVars.fonts.labelsSize;
+                    this.figs.(this.figsNames{i}).fonts.axisSize   = this.uVars.fonts.axisSize;
                 end
                 this.extUpdate = false;
             end
         end   
 
         function setStringsToPlot(this, gName)
-            set(this.requests.(gName).handles.cur.ax, 'FontSize', this.requests.(gName).fonts.axisSize)
-            this.requests.(gName).handles.cur.title =...
-                title(this.requests.(gName).handles.cur.ax, this.requests.(gName).strings.title, ...
-                'FontSize', this.requests.(gName).fonts.titleSize);
-            xlabel(this.requests.(gName).handles.cur.ax, this.requests.(gName).strings.xlabel,...
-                 'FontSize', this.requests.(gName).fonts.labelsSize);
-            ylabel(this.requests.(gName).handles.cur.ax, this.requests.(gName).strings.ylabel,...
-                 'FontSize', this.requests.(gName).fonts.labelsSize);
-            if length( this.requests.(gName).handles.cur.plot) > 1
-                this.requests.(gName).handles.cur.legend =...
-                    legend(this.requests.(gName).handles.cur.ax, this.requests.(gName).strings.legend);
+            set(this.figs.(gName).handles.cur.ax, 'FontSize', this.figs.(gName).fonts.axisSize)
+            this.figs.(gName).handles.cur.title =...
+                title(this.figs.(gName).handles.cur.ax, this.figs.(gName).strings.title, ...
+                'FontSize', this.figs.(gName).fonts.titleSize);
+            xlabel(this.figs.(gName).handles.cur.ax, this.figs.(gName).strings.xlabel,...
+                 'FontSize', this.figs.(gName).fonts.labelsSize);
+            ylabel(this.figs.(gName).handles.cur.ax, this.figs.(gName).strings.ylabel,...
+                 'FontSize', this.figs.(gName).fonts.labelsSize);
+            if length( this.figs.(gName).handles.cur.plot) > 1
+                this.figs.(gName).handles.cur.legend =...
+                    legend(this.figs.(gName).handles.cur.ax, this.figs.(gName).strings.legend);
             end
         end
         
         function setLimsToPlot(this, gName)
-            if ~isempty(this.requests.(gName).lims.xlims)
-                xlim(this.requests.(gName).handles.cur.ax, this.requests.(gName).lims.xlims)
+            if ~isempty(this.figs.(gName).lims.xlims)
+                xlim(this.figs.(gName).handles.cur.ax, this.figs.(gName).lims.xlims)
             end
-            if ~isempty(this.requests.(gName).lims.ylims)
-                ylim(this.requests.(gName).handles.cur.ax, this.requests.(gName).lims.ylims)
+            if ~isempty(this.figs.(gName).lims.ylims)
+                ylim(this.figs.(gName).handles.cur.ax, this.figs.(gName).lims.ylims)
             end
-            if ~isempty(this.requests.(gName).lims.clims)
-                caxis(this.requests.(gName).handles.cur.ax, this.requests.(gName).lims.clims)
+            if ~isempty(this.figs.(gName).lims.clims)
+                caxis(this.figs.(gName).handles.cur.ax, this.figs.(gName).lims.clims)
             end
         end
+        
+%         TODO: complete
+%         function popOutFigures(this)
+
+%         end
     end
 end

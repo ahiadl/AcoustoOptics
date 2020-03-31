@@ -3,28 +3,30 @@ classdef stages < handle
     %   Detailed explanation goes here
     
     properties
-        curPos
-        
-        devices
-    
-        vars
-        
+        curPos       
+        devices  
+        vars        
         connected
+        hardwareAvailable
     end
     
     methods
         function this = stages(port)
             this.vars.port = port;
             this.connected = false;
+            this.hardwareAvailable = false;
         end
         
         function connect(this)
-%             if this.connected
-%                 fprintf("Stages are already connected.\n");
-%             else
+            try
                 [this.vars.ZaberPort, this.devices, this.vars.stepSize] = Zaber_Start(this.vars.port);
                 this.connected = true;
-%             end
+                this.hardwareAvailable = true;
+            catch
+                this.connected = false;
+                this.hardwareAvailable = false;
+                fprintf("STAGES: Can't connect to stages\n")
+            end
         end
         
         function moveStageRel(this, Range)
@@ -51,7 +53,7 @@ classdef stages < handle
             Zaber_Err = this.devices(1).moveabsolute(Zaber_Steps);
             
             if (Zaber_Err) % Error handling
-                fprintf('\n%s received error %d while running the Zaber_MoveAbs function!\n\n',Zaber_Device.Name(1:9), Zaber_Err);
+                fprintf('\nSTAGES: %s received error %d while running the Zaber_MoveAbs function!\n\n',Zaber_Device.Name(1:9), Zaber_Err);
             end
             
             this.devices(2).Protocol.emptybuffer;
@@ -59,7 +61,7 @@ classdef stages < handle
             Zaber_Err = this.devices(1).moveabsolute(Zaber_Steps);
             
             if (Zaber_Err) % Error handling
-                fprintf('\n%s received error %d while running the Zaber_MoveAbs function!\n\n',Zaber_Device.Name(1:9), Zaber_Err);
+                fprintf('\nSTAGES: %s received error %d while running the Zaber_MoveAbs function!\n\n',Zaber_Device.Name(1:9), Zaber_Err);
             end
             
         end
@@ -70,7 +72,7 @@ classdef stages < handle
             Zaber_Err = this.devices(1).moverelative(Zaber_Steps);
             
             if (Zaber_Err) % Error handling
-                fprintf('\n%s received error %d while running the Zaber_MoveAbs function!\n\n',this.devices(1).Name(1:9), Zaber_Err);
+                fprintf('\nSTAGES: %s received error %d while running the Zaber_MoveAbs function!\n\n',this.devices(1).Name(1:9), Zaber_Err);
             end
             
             this.devices(2).Protocol.emptybuffer;
@@ -78,7 +80,7 @@ classdef stages < handle
             Zaber_Err = this.devices(2).moverelative(Zaber_Steps);
             
             if (Zaber_Err) % Error handling
-                fprintf('\n%s received error %d while running the Zaber_MoveAbs function!\n\n',this.devices(2).Name(1:9), Zaber_Err);
+                fprintf('\nSTAGES: %s received error %d while running the Zaber_MoveAbs function!\n\n',this.devices(2).Name(1:9), Zaber_Err);
             end
             
         end
