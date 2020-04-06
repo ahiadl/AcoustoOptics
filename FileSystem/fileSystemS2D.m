@@ -1,4 +1,4 @@
-classdef fileSystemAO < handle
+classdef fileSystemS2D < handle
     
     properties
         uVars
@@ -8,10 +8,12 @@ classdef fileSystemAO < handle
         dirPath     % Directory in the disk in which this scan directory is opened
         
         projPath    % this scan directory (full path)
-        resultsPath % relative to resPath
+        rawDataPath % AO rersults.  relative to resPath
+        resultsPath % Scan results. relative to resPath
         figsPath    % relative to resPath
         
         extProjPath         % absolute path
+        extProjRawDataPath  % relative to projPath
         extProjResultsPath  % relative to projPath
         extProjFigsPath     % relative to projPath
         
@@ -22,7 +24,6 @@ classdef fileSystemAO < handle
         saveReshapedSignal
         saveFFT
         savePhiChCmplx
-        
         
         % Full scan saving indication
         saveFigs
@@ -61,13 +62,15 @@ classdef fileSystemAO < handle
             
             vars.extProject         = false;
             vars.extProjPath        = [];
+            vars.extProjRawDataPath = [];
             vars.extProjResultsPath = []; %relative to extProjPath
             vars.extProjFigsPath    = []; %relative to extProjPath
         end
     end
     
     methods
-        function this = fileSystemAO()
+        function this = fileSystemS2D()
+            this.uVars = fileSystemS2D.uVarsCreate();
         end
         
         function setUserVars(this, uVars)
@@ -93,11 +96,12 @@ classdef fileSystemAO < handle
             
             this.extProject            = uVars.extProject;            
             this.extProjPath           = uVars.extProjPath;
+            this.extProjRawDataPath    = uVars.extProjRawDataPath;
             this.extProjResultsPath    = uVars.extProjResultsPath; 
             this.extProjFigsPath       = uVars.extProjFigsPath;    %relative to extProjPath
         end
         
-        function  vars = configFileSystem(this)
+        function vars = configFileSystem(this)
             if this.saveAny || this.saveVars
                 if this.extProject
                     %in case acousto optics is called by another project
@@ -108,6 +112,7 @@ classdef fileSystemAO < handle
                     %in the projDirPath variable
                     
                     this.projPath       = this.extProjPath;
+                    this.rawDataPath    = this.extProjRawDataPath;
                     this.resultsPath    = this.extProjResultsPath;
                     this.figsPath       = this.extProjFigsPath;      
                 else
@@ -115,20 +120,23 @@ classdef fileSystemAO < handle
                     %own directories.
                     
                     dateStr          = strrep(datestr(datetime('now')), ':', '-');
-                    
-                    this.resultsPath = "Results";
-                    this.figsPath    = "Figures";
+                    this.rawDataPath = "Results/";
+                    this.resultsPath = "";
+                    this.figsPath    = "Figures/";
                     
                     this.projPath   = sprintf("%s/%s-%s", this.dirPath,  dateStr, this.scanName);
+                    rawDataDir      = sprintf("%s/%s",    this.projPath, this.rawDataPath);
                     resultsDir      = sprintf("%s/%s",    this.projPath, this.resultsPath);
                     figsDir         = sprintf("%s/%s",    this.projPath, this.figsPath);
                     
-                    this.dataFilename = "Results.mat";
-                    this.varsFilename = "Vars.mat";
+                    this.dataFilename = "ScanResults.mat";
+                    this.varsFilename = "ScanVars.mat";
                     
                     mkdir(this.projPath);
+                    mkdir(rawDataDir);
                     mkdir(resultsDir);
                     mkdir(figsDir);
+                    
                 end
             end
             
@@ -157,50 +165,27 @@ classdef fileSystemAO < handle
             vars.varsFilename       = this.varsFilename;
             
             vars.projPath           = this.projPath;
+            vars.rawDataPath        = this.rawDataPath;
             vars.resultsPath        = this.resultsPath;
             vars.figsPath           = this.figsPath;
             
             vars.extProject         = this.extProject;
             vars.extProjPath        = this.extProjPath;
+            vars.extProjRawDataPath = this.extProjRawDataPath;
             vars.extProjResultsPath = this.extProjResultsPath;
             vars.extProjFigsPath    = this.extProjFigsPath;
         end
         
-        function saveData(this, res)
-            if this.saveAny
-                if this.saveRawData
-                    data.rawData = res.rawData;    
-                end
-                if this.saveNetSignal
-                     data.netSignal = res.netSignal;
-                end
-                if this.saveDemultiplexed
-                    data.deMultiplexed = res.deMultiplexed;
-                end
-                if this.saveReshapedSignal
-                    data.reshapedSignal = res.reshapedSignal;
-                end
-                if this.saveFFT 
-                    data.FFT = res.fftRes;
-                end
-                if this.savePhiChCmplx
-                    data.phiChCmplx = res.phiChCmplx;
-                    data.phiCh      = res.phiCh;
-                end
-                
-                data.phiQuant = res.phiQuant;
-                data.phi      = res.phi;
-                data.phiStd   = res.phiStd;
-
-                filename = sprintf("%s/%s/%s", this.projPath, this.resultsPath, this.dataFilename);
-                save(filename, '-struct', 'data', '-v7.3');                
-            end
+        function saveResultsToDisk(this, res)
+            fprintf("S2D: FS: Saving results.\n");
+            filename = sprintf("%s/%s%s", this.projPath, this.resultsPath, this.dataFilename);
+            save(filename, '-struct', 'res', '-v7.3');                
         end
 
         function saveVarsToDisk(this, vars, path)
-            % the path is relative to resDir given earlier.
-            fprintf("AOI: FS: Saving variables.\n");
-            filename = sprintf("%s/%s/%s.mat", this.projPath, path, this.varsFilename);
+            % the path is relative to resDir given earlier and contain / at the end.
+            fprintf("S2D: FS: Saving variables.\n");
+            filename = sprintf("%s/%s%s.mat", this.projPath, path, this.varsFilename);
             save(filename, '-struct', 'vars', '-v7.3');
         end
         
@@ -220,6 +205,19 @@ classdef fileSystemAO < handle
             this.varsFilename = sprintf(this.varsFileNameModel, stringVars{:});
         end
 
+        function turnLogFileOn(this)
+            if this.saveAny
+                diary(sprintf("%s/log.txt", this.projPath));
+                diary on
+            end
+        end
+        
+        function turnLogFileOff(this)
+            if this.saveAny
+                diary(sprintf("%s/log.txt", this.projPath))
+                diary off
+            end
+        end
     end
 end
 

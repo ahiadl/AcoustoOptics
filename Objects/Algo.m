@@ -24,7 +24,6 @@ classdef Algo < handle
  
     methods (Static)   
         
-        
         function uVars = uVarsCreate()
             uVars.fSin       = [];              
             uVars.fTrain     = [];
@@ -71,12 +70,13 @@ classdef Algo < handle
         
         function initTimeTable(this)
             this.timeTable.copyFullRawData          = 0;
-
-            this.timeTable.CopyNetSignal1           = 0;
+            
+            this.timeTable.CopyMeasSignal           = 0;
             this.timeTable.CutDigiPreSamples        = 0;
             this.timeTable.CutPropPreSamples        = 0;
             this.timeTable.CutInPhantopmPropSamples = 0;
             this.timeTable.CutPostSamples           = 0;
+            this.timeTable.CopyNetSignal            = 0;
             this.timeTable.ExtractNetSignal         = 0;
             
             this.timeTable.deMultiplex              = 0;
@@ -421,6 +421,10 @@ classdef Algo < handle
             propPreSamplesIdx = this.samples.prePhantomSamples +1;
             propInPhantomIdx  = this.samples.inPhantomPropSamples+1;
             
+            this.timeTable.CopyMeasSignal1 = tic;
+            this.res.measSignal = this.data(:, 1:this.samples.samplesPerMeas);
+            this.timeTable.CopyMeasSignal1 = toc(this.timeTable.CopyMeasSignal1);
+            
             this.timeTable.CutDigiPreSamples = tic;
             this.data = this.data(:,digiPreSamplesIdx:end); % Card Bug 
             this.timeTable.CutDigiPreSamples = toc(this.timeTable.CutDigiPreSamples);
@@ -439,9 +443,9 @@ classdef Algo < handle
             this.data = this.data(:,1:this.samples.samplesPerSignal); % extra trains to fill a buffer
             this.timeTable.CutPostSamples = toc(this.timeTable.CutPostSamples);
             
-            this.timeTable.CopyNetSignal1 = tic;
+            this.timeTable.CopyNetSignal = tic;
             this.res.netSignal = gather(this.data);
-            this.timeTable.CopyNetSignal1 = toc(this.timeTable.CopyNetSignal1);
+            this.timeTable.CopyNetSignal = toc(this.timeTable.CopyNetSignal);
 
         end
         

@@ -1,618 +1,613 @@
-classdef scan2dGraphics < Graphics
+classdef scan2DGraphics < Graphics
     %SACN2DGRAPHICS Summary of this class goes here
     %   Detailed explanation goes here
     
     properties
-        
+        data
     end
     
     methods (Static)
   
-       function gNames = getGraphicsNames()
-            gNames = {'curMainAxis'; 'curMainAxisRep'; 'curMainPlain'; 'curMainPlainRep'; 'navPlain'; 'navPlainRep'};
+       function figsNames = getGraphicsNames()
+            figsNames = {'curMainAxis'; 'curMainAxisAvg'; 'curMainPlane'; 'curMainPlaneAvg'; 'nav'; 'navAvg'};
        end 
         
-       function graphReq = getGraphicsRequest()
-            graphReq.zIdx    = 1;
-            graphReq.ch      = 1;
+       function figs = getGraphicsVars()    
+            % General Scan Parameters
+            figs.xAxis   = [];
+            figs.yAxis   = [];
+            figs.zAxis   = [];
+            figs.repeats = [];
             
-            graphReq.mainAx = 'Y';
+            figs.scanFirstAx   = 'Y';
+            figs.scanSecondAx  = 'X';
+            figs.scanMainPlane = 'YZ';
             
-            graphReq.xAxis = [];
-            graphReq.yAxis = [];
-            graphReq.zAxis = [];
+            figs.firstAxis  = [];
+            figs.secondAxis = [];
+            figs.xlim       = [];
+            figs.dx         = [];
             
-            graphReq.curXidx  = 0;
-            graphReq.curYidx  = 0;
-            graphReq.curQuant = 0;
-            graphReq.curRep   = 0;
+            figs.zIdx    = 1; 
+            figs.zPos    = 0; % the z value related to zIdx;
             
-            graphReq.navXidx  = 0;
-            graphReq.navYidx  = 0;
-            graphReq.navZidx  = 0;
-            graphReq.navRep   = 0;
+            % Current Position
+            figs.curXpos  = 0;
+            figs.curYpos  = 0;
             
-            graphReq.navPlainCoor    = 'Z';
-            graphReq.curNavPlainCoor = 'Z';
+            figs.curXidx  = 0;
+            figs.curYidx  = 0;
+            figs.curRep   = 0;
+            figs.curFirstPos  = 0;
+            figs.curSecondPos = 0;
             
-            graphReq.intExt  = 'int';
-            plotNames = scan2dGraphics.getGraphicsNames();
-            for i = 1:length(plotNames)  
-                graphReq.(plotNames{i}).type      = []; 
-                graphReq.(plotNames{i}).update    = true;
+            % Navigator Position
+            figs.navAx    = [];  % navigating on this axes
+            figs.navPlane = []; % displaying these planes
+
+            figs.navPos  = 0;
+            figs.navIdx  = 0;
+            figs.navRep  = 0;
+            
+            figs.navXaxis = [];
+            figs.navYaxis = [];
+            
+            figs.navXname = 'X';
+            figs.navYname = 'Y';
+            
+            %Specific Figures parameters
+            figs.intExt  = 'int';
+            figsNames = scan2DGraphics.getGraphicsNames();
+            
+            figs.fonts.type       = [];
+            figs.fonts.titleSize  = 18;
+            figs.fonts.labelsSize = 18;
+            figs.fonts.axisSize   = 18;
+            
+            for i = 1:length(figsNames)  
+                figs.(figsNames{i}).type      = []; 
+                figs.(figsNames{i}).update    = true;
  
-                graphReq.(plotNames{i}).handles.int = Graphics.createHandlesStruct();
-                graphReq.(plotNames{i}).handles.ext = Graphics.createHandlesStruct();
-                graphReq.(plotNames{i}).handles.cur = Graphics.createHandlesStruct();
+                figs.(figsNames{i}).handles.int = Graphics.createHandlesStruct();
+                figs.(figsNames{i}).handles.ext = Graphics.createHandlesStruct();
+                figs.(figsNames{i}).handles.cur = Graphics.createHandlesStruct();
                 
-                graphReq.(plotNames{i}).strings.title       = [];
-                graphReq.(plotNames{i}).strings.titleModel  = [];
-                graphReq.(plotNames{i}).strings.xlabel      = [];
-                graphReq.(plotNames{i}).strings.xlabelModel = [];
-                graphReq.(plotNames{i}).strings.ylabel      = [];
-                graphReq.(plotNames{i}).strings.ylabelModel = [];
-                graphReq.(plotNames{i}).strings.legend      = [];
-                graphReq.(plotNames{i}).strings.legendModel = [];
+                figs.(figsNames{i}).strings.title       = [];
+                figs.(figsNames{i}).strings.titleModel  = [];
+                figs.(figsNames{i}).strings.xlabel      = [];
+                figs.(figsNames{i}).strings.xlabelModel = [];
+                figs.(figsNames{i}).strings.ylabel      = [];
+                figs.(figsNames{i}).strings.ylabelModel = [];
+                figs.(figsNames{i}).strings.legend      = [];
+                figs.(figsNames{i}).strings.legendModel = [];
 
-                graphReq.(plotNames{i}).dims.xDim     = [];
-                graphReq.(plotNames{i}).dims.yDim     = [];
-                graphReq.(plotNames{i}).dims.zDim     = [];
-                graphReq.(plotNames{i}).dims.chDim    = [];
-                graphReq.(plotNames{i}).dims.quantDim = [];
-                graphReq.(plotNames{i}).dims.repDim   = [];
-                graphReq.(plotNames{i}).dims.mainDim  = [];
+                figs.(figsNames{i}).markers.plotMark = false;
 
-                graphReq.(plotNames{i}).markers.plotMark = false;
-
-                graphReq.(plotNames{i}).lims.xlims  = [];
-                graphReq.(plotNames{i}).lims.ylims  = [];
-                graphReq.(plotNames{i}).lims.zlims  = [];
-                graphReq.(plotNames{i}).lims.clims = [];
-
-                graphReq.(plotNames{i}).fonts.type       = [];
-                graphReq.(plotNames{i}).fonts.titleSize  = 18;
-                graphReq.(plotNames{i}).fonts.labelsSize = 18;
-                graphReq.(plotNames{i}).fonts.axisSize   = 18;
+                figs.(figsNames{i}).lims.xlims  = [];
+                figs.(figsNames{i}).lims.ylims  = [];
+                figs.(figsNames{i}).lims.zlims  = [];
+                figs.(figsNames{i}).lims.clims  = [];
             end
        end  
         
-       function gReq = createGraphicsRunVars() %for Reduced Operation
-            gReq.ch  = 1;
-            gReq.zIdx = 1;
-     
-            gReq.navXidx = 0;
-            gReq.navYidx = 0;
-            gReq.navZidx = 0;
-            gReq.navRep  = 0;
+       function uVars = createGraphicsUserVars() %for Reduced Operation
+            uVars.zIdx = 1;
             
-            gReq.mainAx = 'Y';
+            uVars.useQuant = true;
+            uVars.repeats  = 1;
+            uVars.xAxis    = [];
+            uVars.yAxis    = [];
+            uVars.zAxis    = [];
             
-            gNames = scan2dGraphics.getGraphicsNames();
+            uVars.scanFirstAx = 'Y';
             
-            gReq.intExt = [];
-            for i=1:length(gNames)
-                gReq.validStruct.(gNames{i}) = false;
+            figsNames = scan2DGraphics.getGraphicsNames();
+            
+            uVars.intExt = [];
+            for i=1:length(figsNames)
+                uVars.validStruct.(figsNames{i}) = false;
             end
             
-            for i=1:length(gNames)
-                gReq.extH.(gNames{i}) =  Graphics.createHandlesStruct();
+            for i=1:length(figsNames)
+                uVars.extH.(figsNames{i}) =  Graphics.createHandlesStruct();
             end
             
-            gReq.fonts.type       = [];
-            gReq.fonts.titleSize  = 14;
-            gReq.fonts.labelsSize = 14;
-            gReq.fonts.axisSize   = 14;
-        end
+            uVars.fonts.type       = [];
+            uVars.fonts.titleSize  = 14;
+            uVars.fonts.labelsSize = 14;
+            uVars.fonts.axisSize   = 14;
+       end
+       
+       function navVars = createNavigatorVars()
+            navVars.navAx   = 'Z';
+            navVars.navIdx  = 0;
+            navVars.navRep  = 0;
+       end
     end
     
     methods
-        function this = scan2dGraphics()
-            this@Graphics(scan2dGraphics.getGraphicsNames())
-            this.requests     = scan2dGraphics.getGraphicsRequest();
-            this.globalReqOld = scan2dGraphics.createGraphicsRunVars();
-            this.globalReq    = scan2dGraphics.createGraphicsRunVars();
+        function this = scan2DGraphics()
+            this@Graphics()
+            this.figsNames = scan2DGraphics.getGraphicsNames();
+            this.figs      = scan2DGraphics.getGraphicsVars();
+            this.uVars     = scan2DGraphics.createGraphicsUserVars();
             this.setGraphicsStaticVars();
+            this.numOfFigs = length(this.figsNames);
         end
  
+        % Set vars Functions
         function setGraphicsStaticVars(this)
             % curMainAxis
-            this.setType(this.graphNames{1}, 'stem');
-            this.setStrings(this.graphNames{1}, {"Current Main Axis"; "(R,X,Y,Z) = (%d, %.2f, %.2f, %.2f)"}, "%s[mm]", "Amp[v]", []);
-            this.setDims(this.graphNames{1}, 1, 2, 3, 4, 5)
+            this.setType('curMainAxis', 'stem');
+            this.setStrings('curMainAxis', "Current Main Axis %s: (R,%s,Z) = (%d, %.2f, %.2f)", "%s[mm]", "\\phi[v]", []);
             
-            % curMainAxisRep
-            this.setType(this.graphNames{2}, 'errorbar');
-            this.setStrings(this.graphNames{2}, {"Current Main Axis (Averaged)"; "(R,X,Y,Z) = (%d, %.2f, %.2f, %.2f)"}, "%s[mm]",  "Amp[v]", []);
-            this.setDims(this.graphNames{2}, 1, 2, 3, 4, 5)
+            % curMainAxisAvg
+            this.setType('curMainAxisAvg', 'errorbar');
+            this.setStrings('curMainAxisAvg', "Current Main Axis %s (Averaged): (R, %s, Z) = (%d, %.2f, %.2f)", "%s[mm]",  "\\phi[v]", []);
             
-            % curMainPlain
-            this.setType(this.graphNames{3}, 'imagesc');
-            this.setStrings(this.graphNames{3}, {"Current Main Plain"; "(R,X,Y,Z) = (%d, %.2f, %.2f, %.2f)"}, "%s [mm]", "%s[mm]", []);
-            this.setDims(this.graphNames{3}, 1, 2, 3, 4, [])
+            % curMainPlane
+            this.setType('curMainPlane', 'imagesc');
+            this.setStrings('curMainPlane', "Current Main Plane %s: (R, %s) = (%d, %.2f)", "%s [mm]", "%s[mm]", []);
             
-            % curMainPlainRep
-            this.setType(this.graphNames{4}, 'imagesc');
-            this.setStrings(this.graphNames{4}, {"Current Main Plain (Averaged)"; "(R,X,Y,Z) = (%d, %.2f, %.2f, %.2f)"}, "%s [mm]", "%s[mm]", []);
-            this.setDims(this.graphNames{4}, 1, 2, 3, 4, [])
+            % curMainPlaneAvg
+            this.setType('curMainPlaneAvg', 'imagesc');
+            this.setStrings('curMainPlaneAvg', "Current Main Plane %s (Averaged): (R, %s) = (%d, %.2f)", "%s [mm]", "%s[mm]", []);
            
             % navPlane
-            this.setType(this.graphNames{5}, 'imagesc');
-            this.setStrings(this.graphNames{5}, {"Navigator Plain"; "(R,%s) = (%d, %.2f)"}, "%s[mm]", "%s[mm]", []);
-            this.setDims(this.graphNames{5}, 1, 2, 3, [], [])
+            this.setType('nav', 'imagesc');
+            this.setStrings('nav', "Navigator Plane %s: (R, %s) = (%d, %.2f)", "%s[mm]", "%s[mm]", []);
             
             % navPlaneRep
-            this.setType(this.graphNames{6}, 'imagesc');
-            this.setStrings(this.graphNames{6}, {"Navigator Plain (Averaged)"; "(%s) = (%.2f)"}, "%s[mm]", "%s[mm]", []);
-            this.setDims(this.graphNames{6}, 1, 2, 3, [], [])
+            this.setType('navAvg', 'imagesc');
+            this.setStrings('navAvg', "Navigator Plane %s (Averaged): (R, %s) = (%d, %.2f)", "%s[mm]", "%s[mm]", []);
+            
+            
+%             this.figs.intExt      = staticVars.intExt;
+%             this.figs.validStruct = staticVars.validStruct;
+%             this.figs.extH        = staticVars.extH;
+        end
+                 
+        function setGraphicsScanVars(this)
+            this.figs.useQuant = this.uVars.useQuant;
+            this.figs.repeats  = this.uVars.repeats;
+            this.figs.xAxis    = this.uVars.xAxis;
+            this.figs.yAxis    = this.uVars.yAxis;
+            this.figs.zAxis    = this.uVars.zAxis*1e3;
+            
+            % reset data arrays:
+            rstPhi    = zeros(length(this.figs.xAxis), length(this.figs.yAxis), length(this.figs.zAxis), this.uVars.repeats);
+            rstPhiAvg = zeros(length(this.figs.xAxis), length(this.figs.yAxis), length(this.figs.zAxis), this.uVars.repeats);
+            
+            this.data.phi       = rstPhi;
+            this.data.phiStd    = rstPhi;
+            this.data.phiAvg    = rstPhiAvg;
+            this.data.phiAVgStd = rstPhiAvg;
+            
+            if this.uVars.zIdx > length(this.figs.zAxis)
+                this.figs.zIdx = 1;
+            else
+                this.figs.zIdx = this.uVars.zIdx;
+            end
+            this.figs.zPos = this.figs.zAxis(this.figs.zIdx);
+            
+            this.figs.scanFirstAx = this.uVars.scanFirstAx;
+            
+            this.figs.validStruct = this.uVars.validStruct;
+            
+            switch this.figs.scanFirstAx
+                case 'X'
+                    this.figs.scanSecondAx  = 'Y';
+                    this.figs.scanMainPlane = 'XZ';
+                    this.figs.firstAxis     = this.figs.xAxis;
+                    this.figs.secondAxis    = this.figs.yAxis;
+                    this.figs.dx            = abs(this.figs.xAxis(1) - this.figs.xAxis(2));
+                    this.figs.xlim          = [this.figs.xAxis(end)-this.figs.dx, this.figs.xAxis(1)+this.figs.dx];
+                case 'Y'
+                    this.figs.scanSecondAx  = 'X';
+                    this.figs.scanMainPlane = 'YZ';
+                    this.figs.firstAxis     = this.figs.yAxis;
+                    this.figs.secondAxis    = this.figs.xAxis;
+                    this.figs.dx            = abs(this.figs.yAxis(1) - this.figs.yAxis(2));
+                    this.figs.xlim          = [this.figs.yAxis(1)- this.figs.dx, this.figs.yAxis(end)+this.figs.dx];
+            end
+            
+            if this.figs.useQuant
+                this.setType('curMainAxis', 'errorbar');
+            else
+                this.setType('curMainAxis', 'stem');
+            end
+            
+            if this.figs.repeats > 1
+                this.setType('curMainAxisAvg', 'errorbar');
+            else
+                this.setType('curMainAxisAvg', 'stem');
+            end
+
+            this.figs.fonts = this.uVars.fonts;
+            
+            this.resetNavigator();
+        end
+
+        function updateCurPosAndIdx(this, pns)
+            this.figs.curRep       = pns.curPosIdx(1);
+            this.figs.curXidx      = pns.curPosIdx(2);
+            this.figs.curYidx      = pns.curPosIdx(3);
+            this.figs.curXpos      = pns.curPos(1);
+            this.figs.curYpos      = pns.curPos(2);
+            this.figs.curFirstPos  = pns.curScan(1);
+            this.figs.curSecondPos = pns.curScan(2);
+        end
+
+        function setNavVars(this, navVars)
+            this.figs.navIdx =  navVars.navIdx;
+            this.figs.navRep =  navVars.navRep;
+            if ~strcmp( this.figs.navAx, navVars.navAx) || this.figs.navUpdate
+                this.figs.nav.update = true;
+                this.figs.navAvg.update = true;
+                this.figs.navAx = navVars.navAx;
+                switch this.figs.navAx
+                    case 'X'
+                        this.figs.navPlane = 'YZ';
+                        this.figs.navAxis  = this.figs.xAxis;
+                        this.figs.navXaxis = this.figs.yAxis;
+                        this.figs.navYaxis = this.figs.zAxis;
+                        this.figs.navXname = 'Y';
+                        this.figs.navYname = 'Z';
+                    case 'Y'
+                        this.figs.navPlane = 'XZ';
+                        this.figs.navAxis  = this.figs.yAxis;
+                        this.figs.navXaxis = this.figs.xAxis;
+                        this.figs.navYaxis = this.figs.zAxis;
+                        this.figs.navXname = 'X';
+                        this.figs.navYname = 'Z';
+                    case 'Z'
+                        this.figs.navPlane = 'XY';
+                        this.figs.navAxis  = this.figs.zAxis;
+                        this.figs.navXaxis = this.figs.xAxis;
+                        this.figs.navYaxis = this.figs.yAxis;
+                        this.figs.navXname = 'X';
+                        this.figs.navYname = 'Y';
+                end
+            end
+            this.figs.navPos   = this.figs.navAxis(this.figs.navIdx);
         end
         
-        function setDims(this, gName, xDim, yDim, zDim, quantDim, chDim)
-            this.requests.(gName).dims.xDim     = xDim;
-            this.requests.(gName).dims.yDim     = yDim;
-            this.requests.(gName).dims.zDim     = zDim;
-            this.requests.(gName).dims.quantDim = quantDim;
-            this.requests.(gName).dims.chDim    = chDim;
+        function resetNavigator(this)
+            navVars.navAx = 'Z';
+            navVars.navIdx = 1;
+            navVars.navRep = 1;
+            this.figs.navUpdate = true;
+            this.setNavVars(navVars);
+            this.dispNavPlane();
+            this.dispNavPlaneAvg();
         end
         
-        % Display Function
-        function dispCurMainAxis(this, yData, stdMat)
+        function setData(this, phi, phiStd, phiAvg, phiAvgStd)
+           this.data.phi       = phi;
+           this.data.phiStd    = phiStd;
+           this.data.phiAvg    = phiAvg;
+           this.data.phiAvgStd = phiAvgStd;           
+        end
+        
+        % Extract data functions
+        function data = extractMainAxisFromData(this, isAvg)
+            if ~isAvg
+                if strcmp(this.figs.scanFirstAx, 'Y')
+                    data.yData  = this.data.phi(this.figs.curXidx, :, this.figs.zIdx, this.figs.curRep);
+                    data.stdVec = this.data.phiStd(this.figs.curXidx, :, this.figs.zIdx, this.figs.curRep);
+                elseif strcmp(this.figs.scanFirstAx, 'X')
+                    data.yData  = this.data.phi(:, this.figs.curYidx, this.figs.zIdx, this.figs.curRep);
+                    data.stdVec = this.data.phiStd(:, this.figs.curYidx, this.figs.zIdx, this.figs.curRep);
+                end
+            else
+                if strcmp(this.figs.scanFirstAx, 'Y')
+                    data.yData  = this.data.phiAvg (this.figs.curXidx, :, this.figs.zIdx);
+                    data.stdVec = this.data.phiStd(this.figs.curXidx, :, this.figs.zIdx);
+                elseif strcmp(this.figs.scanFirstAx, 'X')
+                    data.yData  = this.data.phiAvg (:, this.figs.curYidx, this.figs.zIdx);
+                    data.stdVec = this.data.phiStd(:, this.figs.curYidx, this.figs.zIdx);
+                end
+            end
+        end
+        
+        function data = extractMainPlaneFromData(this, isAvg)
+            if ~isAvg
+                data.clims = [min(min(min(min(this.data.phi)))), max(max(max(max(this.data.phi))))];
+                if strcmp(this.figs.scanFirstAx, 'Y')
+                    data.cData  = permute(this.data.phi(this.figs.curXidx, :, :, this.figs.curRep), [3,2,1,4]);
+                    data.xData  = this.figs.yAxis;
+                elseif strcmp(this.figs.scanFirstAx, 'X')
+                    data.cData  = permute(this.data.phi(:, this.figs.curYidx, :, this.figs.curRep), [3,1,2,4]);                
+                    data.xData  = this.figs.xAxis;
+                end
+            else
+                data.clims = [min(min(min(min(this.data.phiAvg)))), max(max(max(max(this.data.phiAvg))))];
+                if strcmp(this.figs.scanFirstAx, 'Y')
+                    data.cData  = permute(this.data.phiAvg(this.figs.curXidx, :, :), [3,2,1]);
+                    data.xData  = this.figs.yAxis;
+                elseif strcmp(this.figs.scanFirstAx, 'X')
+                    data.cData  = permute(this.data.phiAvg(:, curYidx, :), [3,1,2]);                
+                    data.xData  = this.figs.xAxis;
+                end
+            end
+            
+            if data.clims(1) == data.clims(2)
+                data.clims(2) = data.clims(1)+ 0.1;
+            end
+        end
+        
+        function data = extractNavPlaneFromData(this, isAvg)
+            if ~isAvg
+                data.clims = [min(min(min(min(this.data.phi)))), max(max(max(max(this.data.phi))))];
+                switch this.figs.navAx
+                    case 'X'
+                        data.cData  = permute(this.data.phi(this.figs.navIdx, :, :, this.figs.navRep), [3,2,1,4]);
+                    case 'Y'     
+                        data.cData  = permute(this.data.phi(:, this.figs.navIdx, :, this.figs.navRep), [3,1,2,4]);
+                    case 'Z' 
+                        data.cData  = permute(this.data.phi(:, :, this.figs.navIdx, this.figs.navRep), [2,1,3,4]); 
+                end
+            else
+                data.clims = [min(min(min(min(this.data.phiAvg)))), max(max(max(max(this.data.phiAvg))))];
+                switch this.figs.navAx
+                    case 'X'
+                        data.cData  = permute(this.data.phiAvg(this.figs.navIdx, :, :), [3,2,1]);
+                    case 'Y'     
+                        data.cData  = permute(this.data.phiAvg(:, this.figs.navIdx, :), [3,1,2]);
+                    case 'Z' 
+                        data.cData  = permute(this.data.phiAvg(:, :, this.figs.navIdx), [2,1,3]); 
+                end
+            end
+            if (data.clims(1) == data.clims(2)) 
+                data.clims(2) = data.clims(1)+0.1; 
+            end
+        end
+        
+        % Display Functions
+        function dispCurMainAxis(this)
             % yData - (xLen, yLen, zLen, r)
             % stdMat - (xLen, yLen, zLen, r)
-            if ~isgraphics(this.requests.curMainAxis.handles.cur.ax)
+            if ~isgraphics(this.figs.curMainAxis.handles.cur.ax)
                return
             end
             
-            zIdx = this.requests.zIdx;
-            xIdx = this.requests.curXidx;
-            yIdx = this.requests.curYidx;
-            rIdx = this.requests.curRep;
+            this.setTitleVariables('curMainAxis',...
+                                   {{this.figs.scanFirstAx, this.figs.scanSecondAx, this.figs.curRep, ...
+                                     this.figs.curSecondPos, this.figs.zPos}})
             
-            xCoor = this.requests.xAxis(xIdx);
-            yCoor = this.requests.yAxis(yIdx);
-            zCoor = this.requests.zAxis(zIdx)*1e3;
-            
-            this.setTitleVariables('curMainAxis', {[]; [rIdx, xCoor, yCoor, zCoor]})
-            
-            if strcmp(this.requests.mainAx, 'Y')
-                yData = yData(xIdx, :, zIdx, rIdx);
-                stdMat = stdMat(xIdx, :, zIdx, rIdx);
-                xData = this.requests.yAxis;
-                xName = 'Y'; yName = 'X';
-                dx = abs(this.requests.yAxis(1) - this.requests.yAxis(2));
-                xlim = [this.requests.yAxis(1)-dx, this.requests.yAxis(end)+dx];
-            elseif strcmp(this.requests.mainAx, 'X')
-                yData = yData(:, yIdx, zIdx, rIdx);
-                stdMat = stdMat(:, yIdx, zIdx, rIdx);
-                xData = this.requests.xAxis;
-                xName = 'X'; yName = 'Y'; 
-                dx = abs(this.requests.xAxis(1) - this.requests.xAxis(2));
-                xlim = [this.requests.xAxis(end)-dx, this.requests.xAxis(1)+dx];
-            end
+            %extract relevent data
+            plotData = this.extractMainAxisFromData(false);
 
-            if ~isgraphics(this.requests.curMainAxis.handles.cur.plot) ||...
-               this.requests.curMainAxis.update
+            if ~isgraphics(this.figs.curMainAxis.handles.cur.plot) ||...
+               this.figs.curMainAxis.update
                 
-                this.setAxesVar('curMainAxis', xName, yName);
-                this.setLimits('curMainAxis', xlim, []);
+                this.setAxesVar('curMainAxis', this.figs.scanFirstAx, 'Fluence');
+                this.setLimits('curMainAxis', this.figs.xlim, []);
                 
-                switch this.requests.curMainAxis.type
+                switch this.figs.curMainAxis.type
                     case 'stem'
-                        this.requests.curMainAxis.handles.cur.plot = ...
-                            stem(this.requests.curMainAxis.handles.cur.ax,...
-                            xData, yData); 
+                        this.figs.curMainAxis.handles.cur.plot = ...
+                            stem(this.figs.curMainAxis.handles.cur.ax,...
+                            this.figs.firstAxis, plotData.yData); 
                     case 'errorbar'
-                        this.requests.curMainAxis.handles.cur.plot = ...
-                            errorbar(this.requests.curMainAxis.handles.cur.ax,...
-                            xData, yData, stdMat);
+                        this.figs.curMainAxis.handles.cur.plot = ...
+                            errorbar(this.figs.curMainAxis.handles.cur.ax,...
+                            this.figs.firstAxis, plotData.yData, plotData.stdVec);
                 end
                 
-                this.setLimsToPlot('curMainAxis')
-                this.setStringsToPlot('curMainAxis');
+                this.setLimsToPlot('curMainAxis'); %apply limits to the plot
+                this.setStringsToPlot('curMainAxis'); %allocate title and labels handles
                 drawnow();
-                this.requests.curMainAxis.update = false;
+                this.figs.curMainAxis.update = false;
             else
-                quickPlot(this, 'curMainAxis', xData, yData, [], stdMat)
+                quickPlot(this, 'curMainAxis', this.figs.firstAxis, plotData.yData, [], plotData.stdVec)
             end
         end
         
-        function dispCurMainAxisRep(this, yData, stdMat)
+        function dispCurMainAxisAvg(this)
             % yData - (xLen, yLen, zLen)
             % stdMat - (xLen, yLen, zLen)
-            if ~isgraphics(this.requests.curMainAxisRep.handles.cur.ax)
+            if ~isgraphics(this.figs.curMainAxisAvg.handles.cur.ax)
                return
             end
+            this.setTitleVariables('curMainAxisAvg', {{this.figs.scanFirstAx, ...
+                                                       this.figs.scanSecondAx, this.figs.curRep,...
+                                                       this.figs.curSecondPos, this.figs.zPos}});            
+            %extract relevent data
+            plotData = this.extractMainAxisFromData(true);
             
-            zIdx = this.requests.zIdx;
-            xIdx = this.requests.curXidx;
-            yIdx = this.requests.curYidx;
-            rIdx = this.requests.curRep;
-            
-            xCoor = this.requests.xAxis(xIdx);
-            yCoor = this.requests.yAxis(yIdx);
-            zCoor = this.requests.zAxis(zIdx)*1e3;
-            
-            this.setTitleVariables('curMainAxisRep', {[]; [rIdx, xCoor, yCoor, zCoor]})
-            
-            if strcmp(this.requests.mainAx, 'Y')
-                yData  = yData(xIdx, :, zIdx);
-                stdMat = stdMat(xIdx, :, zIdx);
-                xData  = this.requests.yAxis;
-                xName = 'Y'; yName = 'X';
-                dx = abs(this.requests.yAxis(1) - this.requests.yAxis(2));
-                xlim = [this.requests.yAxis(1)-dx, this.requests.yAxis(end)+dx];
-            elseif strcmp(this.requests.mainAx, 'X')
-                yData  = yData(:, yIdx, zIdx);
-                stdMat = stdMat(:, yIdx, zIdx);
-                xData  = this.requests.xAxis;
-                xName = 'X'; yName = 'Y'; 
-                dx = abs(this.requests.xAxis(1) - this.requests.xAxis(2));
-                xlim = [this.requests.xAxis(end)-dx, this.requests.xAxis(1)+dx];
-            end
-
-            if ~isgraphics(this.requests.curMainAxisRep.handles.cur.plot) ||...
-               this.requests.curMainAxisRep.update
+            if ~isgraphics(this.figs.curMainAxisAvg.handles.cur.plot) ||...
+                this.figs.curMainAxisAvg.update
                 
-                this.setAxesVar('curMainAxisRep', xName, yName)
-                this.setLimits('curMainAxisRep', xlim, [])
-                switch this.requests.curMainAxisRep.type
+                this.setAxesVar('curMainAxisAvg', this.figs.scanFirstAx, 'Fluence')
+                this.setLimits('curMainAxisAvg', this.figs.xlim, [])
+                switch this.figs.curMainAxisAvg.type
                     case 'stem'
-                        this.requests.curMainAxisRep.handles.cur.plot = ...
-                            stem(this.requests.curMainAxisRep.handles.cur.ax,...
-                            xData, yData); 
+                        this.figs.curMainAxisAvg.handles.cur.plot = ...
+                            stem(this.figs.curMainAxisAvg.handles.cur.ax,...
+                            this.figs.firstAxis, plotData.yData); 
                     case 'errorbar'
-                        this.requests.curMainAxisRep.handles.cur.plot = ...
-                            errorbar(this.requests.curMainAxisRep.handles.cur.ax,...
-                            xData, yData, stdMat);
+                        this.figs.curMainAxisAvg.handles.cur.plot = ...
+                            errorbar(this.figs.curMainAxisAvg.handles.cur.ax,...
+                            this.figs.firstAxis, plotData.yData, plotData.stdVec);
                 end
-                this.setLimsToPlot('curMainAxisRep')
-                this.setStringsToPlot('curMainAxisRep');
+                this.setLimsToPlot('curMainAxisAvg')
+                this.setStringsToPlot('curMainAxisAvg');
                 drawnow();
-                this.requests.curMainAxisRep.update = false;
+                this.figs.curMainAxisAvg.update = false;
             else
-                quickPlot(this, 'curMainAxisRep', xData, yData, [], stdMat)
+                quickPlot(this, 'curMainAxisAvg', this.figs.firstAxis, plotData.yData, [], plotData.stdVec)
             end
         end
         
-        function dispCurMainPlain(this, cData)
+        function dispCurMainPlane(this)
             % yData - (xLen, yLen, zLen)
             % stdMat - (xLen, yLen, zLen)
-            if ~isgraphics(this.requests.curMainPlain.handles.cur.ax)
+            if ~isgraphics(this.figs.curMainPlane.handles.cur.ax)
                return
             end
-            
-            zIdx = this.requests.zIdx;
-            xIdx = this.requests.curXidx;
-            yIdx = this.requests.curYidx;
-            rIdx = this.requests.curRep;
-            
-            xCoor = this.requests.xAxis(xIdx);
-            yCoor = this.requests.yAxis(yIdx);
-            zCoor = this.requests.zAxis(zIdx)*1e3;
-            
-            this.setTitleVariables('curMainPlain', {[]; [rIdx, xCoor, yCoor, zCoor]})
-            
-            clims = [min(min(min(min(cData)))), max(max(max(max(cData))))];
-            if clims(1) == clims(2)
-                clims(2) = clims(1)+ 0.1;
-            end
-            this.requests.curMainPlain.lims.clims = clims;
 
-            if strcmp(this.requests.mainAx, 'Y')
-                cData  = permute(cData(xIdx, :, :, rIdx), [3,2,1,4]);
-                xData  = this.requests.yAxis;
-                xName = 'Y'; yName = 'Z';
-            elseif strcmp(this.requests.mainAx, 'X')
-                cData  = permute(cData(:, yIdx, :, rIdx), [3,1,2,4]);                
-                xData  = this.requests.xAxis;
-                xName = 'X'; yName = 'Z'; 
-            end
-            yData  = this.requests.zAxis;
+            this.setTitleVariables('curMainPlane', {{ this.figs.scanMainPlane,...
+                                                      this.figs.scanSecondAx, this.figs.curRep,...
+                                                      this.figs.curSecondPos}});
             
-            if ~isgraphics(this.requests.curMainPlain.handles.cur.plot) ||...
-                this.requests.curMainPlain.update
+            plotData = this.extractMainPlaneFromData(false);
+                                                  
+            this.figs.curMainPlane.lims.clims = plotData.clims;
+
+            if ~isgraphics(this.figs.curMainPlane.handles.cur.plot) ||...
+                this.figs.curMainPlane.update
                 
-                cla(this.requests.curMainPlain.handles.cur.ax)
-                this.setAxesVar('curMainPlain', xName, yName);
+                cla(this.figs.curMainPlane.handles.cur.ax)
+                this.setAxesVar('curMainPlane', this.figs.scanFirstAx, 'Z');
                 
-                this.requests.curMainPlain.handles.cur.plot = ...
-                    imagesc(this.requests.curMainPlain.handles.cur.ax,...
-                    'XData', xData, 'Ydata', yData, 'CData', cData,...
-                    this.requests.curMainPlain.lims.clims);
-                axis(this.requests.curMainPlain.handles.cur.ax, 'tight')
-                colorbar(this.requests.curMainPlain.handles.cur.ax);
-                this.setLimsToPlot('curMainPlain')
-                this.setStringsToPlot('curMainPlain');
+                this.figs.curMainPlane.handles.cur.plot = ...
+                    imagesc(this.figs.curMainPlane.handles.cur.ax,...
+                    'XData', plotData.xData, 'Ydata', this.figs.zAxis, 'CData', plotData.cData,...
+                    plotData.clims);
+                
+                %title
+                axis(this.figs.curMainPlane.handles.cur.ax, 'tight')
+                colorbar(this.figs.curMainPlane.handles.cur.ax);
+                this.setLimsToPlot('curMainPlane');
+                this.setStringsToPlot('curMainPlane');
                 drawnow();
-                this.requests.curMainPlain.update = false;
+                this.figs.curMainPlane.update = false;
             else
-                quickPlot(this, 'curMainPlain', xData, yData, cData)
+                quickPlot(this, 'curMainPlane', plotData.xData, this.figs.zAxis, plotData.cData)
             end
         end
         
-        function dispCurMainPlainRep(this, cData)
+        function dispCurMainPlaneAvg(this)
             % yData - (xLen, yLen, zLen)
             % stdMat - (xLen, yLen, zLen)
-            if ~isgraphics(this.requests.curMainPlainRep.handles.cur.ax)
+            if ~isgraphics(this.figs.curMainPlaneAvg.handles.cur.ax)
                return
-            end
-            
-            zIdx = this.requests.zIdx;
-            xIdx = this.requests.curXidx;
-            yIdx = this.requests.curYidx;
-            rIdx = this.requests.curRep;
-            
-            xCoor = this.requests.xAxis(xIdx);
-            yCoor = this.requests.yAxis(yIdx);
-            zCoor = this.requests.zAxis(zIdx)*1e3;
-            
-            this.setTitleVariables('curMainPlain', {[]; [rIdx, xCoor, yCoor, zCoor]})
-            
-            clims = [min(min(min(cData))), max(max(max(cData)))];
-            if (clims(1) == clims(2))
-                clims(2) = clims(1)+0.1;
-            end
-            this.requests.curMainPlainRep.lims.clims = clims;
-            
-            if strcmp(this.requests.mainAx, 'Y')
-                cData  = permute(cData(xIdx, :, :), [3,2,1]);
-                xData  = this.requests.yAxis;
-                xName = 'Y'; yName = 'Z';
-            elseif strcmp(this.requests.mainAx, 'X')
-                cData  = permute(cData(:, yIdx, :), [3,1,2]);                
-                xData  = this.requests.xAxis;
-                xName = 'X'; yName = 'Z'; 
-            end
-            yData  = this.requests.zAxis;
-            
-            if ~isgraphics(this.requests.curMainPlainRep.handles.cur.plot) ||...
-                this.requests.curMainPlain.update
-                
-                cla(this.requests.curMainPlainRep.handles.cur.ax)
-                this.setAxesVar('curMainPlainRep', xName, yName);
-                
-                this.requests.curMainPlainRep.handles.cur.plot = ...
-                    imagesc(this.requests.curMainPlainRep.handles.cur.ax,...
-                    'XData', xData, 'Ydata', yData, 'CData', cData,...
-                    this.requests.curMainPlainRep.lims.clims);
-                axis(this.requests.curMainPlainRep.handles.cur.ax, 'tight')
-                colorbar(this.requests.curMainPlainRep.handles.cur.ax);
-                this.setLimsToPlot('curMainPlainRep')
-                this.setStringsToPlot('curMainPlainRep');
-                drawnow();
-                this.requests.curMainPlainRep.update = false;
-            else
-                quickPlot(this, 'curMainPlainRep', xData, yData, cData)
-            end
-        end
-        
-        function dispNavPlain(this, cData)
-            % yData  - (xLen, yLen, zLen, rep)
-            if ~isgraphics(this.requests.navPlain.handles.cur.ax)
-               return
-            end
-            
-            clims = [min(min(min(min(cData)))), max(max(max(max(cData))))];
-            if (clims(1) == clims(2)); clims(2) = clims(1)+0.1; end
-            this.requests.navPlain.lims.clims = clims;
-            
-            rIdx = this.requests.navRep;
-%             this.requests.navPlain.update = strcmp(this.requests.curNavPlainCoor, this.requests.navPlainCoor);
-            switch this.requests.navPlainCoor
-                case 'X'
-                    xIdx = this.requests.navXidx;
-                    xCoor = this.requests.xAxis(xIdx);
-                    
-                    str{1} = this.requests.navPlain.strings.titleModel{1};
-                    str{2} = sprintf(this.requests.navPlain.strings.titleModel{2}, 'X', rIdx, xCoor);
-                    this.requests.navPlain.strings.title = str;
-                    
-                    xData  = this.requests.yAxis;
-                    yData  = this.requests.zAxis;
-                    cData  = permute(cData(xIdx, :, :, rIdx), [3,2,1,4]);
-                    
-                    xName = 'Y';
-                    yName = 'Z';
-                case 'Y'
-                    yIdx = this.requests.navYidx;
-                    yCoor = this.requests.yAxis(yIdx);
-                    
-                    str{1} = this.requests.navPlain.strings.titleModel{1};
-                    str{2} = sprintf(this.requests.navPlain.strings.titleModel{2}, 'Y', rIdx, yCoor);
-                    this.requests.navPlain.strings.title = str;
-                    
-                    xData  = this.requests.xAxis;
-                    yData  = this.requests.zAxis;
-                    cData  = permute(cData(:, yIdx, :, rIdx), [3,1,2,4]);
-                    xName = 'X';
-                    yName = 'Z';
-                case 'Z'
-                    zIdx  = this.requests.navZidx;
-                    zCoor = this.requests.zAxis(zIdx)*1e3;
-                    
-                    str{1} = this.requests.navPlain.strings.titleModel{1};
-                    str{2} = sprintf(this.requests.navPlain.strings.titleModel{2}, 'Z', rIdx, zCoor);
-                    this.requests.navPlain.strings.title = str;
-                    
-                    xData  = this.requests.xAxis;
-                    yData  = this.requests.yAxis;
-                    cData  = permute(cData(:, :, zIdx, rIdx), [2,1,3,4]);
-                    
-                    xName = 'X';
-                    yName = 'Y';
-            end
-            
-            if ~isgraphics(this.requests.navPlain.handles.cur.plot) ||...
-                this.requests.navPlain.update
-                
-                cla(this.requests.navPlain.handles.cur.ax)
-                this.setAxesVar('navPlain', xName, yName);
-                
-                this.requests.navPlain.handles.cur.plot = ...
-                    imagesc(this.requests.navPlain.handles.cur.ax,...
-                    'XData', xData, 'Ydata', yData, 'CData', cData,...
-                    this.requests.navPlain.lims.clims);
-                axis(this.requests.navPlain.handles.cur.ax, 'tight')
-                colorbar(this.requests.navPlain.handles.cur.ax);
-                this.setLimsToPlot('navPlain')
-                this.setStringsToPlot('navPlain');
-                drawnow();
-                this.requests.navPlain.update = false;
-            else
-                quickPlot(this, 'navPlain', xData, yData, cData)
-            end    
-        end
-        
-        function dispNavPlainRep(this, cData)
-            % yData  - (xLen, yLen, zLen, rep)
-            if ~isgraphics(this.requests.navPlainRep.handles.cur.ax)
-               return
-            end
-            
-            clims = [min(min(min(cData))), max(max(max(cData)))];
-            if (clims(1) == clims(2)); clims(2) = clims(1)+0.1; end
-            this.requests.navPlainRep.lims.clims = clims;
-            
-%             this.requests.navPlain.update = strcmp(this.requests.curNavPlainCoor, this.requests.navPlainCoor);
-            switch this.requests.navPlainCoor
-                case 'X'
-                    xIdx = this.requests.navXidx;
-                    xCoor = this.requests.xAxis(xIdx);
-                    
-                    str{1} = this.requests.navPlainRep.strings.titleModel{1};
-                    str{2} = sprintf(this.requests.navPlainRep.strings.titleModel{2}, 'X', xCoor);
-                    this.requests.navPlainRep.strings.title = str;
-                    
-                    xData  = this.requests.yAxis;
-                    yData  = this.requests.zAxis;
-                    cData  = permute(cData(xIdx, :, :), [3,2,1]);
-                    
-                    xName = 'Y';
-                    yName = 'Z';                    
-                case 'Y'
-                    yIdx = this.requests.navYidx;
-                    yCoor = this.requests.yAxis(yIdx);
-                    
-                    str{1} = this.requests.navPlainRep.strings.titleModel{1};
-                    str{2} = sprintf(this.requests.navPlainRep.strings.titleModel{2}, 'Y', yCoor);
-                    this.requests.navPlainRep.strings.title = str;
-                    
-                    xData  = this.requests.xAxis;
-                    yData  = this.requests.zAxis;
-                    cData  = permute(cData(:, yIdx, :), [3,1,2]);
-                    
-                    xName = 'X';
-                    yName = 'Z';
-                case 'Z'
-                    zIdx  = this.requests.navZidx;
-                    zCoor = this.requests.zAxis(zIdx)*1e3;
-                    
-                    str{1} = this.requests.navPlainRep.strings.titleModel{1};
-                    str{2} = sprintf(this.requests.navPlainRep.strings.titleModel{2}, 'Z', zCoor);
-                    this.requests.navPlainRep.strings.title = str;
-                    
-                    xData  = this.requests.xAxis;
-                    yData  = this.requests.yAxis;
-                    cData  = permute(cData(:, :, zIdx), [2,1,3]);
-                    
-                    xName = 'X';
-                    yName = 'Y';
             end
 
-            if ~isgraphics(this.requests.navPlainRep.handles.cur.plot) ||...
-                this.requests.navPlainRep.update
+            this.setTitleVariables('curMainPlane', {{ this.figs.scanMainPlane, this.figs.scanSecondAx,...
+                                                      this.figs.curRep, this.figs.curSecondPos}});
+                                                                 
+            plotData = this.extractMainPlaneFromData(true);
+            this.figs.curMainPlaneAvg.lims.clims = plotData.clims;
+
+            if ~isgraphics(this.figs.curMainPlaneAvg.handles.cur.plot) ||...
+                this.figs.curMainPlane.update
                 
-                cla(this.requests.navPlainRep.handles.cur.ax)
-                this.setAxesVar('navPlainRep', xName, yName);
+                cla(this.figs.curMainPlaneAvg.handles.cur.ax)
+                this.setAxesVar('curMainPlaneAvg', this.figs.scanSecondAx, 'Z');
                 
-                this.requests.navPlainRep.handles.cur.plot = ...
-                    imagesc(this.requests.navPlainRep.handles.cur.ax,...
-                    'XData', xData, 'Ydata', yData, 'CData', cData,...
-                    this.requests.navPlainRep.lims.clims);
-                axis(this.requests.navPlainRep.handles.cur.ax, 'tight')
-                colorbar(this.requests.navPlainRep.handles.cur.ax);
-                this.setLimsToPlot('navPlainRep')
-                this.setStringsToPlot('navPlainRep');
+                this.figs.curMainPlaneAvg.handles.cur.plot = ...
+                    imagesc(this.figs.curMainPlaneAvg.handles.cur.ax,...
+                    'XData', plotData.xData, 'Ydata', this.figs.zAxis, 'CData', plotData.cData,...
+                    plotData.clims);
+                
+                axis(this.figs.curMainPlaneAvg.handles.cur.ax, 'tight')
+                colorbar(this.figs.curMainPlaneAvg.handles.cur.ax);
+                this.setLimsToPlot('curMainPlaneAvg')
+                this.setStringsToPlot('curMainPlaneAvg');
+                
                 drawnow();
-                this.requests.navPlainRep.update = false;
+                this.figs.curMainPlaneAvg.update = false;
             else
-                quickPlot(this, 'navPlainRep', xData, yData, cData)
+                quickPlot(this, 'curMainPlaneAvg', plotData.xData, this.figs.zAxis, plotData.cData)
+            end
+        end
+
+        function dispNavPlane(this)
+            % yData  - (xLen, yLen, zLen, rep)
+            if ~isgraphics(this.figs.nav.handles.cur.ax)
+               return
+            end
+            
+            this.setTitleVariables('nav', {{ this.figs.navPlane, this.figs.navAx, ...
+                                             this.figs.navRep, this.figs.navPos}});
+
+            plotData = this.extractNavPlaneFromData(false);
+            this.figs.nav.lims.clims = plotData.clims;
+            
+            if ~isgraphics(this.figs.nav.handles.cur.plot) ||...
+                this.figs.nav.update
+                
+                cla(this.figs.nav.handles.cur.ax)
+                this.setAxesVar('nav', this.figs.navXname, this.figs.navYname);
+                
+                this.figs.nav.handles.cur.plot = ...
+                    imagesc(this.figs.nav.handles.cur.ax, 'XData', this.figs.navXaxis,...
+                    'Ydata', this.figs.navYaxis, 'CData', plotData.cData,...
+                    plotData.clims);
+                
+                axis(this.figs.nav.handles.cur.ax, 'tight')
+                colorbar(this.figs.nav.handles.cur.ax);
+                this.setLimsToPlot('nav')
+                this.setStringsToPlot('nav');
+                drawnow();
+                this.figs.nav.update = false;
+            else
+                quickPlot(this, 'nav', this.figs.navXaxis, this.figs.navYaxis, plotData.cData)
+            end
+        end
+        
+        function dispNavPlaneAvg(this)
+            % yData  - (xLen, yLen, zLen, rep)
+            if ~isgraphics(this.figs.navAvg.handles.cur.ax)
+               return
+            end
+            this.setTitleVariables('navAvg', {{ this.figs.navPlane, this.figs.navAx,...
+                                                this.figs.curRep,   this.figs.navPos}});
+
+            plotData = this.extractNavPlaneFromData(true);
+            this.figs.nav.lims.clims = plotData.clims;
+                                        
+            if ~isgraphics(this.figs.navAvg.handles.cur.plot) ||...
+                this.figs.navAvg.update
+                
+                cla(this.figs.navAvg.handles.cur.ax)
+                this.setAxesVar('navAvg', this.figs.navXname, this.figs.navYname);
+                
+                this.figs.navAvg.handles.cur.plot = ...
+                    imagesc(this.figs.navAvg.handles.cur.ax, 'XData', this.figs.navXaxis,...
+                    'Ydata', this.figs.navYaxis, 'CData', plotData.cData, plotData.clims);
+                
+                axis(this.figs.navAvg.handles.cur.ax, 'tight')
+                colorbar(this.figs.navAvg.handles.cur.ax);
+                this.setLimsToPlot('navAvg')
+                this.setStringsToPlot('navAvg');
+                drawnow();
+                this.figs.navAvg.update = false;
+            else
+                quickPlot(this, 'navAvg', this.figs.navXaxis, this.figs.navYaxis, plotData.cData)
             end    
-        end
-        
-        %Controlling Functions
-        function updateCurScan(this, curScan)
-            this.requests.curRep   = curScan(1);
-            this.requests.curXidx  = curScan(2);
-            this.requests.curYidx  = curScan(3);
-%             this.requests.curQuant = curScan(4);
-        end
-        
-        function setAxesVec(this, xAxis, yAxis, zAxis)
-            this.requests.xAxis = xAxis;
-            this.requests.yAxis = yAxis;
-            this.requests.zAxis = zAxis;
-        end
-        
-        function setMainAx(this, ax)
-           this.requests.mainAx = ax; 
         end
         
         function quickPlot(this, gName, xData, yData, cData, stdDev) 
-            switch this.requests.(gName).type
+            switch this.figs.(gName).type
                 case 'stem'
-                    set(this.requests.(gName).handles.cur.plot,...
+                    set(this.figs.(gName).handles.cur.plot,...
                         'XData', xData,...
                         'YData', yData);
                 case 'plot'    
-                    set(this.requests.(gName).handles.cur.plot,...
+                    set(this.figs.(gName).handles.cur.plot,...
                         'XData', xData,...
                         'YData', yData);
                 case 'errorbar'
-                    set(this.requests.(gName).handles.cur.plot,...
+                    set(this.figs.(gName).handles.cur.plot,...
                         'XData', xData,...
                         'YData', yData,...
                         'YPositiveDelta', stdDev,...
                         'YNegativeDelta', stdDev);
                 case 'imagesc'
-                    set(this.requests.(gName).handles.cur.plot,...
+                    set(this.figs.(gName).handles.cur.plot,...
                         'XData', xData,...
                         'YData', yData,...
                         'CData', cData);
                     this.setLimsToPlot(gName)
             end 
-            set(this.requests.(gName).handles.cur.title, 'String', this.requests.(gName).strings.title);
+            set(this.figs.(gName).handles.cur.title, 'String', this.figs.(gName).strings.title);
+            pause(0.01);
             drawnow();
         end
-        
-        function setAxesVar(this, gName, xName, yName)
-           this.requests.(gName).strings.xlabel = ...
-               sprintf(this.requests.(gName).strings.xlabelModel, xName);
-           this.requests.(gName).strings.ylabel = ...
-               sprintf(this.requests.(gName).strings.ylabelModel, yName);
-        end
-        
-        function setUpdate(this, name, update)
-           this.requests.(name).update = update; 
-        end
-        
-        function setNavParams(this, plain, idx, rep)
-            if ~strcmp(this.requests.navPlainCoor, plain)
-                this.requests.navPlainRep.update = true;
-                this.requests.navPlain.update    = true;
-            end
-            this.requests.navPlainCoor = plain;
-            this.requests.navRep = rep;
-            
-            switch plain
-                case 'X'
-                    this.requests.navXidx = idx;
-                case 'Y'
-                    this.requests.navYidx = idx;
-                case 'Z'
-                    this.requests.navZidx = idx;
-            end
-        end
+
     end
     
 end
-

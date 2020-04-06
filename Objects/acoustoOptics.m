@@ -3,6 +3,8 @@ classdef acoustoOptics < handle
     %   Detailed explanation goes here
     
     properties
+        owner;
+        
         % Objects
         fGen;
         digitizer;
@@ -13,21 +15,22 @@ classdef acoustoOptics < handle
         graphics;
 
         % Data
-        rawData
-        result   
-        timeTable
+        rawData;
+        result;
+        timeTable;
 
         % Variables
-        uVars  % Reduced from user to acoustoOptics
-        extVars  % Extended from acoustoOptics to submodules
-        measVars % Measurement vars (after calculation) given from submodules to acoustoOptics
+        uVars;  % Reduced from user to acoustoOptics
+        extVars;  % Extended from acoustoOptics to submodules
+        measVars; % Measurement vars (after calculation) given from submodules to acoustoOptics
         
         % Control Vars
         changeLog;
         connected;
         periAvail;
-        runLive
-        graphicsNames
+        runLive;
+        graphicsNames;
+        owned;
     end
     
     methods (Static) 
@@ -128,7 +131,7 @@ classdef acoustoOptics < handle
     
     methods
         
-        function this = acoustoOptics()
+        function this = acoustoOptics(owner)
             fprintf("AOI: ------- Creating AcoustoOptic ----------\n");
             fprintf("AOI: 1. Creating an Arbitrary Function Generator Object\n");
             this.fGen = fGen();
@@ -153,6 +156,11 @@ classdef acoustoOptics < handle
             
             this.connected = false;
             this.runLive = false;
+            
+            if nargin > 0 
+                this.owner = owner;
+                this.owned = true;
+            end
         end 
 
         function init(this)
@@ -297,7 +305,11 @@ classdef acoustoOptics < handle
             
             fileSystemVars.scanName             = uVars.fileSystem.scanName;
             fileSystemVars.dirPath              = uVars.fileSystem.dirPath;
-
+            fileSystemVars.dataFileNameModel    = uVars.fileSystem.dataFileNameModel;
+            fileSystemVars.varsFileNameModel    = uVars.fileSystem.varsFileNameModel;
+            
+            
+            
             fileSystemVars.extProject           = uVars.fileSystem.extProject;
             fileSystemVars.extProjPath          = uVars.fileSystem.extProjPath;
             fileSystemVars.extProjResultsPath   = uVars.fileSystem.extProjResultsPath;
@@ -324,7 +336,19 @@ classdef acoustoOptics < handle
                 uVars.figs.validStruct.FFT     = false;
                 uVars.figs.validStruct.qAvgFFT = false;
             end
-
+            
+            if uVars.figs.zIdx > this.measVars.algo.samples.numOfPos
+                uVars.figs.zIdx = 1;
+            end
+            
+            if uVars.figs.ch > this.measVars.algo.digitizer.channels
+                uVars.figs.ch = 1;
+            end
+            
+            if uVars.figs.quant > this.measVars.algo.samples.numOfQuant
+                uVars.figs.quant = 1;
+            end
+            
             this.measVars.figs = uVars.figs;
             this.graphics.setUserVars(this.measVars.figs);
             
@@ -357,10 +381,6 @@ classdef acoustoOptics < handle
             aoVars.measVars.algo.timing.tAcqVec  = [];
 
         end
-        
-%         function algoVars = getAlgoVars(this)
-%             algoVars = this.algo.getAlgoVars();
-%         end
         
         % Peripherals Configurations
         function configPeripherals(this)
@@ -422,6 +442,8 @@ classdef acoustoOptics < handle
             this.fGen.configChannel(1);
             this.fGen.configChannel(2);
             
+            this.graphics.setData([], this.measVars.algo.usSignal.data', this.measVars.algo.extClk.Data')
+            
             if this.measVars.figs.validStruct.extClk
                 this.graphics.plotAFGSignals('extClk', this.measVars.algo.timing.tExtClk*1e6,  this.measVars.algo.extClk.Data');
             end
@@ -461,8 +483,7 @@ classdef acoustoOptics < handle
             end
             
             % AO
-            this.measureAndAnalyse();
-            res = this.results;
+            res = this.measureAndAnalyse();
         end
 
         function res = liveAcoustoOptics(this)
@@ -479,19 +500,19 @@ classdef acoustoOptics < handle
                 end
             end
             
-            
             if this.measVars.AO.limitByN %finit number of measurements
                 % Do one measurement in order the vars will be saved only
                 % once. Then cancel the variable savin option, and continue
                 % measuring in a loop.
-                
-                this.fileSystem.updateFileName(sprintf("AO-%d",1))
-                this.measureAndAnalyse();
+                if this.measVars.fileSystem.saveVars
+                    this.saveVarsToDisk("");
+                end
                 this.measVars.fileSystem.saveVars = false;
-                this.runLive = true;
+                this.fileSystem.setDataFilenameModel("AO-%d.mat");
                 
-                for i=1:this.measVars.AO.N-1
-                    this.fileSystem.updateFileName(sprintf("AO-%d",i+1))
+                this.runLive = true;
+                for i=1:this.measVars.AO.N
+                    this.fileSystem.setDataFilenameVariables({i})
                     this.measureAndAnalyse();
                     pause(0.1)
                     if ~this.runLive
@@ -518,7 +539,7 @@ classdef acoustoOptics < handle
         
         function res = measureAndAnalyse(this)
             if this.measVars.fileSystem.saveVars
-                    this.fileSystem.saveVarsToDisk(this.getAOVars, "");
+                this.saveVarsToDisk("");
             end
             
 %               this.timeTable.acq = tic;
@@ -599,20 +620,26 @@ classdef acoustoOptics < handle
             this.result            = res;
             this.result.rawData    = bufferDataOut;
             this.timeTable.analyse = toc(this.timeTable.analyse);
-            
-            % Collect time statistics
-            inTimeTable              = this.getInnerTimeTables();
-            this.timeTable.algo      = inTimeTable.algo;
-            this.timeTable.digitizer = inTimeTable.digitizer;
 
             % Plot reseults according to figs
+            this.timeTable.setResultsToGraphics = tic;
+            this.graphics.setData(this.result);
+            this.timeTable.setResultsToGraphics = toc(this.timeTable.setResultsToGraphics);
+            
+            this.timeTable.plotAll = tic;
             this.plotAll();
+            this.timeTable.plotAll = toc(this.timeTable.plotAll);
             
             % Save results
             if this.measVars.fileSystem.saveAny
                 fprintf("AOI: Saving Results To Disk\n");
-                this.fileSystem.saveData(this.result) 
+                this.timeTable.saveData = tic;
+                this.fileSystem.saveData(this.result)
+                this.timeTable.saveData = toc(this.timeTable.saveData);
             end
+            
+            % Collect time statistics
+            this.updateTimeTable();
             
             fprintf ("AOI: Done AO\n")
         end
@@ -633,13 +660,27 @@ classdef acoustoOptics < handle
             timeTable.digitizer = this.digitizer.getTimeTable();
         end
         
+        function updateTimeTable(this)
+            inTimeTable              = this.getInnerTimeTables();
+            this.timeTable.algo      = inTimeTable.algo;
+            this.timeTable.digitizer = inTimeTable.digitizer;
+            
+            if this.owned
+                this.owner.displayAOTimeTable();
+            end
+        end
+        
+        function result = getResult(this)
+            result = this.result; 
+        end
+        
         %Graphics
         function plotAll(this)
             if this.measVars.figs.validStruct.fullSignal
                 if ~isfield(this.result, 'rawData')
                     fprintf("AOI: You asked to display Raw Data, but rawData isn't available in reults.\n");
                 else
-                    this.graphics.plotSignal('fullSignal', this.measVars.algo.timing.tAcqVec*1e6, this.result.rawData);
+                    this.graphics.plotSignal('fullSignal');
                 end
             end
             
@@ -647,7 +688,7 @@ classdef acoustoOptics < handle
                 if ~isfield(this.result, 'rawData')
                     fprintf("AOI: You asked to display Measured Samples, but rawData isn't available in reults.\n");
                 else
-                    this.graphics.plotSignal('measSamples', this.measVars.algo.timing.tMeasVec*1e6, this.result.rawData(:, 1:this.measVars.algo.samples.samplesPerMeas));
+                    this.graphics.plotSignal('measSamples');
                 end
             end
 
@@ -655,7 +696,7 @@ classdef acoustoOptics < handle
                 if ~isfield(this.result, 'netSignal')
                     fprintf("AOI: You asked to display Net Signal, but netSignal isn't available in reults.\n");
                 else
-                    this.graphics.plotSignal('netSignal', this.measVars.algo.timing.tSigVec*1e6, this.result.netSignal);
+                    this.graphics.plotSignal('netSignal');
                 end
             end
             
@@ -663,7 +704,7 @@ classdef acoustoOptics < handle
                 if ~isfield(this.result, 'deMultiplexed')
                     fprintf("AOI: You asked to display Demultiplexed Signal, but deMul isn't available in reults.\n");
                 else
-                    this.graphics.plotSignal('deMul', this.measVars.algo.timing.tSigVec*1e6, this.result.netSignal);
+                    this.graphics.plotSignal('deMul');
                 end
             end
             
@@ -671,7 +712,7 @@ classdef acoustoOptics < handle
                 if ~isfield(this.result, 'reshapedSignal')
                     fprintf("AOI: You asked to display Reshaped Singal, but reshapedSignal isn't available in reults.\n");
                 else
-                    this.graphics.plotReshapedSignal('reshapedSignal', this.measVars.algo.timing.tPosVec*1e6, this.result.reshapedSignal);
+                    this.graphics.plotReshapedSignal();
                 end
             end  
             
@@ -679,9 +720,7 @@ classdef acoustoOptics < handle
                  if ~isfield(this.result, 'fftRes')
                     fprintf("AOI: You asked to display FFT, but fftRes isn't available in reults.\n");
                  else
-                    this.graphics.plotFFT('FFT', this.measVars.algo.freq.frequencyBar*1e-6, abs(this.result.fftRes),...
-                                          this.measVars.algo.freq.frequencyBar(this.measVars.algo.freq.fSinIdx)*1e-6,...
-                                          this.measVars.algo.freq.fSinIdx);
+                    this.graphics.plotFFT('FFT');%,...
                  end
             end
             
@@ -689,9 +728,7 @@ classdef acoustoOptics < handle
                  if ~isfield(this.result, 'qAvgFFT')
                     fprintf("AOI: You asked to display quant averaged FFT, but qAvgFFT isn't available in reults.\n");
                  else
-                    this.graphics.plotFFT('qAvgFFT', this.measVars.algo.freq.frequencyBar*1e-6, this.result.qAvgFFT,...
-                                          this.measVars.algo.freq.frequencyBar(this.measVars.algo.freq.fSinIdx)*1e-6,...
-                                          this.measVars.algo.freq.fSinIdx);
+                    this.graphics.plotFFT('qAvgFFT');%,...
                  end
             end
             
@@ -699,7 +736,7 @@ classdef acoustoOptics < handle
                 if ~isfield(this.result, 'phiCh')
                     fprintf("AOI: You asked to display Phi Channel, but phiCh isn't available in reults.\n");
                 else
-                    this.graphics.plotPhiCh('phiCh', this.measVars.algo.len.zVecUSRes*1e3, this.result.phiCh); 
+                    this.graphics.plotPhiCh(); 
                 end
             end
             
@@ -707,7 +744,7 @@ classdef acoustoOptics < handle
                 if ~isfield(this.result, 'phi')
                     fprintf("AOI: You asked to display Phi, but phi isn't available in reults.\n");
                 else
-                    this.graphics.plotPhi('phi', this.measVars.algo.len.zVecUSRes*1e3, this.result.phi, this.result.phiStd);
+                    this.graphics.plotPhi();
                 end
             end  
         end
@@ -721,10 +758,11 @@ classdef acoustoOptics < handle
             this.graphics.setGraphicsDynamicVars(this.measVars.algo)
             this.plotAll();
         end
+        
         % Saved data Operation
+        
         % The following 3 functions should be called consecutively in order
         % to load data and analyse/plot it.
-        
         function vars = loadVarsToAO(this, arg, varargin)
             % Importing vars and sets them into the object but not fully
             % configuring the object.
@@ -820,6 +858,11 @@ classdef acoustoOptics < handle
             end
             
             fprintf ("AOI: Done AO\n")
+        end
+        
+        function saveVarsToDisk(this, path)
+            % path is relative to projPath
+            this.fileSystem.saveVarsToDisk(this.getAOVars, path);
         end
         
     end
