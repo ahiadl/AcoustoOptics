@@ -1,9 +1,32 @@
-classdef scan2D < scanObj
+classdef scan2D < handle
     %SCAN2D Summary of this class goes here
     %   Detailed explanation goes here
     
     properties
+        ao
+        graphics
+        fileSystem
+        sf
+        owner
         
+        results
+        timeTable
+        
+        % Vars
+        uVars
+        grid
+        aoVars
+        figsVars
+        fileSystemVars
+        generalVars
+        
+        strings
+        curPos      %[X,Y]          [mm]
+        curScan     %[1st, 2nd]     [mm]
+        curPosIdx   %[r, xIdx, yIdx][#]
+        curScanIdx; %[r, 1st, 2nd]  [#]
+        
+        owned
     end
     
     methods (Static)
@@ -55,12 +78,18 @@ classdef scan2D < scanObj
     end
     
     methods
-        function this = scan2D(acoustoOpticHandle, owner)
-            this@scanObj(acoustoOpticHandle, owner);
+        function this = scan2D(acoustoOpticHandle)
+            strings.scan      = "Done Scan for (R,X,Y) = (%d, %.2f, %.2f)";
+            strings.timeTable = "R%dX%.2fY%.2f";
             
-            this.strings.scan = "Done Scan for (R,X,Y) = (%d, %.2f, %.2f)";
-            this.strings.timeTable = "R%dX%.2fY%.2f";
+            this.sf = statsFunctions("S2D", strings);
             
+            if ~isempty(acoustoOpticHandle)
+                this.ao = acoustoOpticHandle;
+            else
+                this.ao = acoustoOptics();
+            end
+
             this.graphics = scan2DGraphics();
             this.fileSystem = fileSystemS2D();
         end
@@ -216,22 +245,22 @@ classdef scan2D < scanObj
                         this.graphics.updateCurPosAndIdx(this.getPosAndScan());
                         this.ao.fileSystem.setDataFilenameVariables({r, this.curPos(1), this.curPos(2)}); 
                         
-                        this.printStr(sprintf("S2D: Scaninng on Position: (X,Y) = (%.2f, %.2f)", this.curPos(1), this.curPos(2)), true);
-                        this.startScanTime('singlePos');
+                        this.sf.printStr(sprintf("Scaninng on Position: (X,Y) = (%.2f, %.2f)", this.curPos(1), this.curPos(2)), true);
+                        this.sf.startScanTime('singlePos', this.curScan);
                         
-                        this.startScanTime('netAcoustoOptics');
+                        this.sf.startScanTime('netAcoustoOptics', this.curScan);
                         res = this.ao.moveMeasureAndAnalyse(this.curPos);
-                        this.stopScanTime('netAcoustoOptics');
+                        this.sf.stopScanTime('netAcoustoOptics', this.curScan);
                         
-                        this.startScanTime('copyTime');
+                        this.sf.startScanTime('copyTime', this.curScan);
                         this.putAOResToResultsArray(res);
-                        this.stopScanTime('copyTime');
+                        this.sf.stopScanTime('copyTime', this.curScan);
                         
                         this.graphics.setData (this.results.phi, this.results.phiStd,...
                                                this.results.phiAvg, this.results.phiAvgStd);
                         this.plotCurPlots();
                         
-                        this.stopScanTime('singlePos');
+                        this.sf.stopScanTime('singlePos', this.curScan);
                     end
                 end
                 this.curScanIdx(2:3) = 0; %for time table
@@ -246,7 +275,7 @@ classdef scan2D < scanObj
                 this.fileSystem.saveResultsToDisk(this.results);
             end
             res = this.results;
-            this.printStr(sprintf("S2D: Done 2D scan.\n"), true);
+            this.sf.printStr(sprintf("Done 2D scan.\n"), true);
             this.fileSystem.turnLogFileOff();
         end
         

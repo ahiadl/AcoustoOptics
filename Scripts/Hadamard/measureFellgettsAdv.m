@@ -1,6 +1,6 @@
-close all;
-clear all;
-clc;
+% close all;
+% clear all;
+% clc;
 
 %----------------------------------------------------------%
 %In this file:
@@ -294,6 +294,55 @@ load('D:/ResultsToKeep/FellgettsAdvantage/fftNaive.mat')
 load('D:/ResultsToKeep/FellgettsAdvantage/rawDataHad.mat')
 load('D:/ResultsToKeep/FellgettsAdvantage/rawDataNaive.mat')
 %%
+idx1 = 29;
+idx2 = 15;
+idx4 = 8;
+
+maxIdx = [idx1, idx2, idx4];
+postMaxPts = [8, 11, 7];
+
+samp = 1;
+ch = 3;
+quant = 2;
+pos = 4;
+% length(cyc)
+for i = 1:1
+    for j = 1:length(N{i})
+        
+        fftMat = fftHad{i,j}(:,:,:,:);
+        AbsFFTtmp       = mean(mean(abs(fftMat),    ch),  quant);
+        hadMeanAbsFFT{i,j}   = AbsFFTtmp;
+        
+        if j==1
+            bkgStdHadAbs(i,j,:) = std(AbsFFTtmp(:,:,:, 1:15), 0 , 4);
+        else
+            bkgStdHadAbs(i,j,:) = std(AbsFFTtmp(:,:,:, 45:end), 0 , 4);
+        end
+        
+        fftMat = fftNaive{i,j}(:,:,:,:);
+        AbsFFTtmp       = mean(mean(abs(fftMat),ch), quant);
+        naiveMeanAbsFFT{i,j}   = AbsFFTtmp;
+        
+        if j == 1
+            bkgStdNaiveAbs(i,j,:) = std(AbsFFTtmp(:,:,:, 1:15), 0 , 4);
+        else
+            bkgStdNaiveAbs(i,j,:) = std(AbsFFTtmp(:,:,:, 45:end), 0 , 4);
+        end
+    end
+end
+
+SNRALL = bkgStdNaiveAbs ./ bkgStdHadAbs;
+SNRMean = mean(SNRALL, 3);
+SNRSTD = std(SNRALL, 0, 3);
+
+figure();
+plot (N{1}, sqrt(N{1})/2); hold on;
+errorbar(N{1}, SNRMean(1, :), SNRSTD(1,:))
+
+
+save('MultAdvResAfterReview', 'SNRALL', 'SNRMean', 'SNRSTD');
+
+%%
 % dims
 
 idx1 = 29;
@@ -313,173 +362,173 @@ for i = 1:length(cyc)
 
         % Had
         fftMat = fftHad{i,j}(:,:,:,:);
-        absMeanFFTtmp   = mean(abs(mean(fftMat,     ch)), quant);
+%         absMeanFFTtmp   = mean(abs(mean(fftMat,     ch)), quant);
         AbsFFTtmp       = mean(mean(abs(fftMat),    ch),  quant);
-        AbsSqFFTtmp     = mean(mean(abs(fftMat).^2, ch),  quant);
+%         AbsSqFFTtmp     = mean(mean(abs(fftMat).^2, ch),  quant);
 
-        hadAbsMeanFFT{i,j}   = absMeanFFTtmp;
+%         hadAbsMeanFFT{i,j}   = absMeanFFTtmp;
         hadMeanAbsFFT{i,j}   = AbsFFTtmp;
-        hadMeanAbsSqFFT{i,j} = AbsSqFFTtmp;
+%         hadMeanAbsSqFFT{i,j} = AbsSqFFTtmp;
 
         %Average over different samples
-        expHadAbsMeanFFT{i,j}   = squeeze(mean(absMeanFFTtmp, samp));
-        stdHadAbsMeanFFT{i,j}   = squeeze(std(absMeanFFTtmp, 0, samp));
+%         expHadAbsMeanFFT{i,j}   = squeeze(mean(absMeanFFTtmp, samp));
+%         stdHadAbsMeanFFT{i,j}   = squeeze(std(absMeanFFTtmp, 0, samp));
         
         expHadMeanAbsFFT{i,j}   = squeeze(mean(AbsFFTtmp, samp));
         stdHadMeanAbsFFT{i,j}   = squeeze(std(AbsFFTtmp, 0, samp));
         
-        expHadMeanAbsSqFFT{i,j} = squeeze(mean(AbsSqFFTtmp, samp));
-        stdHadMeanAbsSqFFT{i,j} = squeeze(std(AbsSqFFTtmp, 0, samp));
+%         expHadMeanAbsSqFFT{i,j} = squeeze(mean(AbsSqFFTtmp, samp));
+%         stdHadMeanAbsSqFFT{i,j} = squeeze(std(AbsSqFFTtmp, 0, samp));
 
         if j == 1
-            sigStdHadAbsMean(i,j)  = stdHadAbsMeanFFT{i,j}(maxIdx(i));
-            bkgStdHadAbsMean(i,j)  = stdHadAbsMeanFFT{i,j}(1);
-            sigMeanHadAbsMean(i,j) = expHadAbsMeanFFT{i,j}(maxIdx(i));
-            bkgMeanHadAbsMean(i,j) = expHadAbsMeanFFT{i,j}(1);
+%             sigStdHadAbsMean(i,j)  = stdHadAbsMeanFFT{i,j}(maxIdx(i));
+%             bkgStdHadAbsMean(i,j)  = stdHadAbsMeanFFT{i,j}(1);
+%             sigMeanHadAbsMean(i,j) = expHadAbsMeanFFT{i,j}(maxIdx(i));
+%             bkgMeanHadAbsMean(i,j) = expHadAbsMeanFFT{i,j}(1);
             
             sigStdHadAbs(i,j)  = stdHadMeanAbsFFT{i,j}(maxIdx(i));
             bkgStdHadAbs(i,j)  = stdHadMeanAbsFFT{i,j}(1);
             sigMeanHadAbs(i,j) = expHadMeanAbsFFT{i,j}(maxIdx(i));
             bkgMeanHadAbs(i,j) = expHadMeanAbsFFT{i,j}(1);
             
-            sigStdHadAbsSq(i,j)  = stdHadMeanAbsSqFFT{i,j}(maxIdx(i));
-            bkgStdHadAbsSq(i,j)  = stdHadMeanAbsSqFFT{i,j}(1);
-            sigMeanHadAbsSq(i,j) = expHadMeanAbsSqFFT{i,j}(maxIdx(i));
-            bkgMeanHadAbsSq(i,j) = expHadMeanAbsSqFFT{i,j}(1);
+%             sigStdHadAbsSq(i,j)  = stdHadMeanAbsSqFFT{i,j}(maxIdx(i));
+%             bkgStdHadAbsSq(i,j)  = stdHadMeanAbsSqFFT{i,j}(1);
+%             sigMeanHadAbsSq(i,j) = expHadMeanAbsSqFFT{i,j}(maxIdx(i));
+%             bkgMeanHadAbsSq(i,j) = expHadMeanAbsSqFFT{i,j}(1);
 
-            SNRHadAbsMean(i,j)   = abs( expHadAbsMeanFFT{i,j}(maxIdx(i)) - expHadAbsMeanFFT{i,j}(1)) / stdHadAbsMeanFFT{i,j}(1);
+%             SNRHadAbsMean(i,j)   = abs( expHadAbsMeanFFT{i,j}(maxIdx(i)) - expHadAbsMeanFFT{i,j}(1)) / stdHadAbsMeanFFT{i,j}(1);
             SNRHadMeanAbs(i,j)   = abs( expHadMeanAbsFFT{i,j}(maxIdx(i)) - expHadMeanAbsFFT{i,j}(1)) / stdHadMeanAbsFFT{i,j}(1);
-            SNRHadMeanAbsSq(i,j) = abs( expHadMeanAbsSqFFT{i,j}(maxIdx(i)) - expHadMeanAbsSqFFT{i,j}(1)) / stdHadMeanAbsSqFFT{i,j}(1);
+%             SNRHadMeanAbsSq(i,j) = abs( expHadMeanAbsSqFFT{i,j}(maxIdx(i)) - expHadMeanAbsSqFFT{i,j}(1)) / stdHadMeanAbsSqFFT{i,j}(1);
 
-            SBRHadAbsMean(i,j)   = abs( expHadAbsMeanFFT{i,j}(maxIdx(i)) - expHadAbsMeanFFT{i,j}(1)) / expHadAbsMeanFFT{i,j}(1);
+%             SBRHadAbsMean(i,j)   = abs( expHadAbsMeanFFT{i,j}(maxIdx(i)) - expHadAbsMeanFFT{i,j}(1)) / expHadAbsMeanFFT{i,j}(1);
             SBRHadMeanAbs(i,j)   = abs( expHadMeanAbsFFT{i,j}(maxIdx(i)) - expHadMeanAbsFFT{i,j}(1)) / expHadMeanAbsFFT{i,j}(1);
-            SBRHadMeanAbsSq(i,j) = abs( expHadMeanAbsSqFFT{i,j}(maxIdx(i)) - expHadMeanAbsSqFFT{i,j}(1)) / expHadMeanAbsSqFFT{i,j}(1);
+%             SBRHadMeanAbsSq(i,j) = abs( expHadMeanAbsSqFFT{i,j}(maxIdx(i)) - expHadMeanAbsSqFFT{i,j}(1)) / expHadMeanAbsSqFFT{i,j}(1);
 
         else
             
-            tmpBkgStdVec = absMeanFFTtmp(:,:,:, (maxIdx(i)+postMaxPts(i)):end);
-            tmpBkgStdVec = tmpBkgStdVec(:);
-            bkgStdAbsMean  = std(tmpBkgStdVec);
-            bkgMeanAbsMean = mean(tmpBkgStdVec);
+%             tmpBkgStdVec = absMeanFFTtmp(:,:,:, (maxIdx(i)+postMaxPts(i)):end);
+%             tmpBkgStdVec = tmpBkgStdVec(:);
+%             bkgStdAbsMean  = std(tmpBkgStdVec);
+%             bkgMeanAbsMean = mean(tmpBkgStdVec);
             
             tmpBkgStdVec = AbsFFTtmp(:,:,:, (maxIdx(i)+postMaxPts(i)):end);
             tmpBkgStdVec = tmpBkgStdVec(:);
             bkgStdAbs  = std(tmpBkgStdVec);
             bkgMeanAbs = mean(tmpBkgStdVec);
 
-            tmpBkgStdVec = AbsSqFFTtmp(:,:,:, (maxIdx(i)+postMaxPts(i)):end);
-            tmpBkgStdVec = tmpBkgStdVec(:);
-            bkgStdAbsSq = std(tmpBkgStdVec);
-            bkgMeanAbsSq = mean(tmpBkgStdVec);
+%             tmpBkgStdVec = AbsSqFFTtmp(:,:,:, (maxIdx(i)+postMaxPts(i)):end);
+%             tmpBkgStdVec = tmpBkgStdVec(:);
+%             bkgStdAbsSq = std(tmpBkgStdVec);
+%             bkgMeanAbsSq = mean(tmpBkgStdVec);
 
             
-            sigStdHadMean1(i,j) = stdHadAbsMeanFFT{i,j}(maxIdx(i));
-            bkgStdHadMean(i,j)  = bkgStdAbsMean;
-            sigMeanHadMean(i,j) = expHadAbsMeanFFT{i,j}(maxIdx(i));
-            bkgMeanHadMean(i,j) = bkgMeanAbsMean;
+%             sigStdHadMean1(i,j) = stdHadAbsMeanFFT{i,j}(maxIdx(i));
+%             bkgStdHadMean(i,j)  = bkgStdAbsMean;
+%             sigMeanHadMean(i,j) = expHadAbsMeanFFT{i,j}(maxIdx(i));
+%             bkgMeanHadMean(i,j) = bkgMeanAbsMean;
             
             sigStdHadAbs(i,j)  = stdHadMeanAbsFFT{i,j}(maxIdx(i));
             bkgStdHadAbs(i,j)  = bkgStdAbs;
             sigMeanHadAbs(i,j) = expHadMeanAbsFFT{i,j}(maxIdx(i));
             bkgMeanHadAbs(i,j) = bkgMeanAbs;
             
-            sigStdHadAbsSq(i,j)  = stdHadMeanAbsSqFFT{i,j}(maxIdx(i));
-            bkgStdHadAbsSq(i,j)  = bkgStdAbsSq;
-            sigMeanHadAbsSq(i,j) = expHadMeanAbsSqFFT{i,j}(maxIdx(i));
-            bkgMeanHadAbsSq(i,j) = bkgMeanAbsSq;
+%             sigStdHadAbsSq(i,j)  = stdHadMeanAbsSqFFT{i,j}(maxIdx(i));
+%             bkgStdHadAbsSq(i,j)  = bkgStdAbsSq;
+%             sigMeanHadAbsSq(i,j) = expHadMeanAbsSqFFT{i,j}(maxIdx(i));
+%             bkgMeanHadAbsSq(i,j) = bkgMeanAbsSq;
 
-            SNRHadAbsMean(i,j)   = abs( expHadAbsMeanFFT{i,j}(maxIdx(i)) - expHadAbsMeanFFT{i,j}(end)) / stdHadAbsMeanFFT{i,j}(end);
+%             SNRHadAbsMean(i,j)   = abs( expHadAbsMeanFFT{i,j}(maxIdx(i)) - expHadAbsMeanFFT{i,j}(end)) / stdHadAbsMeanFFT{i,j}(end);
             SNRHadMeanAbs(i,j)   = abs( expHadMeanAbsFFT{i,j}(maxIdx(i)) - expHadMeanAbsFFT{i,j}(end)) / stdHadMeanAbsFFT{i,j}(end);
-            SNRHadMeanAbsSq(i,j) = abs( expHadMeanAbsSqFFT{i,j}(maxIdx(i)) - expHadMeanAbsSqFFT{i,j}(end)) / stdHadMeanAbsSqFFT{i,j}(end);
+%             SNRHadMeanAbsSq(i,j) = abs( expHadMeanAbsSqFFT{i,j}(maxIdx(i)) - expHadMeanAbsSqFFT{i,j}(end)) / stdHadMeanAbsSqFFT{i,j}(end);
 
-            SBRHadAbsMean(i,j)   = abs( expHadAbsMeanFFT{i,j}(maxIdx(i)) - expHadAbsMeanFFT{i,j}(end)) / expHadAbsMeanFFT{i,j}(end);
+%             SBRHadAbsMean(i,j)   = abs( expHadAbsMeanFFT{i,j}(maxIdx(i)) - expHadAbsMeanFFT{i,j}(end)) / expHadAbsMeanFFT{i,j}(end);
             SBRHadMeanAbs(i,j)   = abs( expHadMeanAbsFFT{i,j}(maxIdx(i)) - expHadMeanAbsFFT{i,j}(end)) / expHadMeanAbsFFT{i,j}(end);
-            SBRHadMeanAbsSq(i,j) = abs( expHadMeanAbsSqFFT{i,j}(maxIdx(i)) - expHadMeanAbsSqFFT{i,j}(end)) / expHadMeanAbsSqFFT{i,j}(end);
+%             SBRHadMeanAbsSq(i,j) = abs( expHadMeanAbsSqFFT{i,j}(maxIdx(i)) - expHadMeanAbsSqFFT{i,j}(end)) / expHadMeanAbsSqFFT{i,j}(end);
 
         end
 
         %Naive
         fftMat = fftNaive{i,j}(:,:,:,:);
-        absMeanFFTtmp   = mean(abs(mean(fftMat, ch)),quant);
+%         absMeanFFTtmp   = mean(abs(mean(fftMat, ch)),quant);
         AbsFFTtmp       = mean(mean(abs(fftMat),ch), quant);
-        AbsSqFFTtmp     = mean(mean(abs(fftMat).^2, ch), quant);
+%         AbsSqFFTtmp     = mean(mean(abs(fftMat).^2, ch), quant);
 
-        naiveAbsMeanFFT{i,j}   = absMeanFFTtmp;
+%         naiveAbsMeanFFT{i,j}   = absMeanFFTtmp;
         naiveMeanAbsFFT{i,j}   = AbsFFTtmp;
-        naiveMeanAbsSqFFT{i,j} = AbsSqFFTtmp;
+%         naiveMeanAbsSqFFT{i,j} = AbsSqFFTtmp;
         
         % Average over samples
-        expNaiveAbsMeanFFT{i,j}   = squeeze(mean(absMeanFFTtmp, samp));
-        stdNaiveAbsMeanFFT{i,j}   = squeeze(std(absMeanFFTtmp, 0, samp));
+%         expNaiveAbsMeanFFT{i,j}   = squeeze(mean(absMeanFFTtmp, samp));
+%         stdNaiveAbsMeanFFT{i,j}   = squeeze(std(absMeanFFTtmp, 0, samp));
 
         expNaiveMeanAbsFFT{i,j}   = squeeze(mean(AbsFFTtmp, samp));
         stdNaiveMeanAbsFFT{i,j}   = squeeze(std(AbsFFTtmp, 0, samp));
 
-        expNaiveMeanAbsSqFFT{i,j} = squeeze(mean(AbsSqFFTtmp, samp));
-        stdNaiveMeanAbsSqFFT{i,j} = squeeze(std(AbsSqFFTtmp, 0, samp));
+%         expNaiveMeanAbsSqFFT{i,j} = squeeze(mean(AbsSqFFTtmp, samp));
+%         stdNaiveMeanAbsSqFFT{i,j} = squeeze(std(AbsSqFFTtmp, 0, samp));
 
         if j == 1
-            sigStdNaiveAbsMean(i,j)  = stdNaiveAbsMeanFFT{i,j}(maxIdx(i));
-            bkgStdNaiveAbsMean(i,j)  = stdNaiveAbsMeanFFT{i,j}(1);
-            sigMeanNaiveAbsMean(i,j) = expNaiveAbsMeanFFT{i,j}(maxIdx(i));
-            bkgMeanNaiveAbsMean(i,j) = expNaiveAbsMeanFFT{i,j}(1);
+%             sigStdNaiveAbsMean(i,j)  = stdNaiveAbsMeanFFT{i,j}(maxIdx(i));
+%             bkgStdNaiveAbsMean(i,j)  = stdNaiveAbsMeanFFT{i,j}(1);
+%             sigMeanNaiveAbsMean(i,j) = expNaiveAbsMeanFFT{i,j}(maxIdx(i));
+%             bkgMeanNaiveAbsMean(i,j) = expNaiveAbsMeanFFT{i,j}(1);
             
             sigStdNaiveAbs(i,j)  = stdNaiveMeanAbsFFT{i,j}(maxIdx(i));
             bkgStdNaiveAbs(i,j)  = stdNaiveMeanAbsFFT{i,j}(1);
             sigMeanNaiveAbs(i,j) = expNaiveMeanAbsFFT{i,j}(maxIdx(i));
             bkgMeanNaiveAbs(i,j) = expNaiveMeanAbsFFT{i,j}(1);
             
-            sigStdNaiveAbsSq(i,j)  = stdNaiveMeanAbsSqFFT{i,j}(maxIdx(i));
-            bkgStdNaiveAbsSq(i,j)  = stdNaiveMeanAbsSqFFT{i,j}(1);
-            sigMeanNaiveAbsSq(i,j) = expNaiveMeanAbsSqFFT{i,j}(maxIdx(i));
-            bkgMeanNaiveAbsSq(i,j) = expNaiveMeanAbsSqFFT{i,j}(1);
+%             sigStdNaiveAbsSq(i,j)  = stdNaiveMeanAbsSqFFT{i,j}(maxIdx(i));
+%             bkgStdNaiveAbsSq(i,j)  = stdNaiveMeanAbsSqFFT{i,j}(1);
+%             sigMeanNaiveAbsSq(i,j) = expNaiveMeanAbsSqFFT{i,j}(maxIdx(i));
+%             bkgMeanNaiveAbsSq(i,j) = expNaiveMeanAbsSqFFT{i,j}(1);
 
-            SNRNaiveAbsMean(i,j)   = abs( expNaiveAbsMeanFFT{i,j}(maxIdx(i)) - expNaiveAbsMeanFFT{i,j}(1)) / stdNaiveAbsMeanFFT{i,j}(1);
+%             SNRNaiveAbsMean(i,j)   = abs( expNaiveAbsMeanFFT{i,j}(maxIdx(i)) - expNaiveAbsMeanFFT{i,j}(1)) / stdNaiveAbsMeanFFT{i,j}(1);
             SNRNaiveMeanAbs(i,j)   = abs( expNaiveMeanAbsFFT{i,j}(maxIdx(i)) - expNaiveMeanAbsFFT{i,j}(1)) / stdNaiveMeanAbsFFT{i,j}(1);
-            SNRNaiveMeanAbsSq(i,j) = abs( expNaiveMeanAbsSqFFT{i,j}(maxIdx(i)) - expNaiveMeanAbsSqFFT{i,j}(1)) / stdNaiveMeanAbsSqFFT{i,j}(1);
+%             SNRNaiveMeanAbsSq(i,j) = abs( expNaiveMeanAbsSqFFT{i,j}(maxIdx(i)) - expNaiveMeanAbsSqFFT{i,j}(1)) / stdNaiveMeanAbsSqFFT{i,j}(1);
 
-            SBRNaiveAbsMean(i,j)   = abs( expNaiveAbsMeanFFT{i,j}(maxIdx(i)) - expNaiveAbsMeanFFT{i,j}(1)) / expNaiveAbsMeanFFT{i,j}(1);
+%             SBRNaiveAbsMean(i,j)   = abs( expNaiveAbsMeanFFT{i,j}(maxIdx(i)) - expNaiveAbsMeanFFT{i,j}(1)) / expNaiveAbsMeanFFT{i,j}(1);
             SBRNaiveMeanAbs(i,j)   = abs( expNaiveMeanAbsFFT{i,j}(maxIdx(i)) - expNaiveMeanAbsFFT{i,j}(1)) / expNaiveMeanAbsFFT{i,j}(1);
-            SBRNaiveMeanAbsSq(i,j) = abs( expNaiveMeanAbsSqFFT{i,j}(maxIdx(i)) - expNaiveMeanAbsSqFFT{i,j}(1)) / expNaiveMeanAbsSqFFT{i,j}(1);
+%             SBRNaiveMeanAbsSq(i,j) = abs( expNaiveMeanAbsSqFFT{i,j}(maxIdx(i)) - expNaiveMeanAbsSqFFT{i,j}(1)) / expNaiveMeanAbsSqFFT{i,j}(1);
 
         else
-            tmpBkgStdVec = absMeanFFTtmp(:,:,:, (maxIdx(i)+postMaxPts(i)):end);
-            tmpBkgStdVec = tmpBkgStdVec(:);
-            bkgStdAbsMean  = std(tmpBkgStdVec);
-            bkgMeanAbsMean = mean(tmpBkgStdVec);
-            
+%             tmpBkgStdVec = absMeanFFTtmp(:,:,:, (maxIdx(i)+postMaxPts(i)):end);
+%             tmpBkgStdVec = tmpBkgStdVec(:);
+%             bkgStdAbsMean  = std(tmpBkgStdVec);
+%             bkgMeanAbsMean = mean(tmpBkgStdVec);
+%             
             tmpBkgStdVec = AbsFFTtmp(:,:,:, (maxIdx(i)+postMaxPts(i)):end);
             tmpBkgStdVec = tmpBkgStdVec(:);
             bkgStdAbs  = std(tmpBkgStdVec);
             bkgMeanAbs = mean(tmpBkgStdVec);
 
-            tmpBkgStdVec = AbsSqFFTtmp(:,:,:, (maxIdx(i)+postMaxPts(i)):end);
-            tmpBkgStdVec = tmpBkgStdVec(:);
-            bkgStdAbsSq = std(tmpBkgStdVec);
-            bkgMeanAbsSq = mean(tmpBkgStdVec);
+%             tmpBkgStdVec = AbsSqFFTtmp(:,:,:, (maxIdx(i)+postMaxPts(i)):end);
+%             tmpBkgStdVec = tmpBkgStdVec(:);
+%             bkgStdAbsSq = std(tmpBkgStdVec);
+%             bkgMeanAbsSq = mean(tmpBkgStdVec);
             
-            sigStdNaiveAbsMean(i,j)  = stdNaiveAbsMeanFFT{i,j}(maxIdx(i));
-            bkgStdNaiveAbsMean(i,j)  = bkgStdAbsMean;
-            sigMeanNaiveAbsMean(i,j) = expNaiveAbsMeanFFT{i,j}(maxIdx(i));
-            bkgMeanNaiveAbsMean(i,j) = bkgMeanAbsMean;
+%             sigStdNaiveAbsMean(i,j)  = stdNaiveAbsMeanFFT{i,j}(maxIdx(i));
+%             bkgStdNaiveAbsMean(i,j)  = bkgStdAbsMean;
+%             sigMeanNaiveAbsMean(i,j) = expNaiveAbsMeanFFT{i,j}(maxIdx(i));
+%             bkgMeanNaiveAbsMean(i,j) = bkgMeanAbsMean;
             
             sigStdNaiveAbs(i,j)  = stdNaiveMeanAbsFFT{i,j}(maxIdx(i));
             bkgStdNaiveAbs(i,j)  = bkgStdAbs;
             sigMeanNaiveAbs(i,j) = expNaiveMeanAbsFFT{i,j}(maxIdx(i));
             bkgMeanNaiveAbs(i,j) = bkgMeanAbs;
 
-            sigStdNaiveAbsSq(i,j)  = stdNaiveMeanAbsSqFFT{i,j}(maxIdx(i));
-            bkgStdNaiveAbsSq(i,j)  = bkgStdAbsSq;
-            sigMeanNaiveAbsSq(i,j) = expNaiveMeanAbsSqFFT{i,j}(maxIdx(i));
-            bkgMeanNaiveAbsSq(i,j) = bkgMeanAbsSq;
+%             sigStdNaiveAbsSq(i,j)  = stdNaiveMeanAbsSqFFT{i,j}(maxIdx(i));
+%             bkgStdNaiveAbsSq(i,j)  = bkgStdAbsSq;
+%             sigMeanNaiveAbsSq(i,j) = expNaiveMeanAbsSqFFT{i,j}(maxIdx(i));
+%             bkgMeanNaiveAbsSq(i,j) = bkgMeanAbsSq;
 
-            SNRNaiveAbsMean(i,j)   = abs( expNaiveAbsMeanFFT{i,j}(maxIdx(i)) - expNaiveAbsMeanFFT{i,j}(end)) / stdNaiveAbsMeanFFT{i,j}(end);
+%             SNRNaiveAbsMean(i,j)   = abs( expNaiveAbsMeanFFT{i,j}(maxIdx(i)) - expNaiveAbsMeanFFT{i,j}(end)) / stdNaiveAbsMeanFFT{i,j}(end);
             SNRNaiveMeanAbs(i,j)   = abs( expNaiveMeanAbsFFT{i,j}(maxIdx(i)) - expNaiveMeanAbsFFT{i,j}(end)) / stdNaiveMeanAbsFFT{i,j}(end);
-            SNRNaiveMeanAbsSq(i,j) = abs( expNaiveMeanAbsSqFFT{i,j}(maxIdx(i)) - expNaiveMeanAbsSqFFT{i,j}(end)) / stdNaiveMeanAbsSqFFT{i,j}(end);
-
-            SBRNaiveAbsMean(i,j)   = abs( expNaiveAbsMeanFFT{i,j}(maxIdx(i)) - expNaiveAbsMeanFFT{i,j}(end)) / expNaiveAbsMeanFFT{i,j}(end);
+%             SNRNaiveMeanAbsSq(i,j) = abs( expNaiveMeanAbsSqFFT{i,j}(maxIdx(i)) - expNaiveMeanAbsSqFFT{i,j}(end)) / stdNaiveMeanAbsSqFFT{i,j}(end);
+% 
+%             SBRNaiveAbsMean(i,j)   = abs( expNaiveAbsMeanFFT{i,j}(maxIdx(i)) - expNaiveAbsMeanFFT{i,j}(end)) / expNaiveAbsMeanFFT{i,j}(end);
             SBRNaiveMeanAbs(i,j)   = abs( expNaiveMeanAbsFFT{i,j}(maxIdx(i)) - expNaiveMeanAbsFFT{i,j}(end)) / expNaiveMeanAbsFFT{i,j}(end);
-            SBRNaiveMeanAbsSq(i,j) = abs( expNaiveMeanAbsSqFFT{i,j}(maxIdx(i)) - expNaiveMeanAbsSqFFT{i,j}(end)) / expNaiveMeanAbsSqFFT{i,j}(end);
+%             SBRNaiveMeanAbsSq(i,j) = abs( expNaiveMeanAbsSqFFT{i,j}(maxIdx(i)) - expNaiveMeanAbsSqFFT{i,j}(end)) / expNaiveMeanAbsSqFFT{i,j}(end);
 
         end
     end
@@ -501,21 +550,21 @@ FASNRStdBkgAbsSq = bkgStdNaiveAbsSq ./ bkgStdHadAbsSq;
 
 %% save Post Analysis Results
 
-save('D:/ResultsToKeep/FellgettsAdvantage/analysisResultsHad.mat', ...
-    'hadMeanAbsFFT', 'expHadMeanAbsFFT', 'stdHadMeanAbsFFT',...
-    'sigStdHadAbs', 'bkgStdHadAbs', 'sigMeanHadAbs', 'bkgMeanHadAbs',...
-    'SNRHadMeanAbs', '-v7.3');
-
-save('D:/ResultsToKeep/FellgettsAdvantage/analysisResultsNaive.mat', ...
-    'naiveMeanAbsFFT', 'expNaiveMeanAbsFFT', 'stdNaiveMeanAbsFFT',...
-    'sigStdNaiveAbs', 'bkgStdNaiveAbs', 'sigMeanNaiveAbs', 'bkgMeanNaiveAbs',...
-    'SNRNaiveMeanAbs', '-v7.3');
-
-save('D:/ResultsToKeep/FellgettsAdvantage/postAnalysisAdvantageResults.mat', ...
-    'FASNRAbsMean', 'FASNRMeanAbs', 'FASNRMeanAbsSq',...
-    'FASBRAbsMean', 'FASBRMeanAbs', 'FASBRMeanAbsSq',...
-    'FASNRStdSigAbs', 'FASNRStdSigAbsSq', 'FASNRStdBkgAbs', 'FASNRStdBkgAbsSq',...
-    'N','-v7.3');
+% save('D:/ResultsToKeep/FellgettsAdvantage/analysisResultsHad.mat', ...
+%     'hadMeanAbsFFT', 'expHadMeanAbsFFT', 'stdHadMeanAbsFFT',...
+%     'sigStdHadAbs', 'bkgStdHadAbs', 'sigMeanHadAbs', 'bkgMeanHadAbs',...
+%     'SNRHadMeanAbs', '-v7.3');
+% 
+% save('D:/ResultsToKeep/FellgettsAdvantage/analysisResultsNaive.mat', ...
+%     'naiveMeanAbsFFT', 'expNaiveMeanAbsFFT', 'stdNaiveMeanAbsFFT',...
+%     'sigStdNaiveAbs', 'bkgStdNaiveAbs', 'sigMeanNaiveAbs', 'bkgMeanNaiveAbs',...
+%     'SNRNaiveMeanAbs', '-v7.3');
+% 
+% save('D:/ResultsToKeep/FellgettsAdvantage/postAnalysisAdvantageResults.mat', ...
+%     'FASNRAbsMean', 'FASNRMeanAbs', 'FASNRMeanAbsSq',...
+%     'FASBRAbsMean', 'FASBRMeanAbs', 'FASBRMeanAbsSq',...
+%     'FASNRStdSigAbs', 'FASNRStdSigAbsSq', 'FASNRStdBkgAbs', 'FASNRStdBkgAbsSq',...
+%     'N','-v7.3');
 
 
 %% Phd Figures

@@ -6,6 +6,7 @@ classdef scanObj < handle
         ao
         graphics
         fileSystem
+        sf
         owner
         
         results
@@ -32,6 +33,10 @@ classdef scanObj < handle
            
         function this = scanObj(acoustoOpticHandle, owner)
             printStr(this, "----Creating Scan Object----", true);
+            
+            strings.scan = "Done Scan for (R,X,Y) = (%d, %.2f, %.2f)";
+            strings.timeTable = "R%dX%.2fY%.2f";
+            
             
             printStr(this, "1. Acousto Optics Object", true);
             if ~isempty(acoustoOpticHandle)
@@ -75,27 +80,7 @@ classdef scanObj < handle
            this.timeTable = struct(); 
         end
         
-        function startTime(this, str)
-            meas = sprintf("%s", str);
-            this.timeTable.(meas).(str) = tic;
-        end
         
-        function stopTime(this, str)
-            meas = sprintf("%s", str);
-            this.timeTable.(meas).(str) = toc(this.timeTable.(meas).(str));
-        end
-
-        function startScanTime(this, str)
-            meas = sprintf(this.strings.timeTable, this.curScan);
-            meas = strrep(meas, '.' , '');
-            this.timeTable.scan.(meas).(str) = tic;
-        end
-        
-        function stopScanTime(this, str)
-            meas = sprintf(this.strings.timeTable, this.curScan);
-            meas = strrep(meas, '.' , '');
-            this.timeTable.scan.(meas).(str) = toc(this.timeTable.scan.(meas).(str));
-        end
         
         function storeAcoustoOpricTimeTable(this)
             meas = sprintf(this.strings.timeTable, this.curScan);

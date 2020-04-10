@@ -125,8 +125,7 @@ classdef AOGraphics < Graphics
 %             this.graphics.setStrings(title, xlabel, ylabel, legend);
 %             this.graphics.setDims(gName, zIdxDim, chDim, dataDim)
 %             this.graphics.setMarkersEnable(enable);          
-            
-%             setDims - when dim is irrelevant send 1
+
             % extClk
             this.setType('extClk', 'stem');
             this.setStrings('extClk', "External Clk (Sampling Clock)", "t[\mus]", "Amp", []);
@@ -264,13 +263,17 @@ classdef AOGraphics < Graphics
         end
         
         function signal = extractFFTSignal(this, figName)
+            signal.zIdx  = this.figs.zIdx;
+            signal.zVec  = this.figs.zVec;
             switch figName
                 case 'FFT'
                     signal.yData = abs(this.data.fftRes);
                     signal.quant = this.figs.quant;
+                    signal.titleVars = {{signal.zVec(signal.zIdx)*1e3, signal.zIdx, signal.quant}};
                 case 'qAvgFFT'
                     signal.yData = abs(this.data.qAvgFFT);
                     signal.quant = 1;
+                    signal.titleVars = {{signal.zVec(signal.zIdx)*1e3, signal.zIdx}};
             end
             
             if ~this.figs.displayFullFFT
@@ -286,10 +289,7 @@ classdef AOGraphics < Graphics
                 signal.xData = this.figs.fBarShift;
                 signal.yData = fftshift(signal.yData, 3);
             end
-            
-            signal.zIdx  = this.figs.zIdx;
-            signal.zVec  = this.figs.zVec;
-                      
+                     
             signal.markerX = this.figs.fBar(this.figs.fIdx);
             signal.markerY = squeeze(signal.yData(signal.quant, :, this.figs.fIdx, signal.zIdx));
             
@@ -479,7 +479,7 @@ classdef AOGraphics < Graphics
             end
             
             signal = this.extractFFTSignal(figName);
-            this.setTitleVariables(figName, {{signal.zVec(signal.zIdx)*1e3, signal.zIdx, signal.quant}});          % FFT
+            this.setTitleVariables(figName, signal.titleVars);          % FFT
  
             if ~isgraphics(this.figs.(figName).handles.cur.plot(1))
             	hold(this.figs.(figName).handles.cur.ax, 'on');

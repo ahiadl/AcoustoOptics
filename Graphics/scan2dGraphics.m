@@ -28,16 +28,16 @@ classdef scan2DGraphics < Graphics
             figs.xlim       = [];
             figs.dx         = [];
             
-            figs.zIdx    = 1; 
-            figs.zPos    = 0; % the z value related to zIdx;
+            figs.zIdx = 1; 
+            figs.zPos = 0; % the z value related to zIdx;
             
             % Current Position
-            figs.curXpos  = 0;
-            figs.curYpos  = 0;
+            figs.curXpos = 0;
+            figs.curYpos = 0;
             
-            figs.curXidx  = 0;
-            figs.curYidx  = 0;
-            figs.curRep   = 0;
+            figs.curXidx      = 0;
+            figs.curYidx      = 0;
+            figs.curRep       = 0;
             figs.curFirstPos  = 0;
             figs.curSecondPos = 0;
             
@@ -45,9 +45,9 @@ classdef scan2DGraphics < Graphics
             figs.navAx    = [];  % navigating on this axes
             figs.navPlane = []; % displaying these planes
 
-            figs.navPos  = 0;
-            figs.navIdx  = 0;
-            figs.navRep  = 0;
+            figs.navPos   = 0;
+            figs.navIdx   = 0;
+            figs.navRep   = 0;
             
             figs.navXaxis = [];
             figs.navYaxis = [];
@@ -57,7 +57,7 @@ classdef scan2DGraphics < Graphics
             
             %Specific Figures parameters
             figs.intExt  = 'int';
-            figsNames = scan2DGraphics.getGraphicsNames();
+            figsNames    = scan2DGraphics.getGraphicsNames();
             
             figs.fonts.type       = [];
             figs.fonts.titleSize  = 18;
@@ -160,11 +160,7 @@ classdef scan2DGraphics < Graphics
             % navPlaneRep
             this.setType('navAvg', 'imagesc');
             this.setStrings('navAvg', "Navigator Plane %s (Averaged): (R, %s) = (%d, %.2f)", "%s[mm]", "%s[mm]", []);
-            
-            
-%             this.figs.intExt      = staticVars.intExt;
-%             this.figs.validStruct = staticVars.validStruct;
-%             this.figs.extH        = staticVars.extH;
+
         end
                  
         function setGraphicsScanVars(this)
@@ -176,7 +172,7 @@ classdef scan2DGraphics < Graphics
             
             % reset data arrays:
             rstPhi    = zeros(length(this.figs.xAxis), length(this.figs.yAxis), length(this.figs.zAxis), this.uVars.repeats);
-            rstPhiAvg = zeros(length(this.figs.xAxis), length(this.figs.yAxis), length(this.figs.zAxis), this.uVars.repeats);
+            rstPhiAvg = zeros(length(this.figs.xAxis), length(this.figs.yAxis), length(this.figs.zAxis));
             
             this.data.phi       = rstPhi;
             this.data.phiStd    = rstPhi;
@@ -315,19 +311,19 @@ classdef scan2DGraphics < Graphics
                 data.clims = [min(min(min(min(this.data.phi)))), max(max(max(max(this.data.phi))))];
                 if strcmp(this.figs.scanFirstAx, 'Y')
                     data.cData  = permute(this.data.phi(this.figs.curXidx, :, :, this.figs.curRep), [3,2,1,4]);
-                    data.xData  = this.figs.yAxis;
+%                     data.xData  = this.figs.yAxis;
                 elseif strcmp(this.figs.scanFirstAx, 'X')
                     data.cData  = permute(this.data.phi(:, this.figs.curYidx, :, this.figs.curRep), [3,1,2,4]);                
-                    data.xData  = this.figs.xAxis;
+%                     data.xData  = this.figs.xAxis;
                 end
             else
                 data.clims = [min(min(min(min(this.data.phiAvg)))), max(max(max(max(this.data.phiAvg))))];
                 if strcmp(this.figs.scanFirstAx, 'Y')
                     data.cData  = permute(this.data.phiAvg(this.figs.curXidx, :, :), [3,2,1]);
-                    data.xData  = this.figs.yAxis;
+%                     data.xData  = this.figs.yAxis;
                 elseif strcmp(this.figs.scanFirstAx, 'X')
                     data.cData  = permute(this.data.phiAvg(:, curYidx, :), [3,1,2]);                
-                    data.xData  = this.figs.xAxis;
+%                     data.xData  = this.figs.xAxis;
                 end
             end
             
@@ -463,7 +459,7 @@ classdef scan2DGraphics < Graphics
                 
                 this.figs.curMainPlane.handles.cur.plot = ...
                     imagesc(this.figs.curMainPlane.handles.cur.ax,...
-                    'XData', plotData.xData, 'Ydata', this.figs.zAxis, 'CData', plotData.cData,...
+                    'XData', this.figs.firstAxis, 'Ydata', this.figs.zAxis, 'CData', plotData.cData,...
                     plotData.clims);
                 
                 %title
@@ -474,7 +470,7 @@ classdef scan2DGraphics < Graphics
                 drawnow();
                 this.figs.curMainPlane.update = false;
             else
-                quickPlot(this, 'curMainPlane', plotData.xData, this.figs.zAxis, plotData.cData)
+                quickPlot(this, 'curMainPlane', this.figs.firstAxis, this.figs.zAxis, plotData.cData)
             end
         end
         
@@ -499,7 +495,7 @@ classdef scan2DGraphics < Graphics
                 
                 this.figs.curMainPlaneAvg.handles.cur.plot = ...
                     imagesc(this.figs.curMainPlaneAvg.handles.cur.ax,...
-                    'XData', plotData.xData, 'Ydata', this.figs.zAxis, 'CData', plotData.cData,...
+                    'XData', this.figs.firstAxis, 'Ydata', this.figs.zAxis, 'CData', plotData.cData,...
                     plotData.clims);
                 
                 axis(this.figs.curMainPlaneAvg.handles.cur.ax, 'tight')
@@ -510,7 +506,7 @@ classdef scan2DGraphics < Graphics
                 drawnow();
                 this.figs.curMainPlaneAvg.update = false;
             else
-                quickPlot(this, 'curMainPlaneAvg', plotData.xData, this.figs.zAxis, plotData.cData)
+                quickPlot(this, 'curMainPlaneAvg', this.figs.firstAxis, this.figs.zAxis, plotData.cData)
             end
         end
 
