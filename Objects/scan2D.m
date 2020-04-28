@@ -22,9 +22,7 @@ classdef scan2D < handle
         
         strings
         curPos      %[X,Y]          [mm]
-        curScan     %[1st, 2nd]     [mm]
         curPosIdx   %[r, xIdx, yIdx][#]
-        curScanIdx; %[r, 1st, 2nd]  [#]
         
         owned
     end
@@ -54,22 +52,17 @@ classdef scan2D < handle
             uVars.ao   = acoustoOptics.uVarsCreate();
             uVars.figs = scan2D.uVarsFiguresCreate();
             uVars.fileSystem = fileSystemS2D.uVarsCreate();
-            
-%             uVars.fileSystem.scanName        = [];
-%             uVars.fileSystem.resDirPath      = [];
-%             uVars.fileSystem.saveFullData    = false;
-%             uVars.fileSystem.saveReducedData = false;
-%             uVars.fileSystem.saveFigs        = false;
-%             uVars.fileSystem.savePhiChCmplx  = false;
            
-            uVars.grid.startX    = 0;
-            uVars.grid.startY    = 0;
-            uVars.grid.endX      = 0;
-            uVars.grid.endY      = 0;
-            uVars.grid.strideX   = 0;
-            uVars.grid.strideY   = 0;
+            uVars.grid.startFirst     = 0;
+            uVars.grid.startSecond    = 0;
+            uVars.grid.endFirst       = 0;
+            uVars.grid.endSecond      = 0;
+            uVars.grid.strideFirst    = 0;
+            uVars.grid.strideSecond   = 0;
             
-            uVars.grid.firstAxis = 'Y';
+            uVars.grid.firstAxis  = 'Y';
+            uVars.grid.secondAxis = 'X';
+%             uVars.grid.depthAxis  = 'Z';
             
             uVars.general.repeats   = 1;
             uVars.general.useQuant  = true;
@@ -95,22 +88,23 @@ classdef scan2D < handle
         end
         
         function initResultsArrays(this)      
-            xLen       = this.grid.xIdxLen;
-            yLen       = this.grid.yIdxLen;
-            zLen       = this.aoVars.measVars.algo.samples.numOfPos;
+            firstAxLen     = this.grid.firstIdxLen;
+            secondAxLen    = this.grid.secondIdxLen;
+            depthLen       = this.aoVars.measVars.algo.samples.numOfPos;
+            
             repeats    = this.generalVars.repeats;
             numOfQuant = this.aoVars.measVars.algo.samples.numOfQuant;
             channels   = this.aoVars.measVars.algo.digitizer.channels;
             
-            this.results.phiChCmplx = zeros(xLen, yLen, zLen, repeats, numOfQuant, channels);
-            this.results.phiCh      = zeros(xLen, yLen, zLen, repeats, numOfQuant, channels);
-            this.results.phiQuant   = zeros(xLen, yLen, zLen, repeats, numOfQuant);
-            this.results.phiStd     = zeros(xLen, yLen, zLen, repeats);
-            this.results.phi        = zeros(xLen, yLen, zLen, repeats);
-            this.results.phiAvg     = zeros(xLen, yLen, zLen);
-            this.results.phiAvgStd  = zeros(xLen, yLen, zLen);
+            this.results.phiChCmplx = zeros(firstAxLen, secondAxLen, depthLen, repeats, numOfQuant, channels);
+            this.results.phiCh      = zeros(firstAxLen, secondAxLen, depthLen, repeats, numOfQuant, channels);
+            this.results.phiQuant   = zeros(firstAxLen, secondAxLen, depthLen, repeats, numOfQuant);
+            this.results.phiStd     = zeros(firstAxLen, secondAxLen, depthLen, repeats);
+            this.results.phi        = zeros(firstAxLen, secondAxLen, depthLen, repeats);
+            this.results.phiAvg     = zeros(firstAxLen, secondAxLen, depthLen);
+            this.results.phiAvgStd  = zeros(firstAxLen, secondAxLen, depthLen);
             
-            this.curScanIdx = zeros(1,3);
+            this.curPosIdx = zeros(1,3);
         end
         
         function configureScan(this)
@@ -136,7 +130,7 @@ classdef scan2D < handle
             
             uVars.ao.fileSystem.saveVars = false; %don't save vars each measurement made
             
-            uVars.ao.fileSystem.dataFileNameModel      = "R%dX%.2fY%.2f.mat";
+            uVars.ao.fileSystem.dataFileNameModel      = "AO-R%dX%.2fY%.2f.mat";
             uVars.ao.fileSystem.varsFileNameModel      = "AOVars.mat";
             
             uVars.ao.fileSystem.extProject         = true;
@@ -151,15 +145,16 @@ classdef scan2D < handle
             this.aoVars = this.ao.getAOVars(); 
             
             fprintf("S2D: 4. Setting scan variables.\n");
-            this.grid.startX  = uVars.grid.startX;
-            this.grid.strideX = uVars.grid.strideX;
-            this.grid.endX    = uVars.grid.endX;
-            this.grid.startY  = uVars.grid.startY;
-            this.grid.strideY = uVars.grid.strideY;
-            this.grid.endY    = uVars.grid.endY;
+            this.grid.startFirst   = uVars.grid.startFirst;
+            this.grid.strideFirst  = uVars.grid.strideFirst;
+            this.grid.endFirst     = uVars.grid.endFirst;
+            this.grid.startSecond  = uVars.grid.startSecond;
+            this.grid.strideSecond = uVars.grid.strideSecond;
+            this.grid.endSecond    = uVars.grid.endSecond;
             
-            this.grid.firstAxis = uVars.grid.firstAxis;
-            
+            this.grid.firstAxis  = uVars.grid.firstAxis;
+            this.grid.secondAxis = uVars.grid.secondAxis;
+
             this.calcGrid();
             
             fprintf("S2D: 5. Setting general variables.\n");
@@ -169,15 +164,18 @@ classdef scan2D < handle
             fprintf("S2D: 6. Setting figures variables.\n");
             figs = this.graphics.createGraphicsUserVars();
 
-            figs.zIdx = uVars.figs.zIdx;
+            figs.depthIdx = uVars.figs.depthIdx;
 
-            figs.useQuant = uVars.general.useQuant;
-            figs.repeats  = uVars.general.repeats;
-            figs.xAxis    = this.grid.xVec ;
-            figs.yAxis    = this.grid.yVec;
-            figs.zAxis    = this.aoVars.measVars.algo.len.zVecUSRes;
-            
-            figs.scanFirstAx = uVars.grid.firstAxis;
+            figs.useQuant   = uVars.general.useQuant;
+            figs.repeats    = uVars.general.repeats;
+            figs.firstAxis  = this.grid.firstVec;
+            figs.secondAxis = this.grid.secondVec;
+            figs.depthAxis  = this.aoVars.measVars.algo.len.zVecUSRes;
+
+            figs.firstAxLabel = uVars.grid.firstAxis;
+            figs.secondAxLabe = uVars.grid.secondAxis;
+            figs.depthAxLabel = this.grid.depthAxis;
+            figs.mainPlane    = this.grid.mainPlane;
             
             figs.intExt      = uVars.figs.intExt;
             figs.validStruct = uVars.figs.validStruct;
@@ -214,11 +212,11 @@ classdef scan2D < handle
 
         function averageRepeats(this)
             if strcmp(this.grid.firstAxis, 'Y')
-                this.results.phiAvg    = mean(this.results.phi(:,:,:,1:this.curScanIdx(1)), 4);
-                this.results.phiAvgStd = std(this.results.phi(:,:,:,1:this.curScanIdx(1)), 0, 4);
+                this.results.phiAvg    = mean(this.results.phi(:,:,:,1:this.curPosIdx(1)), 4);
+                this.results.phiAvgStd = std(this.results.phi(:,:,:,1:this.curPosIdx(1)), 0, 4);
             elseif strcmp(this.grid.firstAxis, 'X')
-                this.results.phiAvg    = mean(this.results.phi(:,:,:,1:this.curScanIdx(1)), 4);
-                this.results.phiAvgStd = std(this.results.phi(:,:,:,1:this.curScanIdx(1)), 0, 4);
+                this.results.phiAvg    = mean(this.results.phi(:,:,:,1:this.curPosIdx(1)), 4);
+                this.results.phiAvgStd = std(this.results.phi(:,:,:,1:this.curPosIdx(1)), 0, 4);
             end 
         end
         
@@ -231,39 +229,39 @@ classdef scan2D < handle
             end
             
             for r = 1:this.generalVars.repeats
-                this.curScanIdx(1) = r;
+                this.curPosIdx(1) = r;
                 for i=1:this.grid.secondIdxLen
                     
                     this.updateCurPosAndIdx( r, 1, i);
-                    this.graphics.updateCurPosAndIdx(this.getPosAndScan()); 
+                    this.graphics.updateCurPosAndIdx(this.getPos()); 
                     
                     this.plotAvgPlots()
                     
                     for j=1:this.grid.firstIdxLen
                         
                         this.updateCurPosAndIdx( r, j, i);
-                        this.graphics.updateCurPosAndIdx(this.getPosAndScan());
+                        this.graphics.updateCurPosAndIdx(this.getPos());
                         this.ao.fileSystem.setDataFilenameVariables({r, this.curPos(1), this.curPos(2)}); 
                         
                         this.sf.printStr(sprintf("Scaninng on Position: (X,Y) = (%.2f, %.2f)", this.curPos(1), this.curPos(2)), true);
-                        this.sf.startScanTime('singlePos', this.curScan);
+                        this.sf.startScanTime('singlePos', this.curPos);
                         
-                        this.sf.startScanTime('netAcoustoOptics', this.curScan);
+                        this.sf.startScanTime('netAcoustoOptics', this.curPos);
                         res = this.ao.moveMeasureAndAnalyse(this.curPos);
-                        this.sf.stopScanTime('netAcoustoOptics', this.curScan);
+                        this.sf.stopScanTime('netAcoustoOptics', this.curPos);
                         
-                        this.sf.startScanTime('copyTime', this.curScan);
+                        this.sf.startScanTime('copyTime', this.curPos);
                         this.putAOResToResultsArray(res);
-                        this.sf.stopScanTime('copyTime', this.curScan);
+                        this.sf.stopScanTime('copyTime', this.curPos);
                         
                         this.graphics.setData (this.results.phi, this.results.phiStd,...
                                                this.results.phiAvg, this.results.phiAvgStd);
                         this.plotCurPlots();
                         
-                        this.sf.stopScanTime('singlePos', this.curScan);
+                        this.sf.stopScanTime('singlePos', this.curPos);
                     end
                 end
-                this.curScanIdx(2:3) = 0; %for time table
+                this.curPosIdx(2:3) = 0; %for time table
 
                 this.averageRepeats();
                 this.plotAvgPlots();
@@ -283,79 +281,76 @@ classdef scan2D < handle
         function updateCurPosAndIdx(this, r, first, second)
             % curScanIdx - always aligned to (R, 1st, 2nd)[#]
             % curScan    - always aligned to ( 1st, 2nd)[mm]
-            this.curScanIdx  = [r, first, second];
-            this.curScan     = [this.grid.firstVec(first), this.grid.secondVec(second)];
-            
-            % curPosIdx - always aligned to (R, xIdx, yIdx)[#]
-            % curPos    - always aligned to (X, Y] [mm]
-            if strcmp(this.grid.firstAxis, 'Y')
-                this.curPosIdx = [r, second, first];
-                this.curPos    = [this.grid.secondVec(this.curPosIdx(2)), ...
-                                  this.grid.firstVec(this.curPosIdx(3))];
-            elseif strcmp(this.grid.firstAxis, 'X')
-                this.curPosIdx = [r,first, second];
-                this.curPos    = [this.grid.firstVec(this.curPosIdx(2)), ...  
-                                  this.grid.secondVec(this.curPosIdx(3))];
-            end
+            this.curPosIdx  = [r, first, second];
+            this.curPos     = [this.grid.firstVec(first), this.grid.secondVec(second)];
         end
         
-        function pns = getPosAndScan(this)
-            pns.curPos     = this.curPos;
-            pns.curScan    = this.curScan;
-            pns.curPosIdx  = this.curPosIdx;
-            pns.curScanIdx = this.curScanIdx;
+        function pns = getPos(this)
+%             pns.curPos     = this.curPos;
+            pns.curPos    = this.curPos;
+%             pns.curPosIdx  = this.curPosIdx;
+            pns.curPosIdx = this.curPosIdx;
         end
         
         function calcGrid(this)
-            this.grid.xVec    = this.grid.startX:this.grid.strideX:this.grid.endX;
-            this.grid.yVec    = this.grid.startY:this.grid.strideY:this.grid.endY;
+            this.grid.firstVec  = this.grid.startFirst  : this.grid.strideFirst  : this.grid.endFirst;
+            this.grid.secondVec = this.grid.startSecond : this.grid.strideSecond : this.grid.endSecond;
+            this.grid.depthVec = this.aoVars.measVars.algo.len.zVecUSRes;
             
-            this.grid.xLen    = abs(this.grid.startX - this.grid.endX);
-            this.grid.yLen    = abs(this.grid.startY - this.grid.endY);
-            this.grid.xIdxLen = length(this.grid.xVec);
-            this.grid.yIdxLen = length(this.grid.yVec);
-            this.grid.xIdx    = 1:1:this.grid.xIdxLen;        
-            this.grid.yIdx    = 1:1:this.grid.yIdxLen;
+            this.grid.firstLen     = abs(this.grid.startFirst - this.grid.endFirst);
+            this.grid.secondLen    = abs(this.grid.startSecond - this.grid.endSecond);
+            this.grid.firstIdxLen  = length(this.grid.firstVec);
+            this.grid.secondIdxLen = length(this.grid.secondVec);
+            this.grid.firstIdx     = 1:1:this.grid.firstIdxLen;        
+            this.grid.secondIdx    = 1:1:this.grid.secondIdxLen;
+            
+            this.grid.firstNorm    = this.grid.firstVec - mean(this.grid.firstVec);
+            this.grid.secondNorm   = this.grid.secondVec - min(this.grid.secondVec);
             
             switch this.grid.firstAxis
-                case 'Y'
-                    this.grid.startFirst   = this.grid.startY;
-                    this.grid.strideFirst  = this.grid.strideY;
-                    this.grid.endFirst     = this.grid.endY;
-                    
-                    this.grid.startSecond  = this.grid.startX;
-                    this.grid.strideSecond = this.grid.strideX;
-                    this.grid.endSecond    = this.grid.endX;
-                    
-                    this.grid.firstVec     = this.grid.yVec;
-                    this.grid.secondVec    = this.grid.xVec;
-                    
-                    this.grid.firstLen     = this.grid.yLen;
-                    this.grid.secondLen    = this.grid.xLen;
-                    this.grid.firstIdxLen  = this.grid.yIdxLen;
-                    this.grid.secondIdxLen = this.grid.xIdxLen;
-                    this.grid.firstIdx     = this.grid.yIdx;
-                    this.grid.secondIdx    = this.grid.xIdx;
-                    
                 case 'X'
-                    this.grid.startFirst   = this.grid.startX;
-                    this.grid.strideFirst  = this.grid.strideX;
-                    this.grid.endFirst     = this.grid.endX;
-                    
-                    this.grid.startSecond  = this.grid.startY;
-                    this.grid.strideSecond = this.grid.strideY;
-                    this.grid.endSecond    = this.grid.endY;
-                    
-                    this.grid.firstVec     = this.grid.xVec;
-                    this.grid.secondVec    = this.grid.yVec;
-                    
-                    this.grid.firstLen     = this.grid.xLen;
-                    this.grid.secondLen    = this.grid.yLen;
-                    this.grid.firstIdxLen  = this.grid.xIdxLen;
-                    this.grid.secondIdxLen = this.grid.yIdxLen;
-                    this.grid.firstIdx     = this.grid.xIdx;
-                    this.grid.secondIdx    = this.grid.yIdx;
-            end
+                    this.grid.xVec = this.grid.firstVec;
+                    switch this.grid.secondAxis
+                        case 'Y'
+                            this.grid.yVec = this.grid.secondVec;
+                            this.grid.zVec = this.grid.depthVec;
+                            this.grid.depthAxis = 'Z';
+                            this.grid.mainPlane = 'XZ';
+                        case 'Z'
+                            this.grid.zVec = this.grid.secondVec;
+                            this.grid.yVec = this.grid.depthVec;
+                            this.grid.depthAxis = 'Y';
+                            this.grid.mainPlane = 'XY';
+                    end
+                case 'Y'
+                    this.grid.yVec = this.grid.firstVec;
+                    switch this.grid.secondAxis
+                        case 'X'
+                            this.grid.xVec = this.grid.secondVec;
+                            this.grid.zVec = this.grid.depthVec;
+                            this.grid.depthAxis = 'Z';
+                            this.grid.mainPlane = 'YZ';
+                        case 'Z'
+                            this.grid.zVec = this.grid.secondVec;
+                            this.grid.xVec = this.grid.depthVec;
+                            this.grid.depthAxis = 'X';
+                            this.grid.mainPlane = 'XY';
+                    end   
+                case 'Z'
+                    this.grid.zVec = this.grid.firstVec;
+                    switch this.grid.secondAxis
+                        case 'X'
+                            this.grid.xVec = this.grid.secondVec;
+                            this.grid.yVec = this.grid.depthVec;
+                            this.grid.depthAxis = 'Y';
+                            this.grid.mainPlane = 'YZ';
+                        case 'Y'
+                            this.grid.yVec = this.grid.secondVec;
+                            this.grid.xVec = this.grid.depthVec;
+                            this.grid.depthAxis = 'X';
+                            this.grid.mainPlane = 'XZ';
+                    end
+            end 
         end
 
         % Graphics Functions

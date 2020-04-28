@@ -17,13 +17,13 @@ classdef fileSystemS2D < handle
         extProjResultsPath  % relative to projPath
         extProjFigsPath     % relative to projPath
         
-        % Acousto Optics reconstruction saving indication 
-        saveRawData
-        saveNetSignal
-        saveDemultiplexed
-        saveReshapedSignal
-        saveFFT
-        savePhiChCmplx
+%         % Acousto Optics reconstruction saving indication 
+%         saveRawData
+%         saveNetSignal
+%         saveDemultiplexed
+%         saveReshapedSignal
+%         saveFFT
+%         savePhiChCmplx
         
         % Full scan saving indication
         saveFigs
@@ -42,12 +42,12 @@ classdef fileSystemS2D < handle
     
     methods (Static)
         function vars = uVarsCreate()
-            vars.saveRawData        = false;
-            vars.saveNetSignal      = false;
-            vars.saveDemultiplexed  = false;
-            vars.saveReshapedSignal = false;
-            vars.saveFFT            = false;
-            vars.savePhiChCmplx     = false;
+%             vars.saveRawData        = false;
+%             vars.saveNetSignal      = false;
+%             vars.saveDemultiplexed  = false;
+%             vars.saveReshapedSignal = false;
+%             vars.saveFFT            = false;
+%             vars.savePhiChCmplx     = false;
             
             vars.saveResults        = false;
             vars.saveFigs           = false;
@@ -76,12 +76,12 @@ classdef fileSystemS2D < handle
         function setUserVars(this, uVars)
             this.uVars = uVars;
             
-            this.saveRawData        = uVars.saveRawData;
-            this.saveNetSignal      = uVars.saveNetSignal;
-            this.saveDemultiplexed  = uVars.saveDemultiplexed;
-            this.saveReshapedSignal = uVars.saveReshapedSignal;
-            this.saveFFT            = uVars.saveFFT;
-            this.savePhiChCmplx     = uVars.savePhiChCmplx;
+%             this.saveRawData        = uVars.saveRawData;
+%             this.saveNetSignal      = uVars.saveNetSignal;
+%             this.saveDemultiplexed  = uVars.saveDemultiplexed;
+%             this.saveReshapedSignal = uVars.saveReshapedSignal;
+%             this.saveFFT            = uVars.saveFFT;
+%             this.savePhiChCmplx     = uVars.savePhiChCmplx;
             
             this.saveResults = uVars.saveResults;
             this.saveFigs    = uVars.saveFigs;
@@ -144,12 +144,12 @@ classdef fileSystemS2D < handle
         end
         
         function vars = getFilesystemVars(this)
-            vars.saveRawData        = this.saveRawData;
-            vars.saveNetSignal      = this.saveNetSignal;
-            vars.saveDemultiplexed  = this.saveDemultiplexed;
-            vars.saveReshapedSignal = this.saveReshapedSignal;
-            vars.saveFFT            = this.saveFFT;
-            vars.savePhiChCmplx     = this.savePhiChCmplx;
+%             vars.saveRawData        = this.saveRawData;
+%             vars.saveNetSignal      = this.saveNetSignal;
+%             vars.saveDemultiplexed  = this.saveDemultiplexed;
+%             vars.saveReshapedSignal = this.saveReshapedSignal;
+%             vars.saveFFT            = this.saveFFT;
+%             vars.savePhiChCmplx     = this.savePhiChCmplx;
             
             vars.saveResults = this.saveResults;
             vars.saveFigs    = this.saveFigs;            

@@ -81,6 +81,7 @@ classdef acoustoOptics < handle
             uVars.measHere          = [];
             uVars.limitByN          = [];
             uVars.N                 = [];
+            uVars.dispTimeTable     = true;
             
             %NOTICE: stages vars are included in the uVars, although uVars
             %related to the AcoustoOptics and may remain constant while
@@ -131,7 +132,7 @@ classdef acoustoOptics < handle
     
     methods
         
-        function this = acoustoOptics(owner)
+        function this = acoustoOptics()
             fprintf("AOI: ------- Creating AcoustoOptic ----------\n");
             fprintf("AOI: 1. Creating an Arbitrary Function Generator Object\n");
             this.fGen = fGen();
@@ -157,13 +158,10 @@ classdef acoustoOptics < handle
             this.connected = false;
             this.runLive = false;
             
-            if nargin > 0 
-                this.owner = owner;
-                this.owned = true;
-            end
+
         end 
 
-        function init(this)
+        function init(this, owner)
             fprintf("AOI: ------- Initiating AcoustoOptic ----------\n");
             if this.connected   
                 fprintf("AOI: Acousto Optics system is already connected, no need to reconnect.\n");
@@ -187,6 +185,11 @@ classdef acoustoOptics < handle
                 this.periAvail.IO = this.IO.hardwareAvailable;
 
                 this.connected = true;
+                
+                if nargin >1
+                    this.owner = owner;
+                    this.owned = true;
+                end
             end
             % This indication does not includes the stage hardware available flag
             % as it is not mandatory for activating the AO measurement and
@@ -361,8 +364,10 @@ classdef acoustoOptics < handle
             this.extVars.AO.measHere         = uVars.measHere;
             this.extVars.AO.limitByN         = uVars.limitByN;
             this.extVars.AO.N                = uVars.N;
+            this.extVars.AO.dispTimeTable    = uVars.dispTimeTable;
             
             this.measVars.AO = this.extVars.AO;
+            
         end
         
         function aoVars = getAOVars(this)
@@ -639,7 +644,9 @@ classdef acoustoOptics < handle
             end
             
             % Collect time statistics
-            this.updateTimeTable();
+            if this.measVars.AO.dispTimeTable
+                this.updateTimeTable();
+            end
             
             fprintf ("AOI: Done AO\n")
         end
