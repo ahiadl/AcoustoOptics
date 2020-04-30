@@ -1,4 +1,4 @@
-classdef scan2DGraphics < Graphics
+classdef scan3DGraphics < Graphics
     %SACN2DGRAPHICS Summary of this class goes here
     %   Detailed explanation goes here
     
@@ -12,12 +12,13 @@ classdef scan2DGraphics < Graphics
             figsNames = {'curMainAxis'; 'curMainAxisAvg'; 'curMainPlane'; 'curMainPlaneAvg'; 'nav'; 'navAvg'};
        end 
         
-       function figs = getGraphicsVars()    
+       function figs = createGraphicsVars()    
             % General Scan Parameters
             figs.firstAxis   = [];
             figs.secondAxis   = [];
             figs.depthAxis   = [];
             figs.repeats = [];
+            figs.normColorsToPlane = true;
             
             figs.firstAxLabel   = 'Y';
             figs.secondAxLabel  = 'X';
@@ -27,11 +28,11 @@ classdef scan2DGraphics < Graphics
             figs.firstAxLimsToPlot = [];
             figs.dxFirstAx         = [];
             
-            figs.depthIdx = 1; 
-            figs.depthPos = 0; % the z value related to zIdx;
+            figs.depthIdx    = 1; 
+            figs.depthPos    = 0; % the z value related to zIdx;
             
             % Current Position
-            figs.curPosFirst = 0;
+            figs.curPosFirst  = 0;
             figs.curPosSecond = 0;
             figs.curIdxFirst  = 0;
             figs.curIdxSecond = 0;
@@ -51,9 +52,15 @@ classdef scan2DGraphics < Graphics
             figs.navXname = 'X';
             figs.navYname = 'Y';
             
+            % Color Limits
+            figs.scan3DClims    = [0, 1];
+            figs.scanAvg3DClims = [0, 1];
+            figs.scan2DClims     = [0, 1];
+            figs.scanAvg2DClims  = [0, 1];
+            
             %Specific Figures parameters
             figs.intExt  = 'int';
-            figsNames    = scan2DGraphics.getGraphicsNames();
+            figsNames    = scan3DGraphics.getGraphicsNames();
             
             figs.fonts.type       = [];
             figs.fonts.titleSize  = 18;
@@ -100,7 +107,7 @@ classdef scan2DGraphics < Graphics
             uVars.depthAxLabel  = 'Z';
             uVars.mainPlaneLabel = 'YZ';
             
-            figsNames = scan2DGraphics.getGraphicsNames();
+            figsNames = scan3DGraphics.getGraphicsNames();
             
             uVars.intExt = [];
             for i=1:length(figsNames)
@@ -125,11 +132,11 @@ classdef scan2DGraphics < Graphics
     end
     
     methods
-        function this = scan2DGraphics()
+        function this = scan3DGraphics()
             this@Graphics()
-            this.figsNames = scan2DGraphics.getGraphicsNames();
-            this.figs      = scan2DGraphics.getGraphicsVars();
-            this.uVars     = scan2DGraphics.createGraphicsUserVars();
+            this.figsNames = scan3DGraphics.getGraphicsNames();
+            this.figs      = scan3DGraphics.createGraphicsVars();
+            this.uVars     = scan3DGraphics.createGraphicsUserVars();
             this.setGraphicsStaticVars();
             this.numOfFigs = length(this.figsNames);
         end
@@ -169,14 +176,10 @@ classdef scan2DGraphics < Graphics
             this.figs.secondAxis = this.uVars.secondAxis;
             this.figs.depthAxis  = this.uVars.depthAxis*1e3;
             
-            % reset data arrays:
-            rstPhi    = zeros(length(this.figs.firstAxis), length(this.figs.secondAxis), length(this.figs.depthAxis), this.uVars.repeats);
-            rstPhiAvg = zeros(length(this.figs.firstAxis), length(this.figs.secondAxis), length(this.figs.depthAxis));
+            this.figs.normColorsToPlane = this.uVars.normColorsToPlane;
             
-            this.data.phi       = rstPhi;
-            this.data.phiStd    = rstPhi;
-            this.data.phiAvg    = rstPhiAvg;
-            this.data.phiAVgStd = rstPhiAvg;
+            % reset data arrays:
+            this.initDataArray();
             
             if this.uVars.depthIdx > length(this.figs.depthAxis)
                 this.figs.depthIdx = 1;
@@ -266,13 +269,6 @@ classdef scan2DGraphics < Graphics
             this.dispNavPlaneAvg();
         end
         
-        function setData(this, phi, phiStd, phiAvg, phiAvgStd)
-           this.data.phi       = phi;
-           this.data.phiStd    = phiStd;
-           this.data.phiAvg    = phiAvg;
-           this.data.phiAvgStd = phiAvgStd;           
-        end
-        
         function setDepthToMainAxis(this, idx)
             if idx > length(this.figs.depthAxis)
                 this.figs.depthIdx = 1;
@@ -280,6 +276,77 @@ classdef scan2DGraphics < Graphics
                 this.figs.depthIdx = idx;
             end
             this.figs.depthPos = this.figs.depthAxis(this.figs.depthIdx); 
+        end
+        
+        function setLoadedDataClims(this, data)
+            this.figs.scan3DClims(1) = min(data.phi(:));
+            this.figs.scan3DClims(2) = max(data.phi(:));
+            this.figs.scanAvg3DClims(1) = min(data.phiAvg(:));
+            this.figs.scanAvg3DClims(2) = max(data.phiAvg(:));             
+        end
+        
+        function setColorsScale(this, normColorsToPlane)
+           this.figs.normColorsToPlane = normColorsToPlane; 
+        end
+        
+        %Set Data functions
+        function initDataArray(this)
+            rstPhi    = zeros(length(this.figs.firstAxis), length(this.figs.secondAxis), length(this.figs.depthAxis), this.uVars.repeats);
+            rstPhiAvg = zeros(length(this.figs.firstAxis), length(this.figs.secondAxis), length(this.figs.depthAxis));
+            
+            this.data.phi       = rstPhi;
+            this.data.phiStd    = rstPhi;
+            this.data.phiAvg    = rstPhiAvg;
+            this.data.phiAVgStd = rstPhiAvg;
+        end
+        
+        function set1DData(this, data)
+            this.data.phi(this.figs.curIdxFirst, this.figs.curIdxSecond, :, this.figs.curRep) = data.phi;
+            this.data.phiStd(this.figs.curIdxFirst, this.figs.curIdxSecond, :) = data.phiStd;
+
+            if (this.figs.curIdxFirst == 1)
+               this.figs.scan2DClims  = [inf, 0];
+            end
+            
+            if (this.figs.curIdxFirst == 1) && (this.figs.curIdxSecond == 1) && (this.figs.curRep == 1)
+                this.figs.scan3DClims  = [inf, 0];
+            end    
+
+            curMin = min(this.data.phi(this.figs.curIdxFirst, this.figs.curIdxSecond, :, this.figs.curRep));
+            curMax = max(this.data.phi(this.figs.curIdxFirst, this.figs.curIdxSecond, :, this.figs.curRep));
+            this.figs.scan2DClims(1) = min(this.figs.scan2DClims(1), curMin);
+            this.figs.scan2DClims(2) = max(this.figs.scan2DClims(2), curMax);
+            this.figs.scan3DClims(1) = min(this.figs.scan3DClims(1), curMin);
+            this.figs.scan3DClims(2) = max(this.figs.scan3DClims(2), curMax);
+        end
+
+        function setAvg1DData(this, data)
+            this.data.phiAvg(this.figs.curIdxFirst, this.figs.curIdxSecond, :)     = data.phiAvg;
+            this.data.phiAvgStd(this.figs.curIdxFirst, this.figs.curIdxSecond, :) = data.phiAvgStd;
+            
+            if (this.figs.curRep == 1) && (this.figs.curIdxFirst == 1)
+               this.figs.scanAvg2DClims  = [inf, 0];
+            end
+            
+            if (this.figs.curIdxFirst == 1) && (this.figs.curIdxSecond == 1) && (this.figs.curRep == 1)
+                this.figs.scanAvg3DClims  = [inf, 0];
+            end 
+            
+            curMin = min(this.data.phiAvg(this.figs.curIdxFirst, this.figs.curIdxSecond, :));
+            curMax = max(this.data.phiAvg(this.figs.curIdxFirst, this.figs.curIdxSecond, :));
+            this.figs.scanAvg2DClims(1) = min(this.figs.scanAvg2DClims(1), curMin);
+            this.figs.scanAvg2DClims(2) = max(this.figs.scanAvg2DClims(2), curMax);
+            this.figs.scanAvg3DClims(1) = min(this.figs.scanAvg3DClims(1), curMin);
+            this.figs.scanAvg3DClims(2) = max(this.figs.scanAvg3DClims(2), curMax);
+        end
+
+        function setLoadedData(this, data)
+            this.data.phi = data.phi;
+            this.data.phiStd = data.phiStd;
+            this.data.phiAvg = data.phiAvg;
+            this.data.phiAvgStd = data.phiAvgStd;
+            
+            this.setLoadedDataClims(data);
         end
         
         % Extract data functions
@@ -295,11 +362,19 @@ classdef scan2DGraphics < Graphics
         
         function data = extractMainPlaneFromData(this, isAvg)
             if ~isAvg
-                data.clims = [min(min(min(min(this.data.phi)))), max(max(max(max(this.data.phi))))];
-                data.cData  = permute(this.data.phi(:, this.figs.curIdxSecond, :, this.figs.curRep), [3,1,2,4]);
+                if this.figs.normColorsToPlane 
+                    data.clims = this.figs.scan2DClims;
+                else
+                    data.clims = this.figs.scan3DClims;
+                end
+                data.cData = permute(this.data.phi(:, this.figs.curIdxSecond, :, this.figs.curRep), [3,1,2,4]);
             else
-                data.clims = [min(min(min(min(this.data.phiAvg)))), max(max(max(max(this.data.phiAvg))))];
-                data.cData  = permute(this.data.phiAvg(:, this.figs.curIdxSecond, :), [3,1,2]);
+                if this.figs.normColorsToPlane 
+                    data.clims = this.figs.scanAvg2DClims;
+                else
+                    data.clims = this.figs.scanAvg3DClims;
+                end
+                data.cData = permute(this.data.phiAvg(:, this.figs.curIdxSecond, :), [3,1,2]);
             end
             if data.clims(1) == data.clims(2)
                 data.clims(2) = data.clims(1)+ 0.1;
@@ -308,7 +383,7 @@ classdef scan2DGraphics < Graphics
         
         function data = extractNavPlaneFromData(this, isAvg)
             if ~isAvg
-                data.clims = [min(min(min(min(this.data.phi)))), max(max(max(max(this.data.phi))))];
+%                 data.clims = [min(min(min(min(this.data.phi)))), max(max(max(max(this.data.phi))))];
                 if strcmp(this.figs.navAx, this.figs.firstAxLabel)
                     data.cData = permute(this.data.phi(this.figs.navIdx, :, :, this.figs.navRep), [3,2,1,4]);
                 elseif strcmp(this.figs.navAx, this.figs.secondAxLabel)
@@ -319,7 +394,7 @@ classdef scan2DGraphics < Graphics
                     fprintf("S2D ERROR: no compatible navigator axis");
                 end
             else
-                data.clims = [min(min(min(min(this.data.phiAvg)))), max(max(max(max(this.data.phiAvg))))];
+%                 data.clims = [min(min(min(min(this.data.phiAvg)))), max(max(max(max(this.data.phiAvg))))];
                 if strcmp(this.figs.navAx, this.figs.firstAxLabel)
                     data.cData  = permute(this.data.phiAvg(this.figs.navIdx, :, :), [3,2,1]);
                 elseif strcmp(this.figs.navAx, this.figs.secondAxLabel)
@@ -331,6 +406,24 @@ classdef scan2DGraphics < Graphics
                 end
             end
             
+            if this.figs.normColorsToPlane  
+                uniData = unique(data.cData(:));
+                minVars = mink(uniData, 2);
+                if minVars(1) ~= 0
+                    minVal = minVars(1);
+                else
+                    minVal = minVars(2);
+                end
+                data.clims(1) = minVal;
+                data.clims(2) = max(uniData);
+            else
+                if ~isAvg
+                    data.clims = this.figs.scan3DClims;
+                else
+                    data.clims = this.figs.scanAvg3DClims;
+                end
+            end
+                        
             if (data.clims(1) == data.clims(2)) 
                 data.clims(2) = data.clims(1)+0.1; 
             end

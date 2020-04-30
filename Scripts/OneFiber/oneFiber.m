@@ -29,7 +29,7 @@ imgOrig2 = res2.res2.phi(:,:,zIdx2);
 % Change Scale: Normalize and db
 imgNorm1 = (imgOrig1 - min(min(imgOrig1))) /  abs(max(max(imgOrig1)) - min(min(imgOrig1)) );
 imgLog1  = db(imgNorm1); 
-imgNorm2 = (img2 - min(min(img2))) /  abs(max(max(img2)) - min(min(img2)) );
+imgNorm2 = (imgOrig2 - min(min(imgOrig2))) /  abs(max(max(imgOrig2)) - min(min(imgOrig2)) );
 imgLog2 = db(imgNorm2);
 
 
@@ -91,3 +91,108 @@ hCB1L = get(hCB1, 'label');
 set(hCB1, 'FontSize', axesFontSize, 'TickLabelInterpreter', 'latex')
 set(ax2, 'FontSize', axesFontSize, 'TickLabelInterpreter', 'latex')
 caxis(ax2, climsLog)
+
+%% Mu effective analysis
+
+figure()
+ax = subplot(1,2,1);
+set(ax, 'FontSize', axesFontSize, 'TickLabelInterpreter', 'latex')
+imagesc(ax, 'XData', yAxisNorm, ...
+            'YData', xAxisNorm,...
+            'CData', imgNorm1);
+axis equal
+axis tight
+xlabel("Y[mm]")
+ylabel("X[mm]")
+colorbar;
+
+ax = subplot(1,2,2);
+set(ax, 'FontSize', axesFontSize, 'TickLabelInterpreter', 'latex')
+imagesc(ax, imgNorm1);
+axis equal
+axis tight
+xlabel("Y[mm]")
+ylabel("X[mm]")
+colorbar;
+
+OFimg = imgNorm1;
+
+phi_sq = OFimg(:, 25);
+phi = sqrt(phi_sq);
+grad_phi = gradient(phi);
+dx = xAxisNorm(2)-xAxisNorm(1);
+
+figure()
+ax=axes();
+set(ax, 'FontSize', axesFontSize, 'TickLabelInterpreter', 'latex')
+plot(ax, xAxisNorm, phi_sq)
+% title("Single Mid-Line")
+xlabel("X(Depth)(mm)")
+ylabel('\phi^2')
+
+figure()
+ax=axes();
+set(ax, 'FontSize', axesFontSize, 'TickLabelInterpreter', 'latex')
+plot(ax, xAxisNorm, phi)
+% title("Single Mid-Line")
+xlabel("X(Depth)(mm)")
+ylabel('\phi')
+
+figure()
+ax=axes();
+set(ax, 'FontSize', axesFontSize, 'TickLabelInterpreter', 'latex')
+plot(ax, xAxisNorm, -grad_phi/(dx))
+% title("Single Mid-Line")
+xlabel("X(Depth)(mm)")
+ylabel("\nabla\phi")
+
+figure()
+ax=axes();
+set(ax, 'FontSize', axesFontSize, 'TickLabelInterpreter', 'latex')
+plot(ax, xAxisNorm, grad_phi./(dx*phi))
+% title("Single Mid-Line")
+xlabel("X(Depth)(mm)")
+ylabel('\d(phi)/(dx*phi)')
+
+avg_muEff = mean(grad_phi./(dx*phi));
+std_mueff = std(grad_phi./(dx*phi));
+
+phi_sq_avg = OFimg(:, 20:30);
+phi_avg = sqrt(phi_sq_avg);
+[~, grad_phi_avg] = gradient(phi_avg);
+
+mu_eff_avg = -grad_phi_avg./(dx*phi_avg);
+mu_eff_tot = mean(mu_eff_avg,2);
+mu_eff_tot_std = std(mu_eff_avg,0,2);
+
+mu_eff_avg_val = mean(mu_eff_tot);
+mu_eff_avg_std_val = std(mu_eff_tot);
+
+figure()
+ax=axes();
+
+errorbar(ax, xAxisNorm, mu_eff_tot, mu_eff_tot_std)
+title("Average \mu_{eff}")
+xlabel("X(Depth)(mm)")
+ylabel('\mu_{eff}')
+set(ax, 'FontSize', axesFontSize, 'TickLabelInterpreter', 'latex')
+
+phi_sq_avg = mean(OFimg(:, 20:30),2);
+phi_avg = sqrt(phi_sq_avg);
+[grad_phi_avg] = gradient(phi_avg);
+
+mu_eff_avg = -grad_phi_avg./(dx*phi_avg);
+mu_eff_tot = mean(mu_eff_avg);
+mu_eff_tot_std = std(mu_eff_avg);
+
+figure()
+ax=axes();
+
+plot(ax, xAxisNorm, mu_eff_tot)
+title("Average Mid-Lines")
+xlabel("X(Depth)(mm)")
+ylabel('\mu_{eff}')
+set(ax, 'FontSize', axesFontSize, 'TickLabelInterpreter', 'latex')
+
+
+

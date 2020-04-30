@@ -18,8 +18,10 @@ classdef statsFunctions < handle
             end
         end
         
-        function setStringModel(this, name, model)
-            this.strings.(name) = model;
+        function setStringModels(this, names, models)
+            for i=1:length(names)
+                this.strings.(names{i}) = models{i};
+            end
         end
         
         function printStrModel(this, strName, vars, dispStr)
@@ -55,16 +57,16 @@ classdef statsFunctions < handle
             this.timeTable.(meas).(str) = toc(this.timeTable.(meas).(str));
         end
 
-        function startScanTime(this, str, vars)
-            meas = sprintf(this.strings.timeTable, vars);
+        function startScanTime(this, field, str, vars)
+            meas = sprintf(this.strings.(field), vars);
             meas = strrep(meas, '.' , '');
-            this.timeTable.scan.(meas).(str) = tic;
+            this.timeTable.(field).(meas).(str) = tic;
         end
         
-        function stopScanTime(this, str, vars)
-            meas = sprintf(this.strings.timeTable, vars);
+        function stopScanTime(this, field, str, vars)
+            meas = sprintf(this.strings.(field), vars);
             meas = strrep(meas, '.' , '');
-            this.timeTable.scan.(meas).(str) = toc(this.timeTable.scan.(meas).(str));
+            this.timeTable.(field).(meas).(str) = toc(this.timeTable.(field).(meas).(str));
         end
         
         function resetTimeTable(this)

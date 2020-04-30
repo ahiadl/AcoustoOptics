@@ -1,4 +1,4 @@
-classdef fileSystemS2D < handle
+classdef fileSystemS3D < handle
     
     properties
         uVars
@@ -34,9 +34,11 @@ classdef fileSystemS2D < handle
         saveAny
         extProject
         
-        dataFileNameModel
+        data3DFileNameModel
+        data2DFileNameModel
+        data3DFilename
+        data2DFilename
         varsFileNameModel
-        dataFilename
         varsFilename
     end
     
@@ -55,10 +57,11 @@ classdef fileSystemS2D < handle
             
             vars.saveAny            = [];
             
-            vars.scanName           = [];
-            vars.dirPath            = [];
-            vars.dataFileNameModel  = [];
-            vars.varsFileNameModel  = [];
+            vars.scanName             = [];
+            vars.dirPath              = [];
+            vars.data3DFileNameModel  = [];
+            vars.data2DFileNameModel  = [];
+            vars.varsFileNameModel    = [];
             
             vars.extProject         = false;
             vars.extProjPath        = [];
@@ -69,8 +72,8 @@ classdef fileSystemS2D < handle
     end
     
     methods
-        function this = fileSystemS2D()
-            this.uVars = fileSystemS2D.uVarsCreate();
+        function this = fileSystemS3D()
+            this.uVars = fileSystemS3D.uVarsCreate();
         end
         
         function setUserVars(this, uVars)
@@ -89,10 +92,11 @@ classdef fileSystemS2D < handle
             
             this.saveAny     = uVars.saveAny;
             
-            this.scanName          = uVars.scanName;
-            this.dirPath           = uVars.dirPath;
-            this.dataFileNameModel = uVars.dataFileNameModel;
-            this.varsFileNameModel = uVars.varsFileNameModel;
+            this.scanName            = uVars.scanName;
+            this.dirPath             = uVars.dirPath;
+            this.data3DFileNameModel = uVars.data3DFileNameModel;
+            this.data2DFileNameModel = uVars.data2DFileNameModel;
+            this.varsFileNameModel   = uVars.varsFileNameModel;
             
             this.extProject            = uVars.extProject;            
             this.extProjPath           = uVars.extProjPath;
@@ -114,7 +118,8 @@ classdef fileSystemS2D < handle
                     this.projPath       = this.extProjPath;
                     this.rawDataPath    = this.extProjRawDataPath;
                     this.resultsPath    = this.extProjResultsPath;
-                    this.figsPath       = this.extProjFigsPath;      
+                    this.figsPath       = this.extProjFigsPath;
+                    
                 else
                     %in case acousto optics is independant, it creates its
                     %own directories.
@@ -129,7 +134,7 @@ classdef fileSystemS2D < handle
                     resultsDir      = sprintf("%s/%s",    this.projPath, this.resultsPath);
                     figsDir         = sprintf("%s/%s",    this.projPath, this.figsPath);
                     
-                    this.dataFilename = "ScanResults.mat";
+                    this.data3DFilename = "Scan3DResults.mat";
                     this.varsFilename = "ScanVars.mat";
                     
                     mkdir(this.projPath);
@@ -157,12 +162,16 @@ classdef fileSystemS2D < handle
             
             vars.saveAny = this.saveAny;
             
-            vars.scanName           = this.scanName;
-            vars.dirPath            = this.dirPath;
-            vars.dataFileNameModel  = this.dataFileNameModel;
-            vars.dataFilename       = this.dataFilename;
-            vars.varsFileNameModel  = this.varsFileNameModel;
-            vars.varsFilename       = this.varsFilename;
+            vars.scanName             = this.scanName;
+            vars.dirPath              = this.dirPath;
+            
+            vars.data3DFileNameModel  = this.data3DFileNameModel;
+            vars.data3DFilename       = this.data3DFilename;
+            vars.data2DFileNameModel  = this.data2DFileNameModel;
+            vars.data2DFilename       = this.data2DFilename;
+            
+            vars.varsFileNameModel    = this.varsFileNameModel;
+            vars.varsFilename         = this.varsFilename;
             
             vars.projPath           = this.projPath;
             vars.rawDataPath        = this.rawDataPath;
@@ -176,12 +185,18 @@ classdef fileSystemS2D < handle
             vars.extProjFigsPath    = this.extProjFigsPath;
         end
         
-        function saveResultsToDisk(this, res)
+        function save3DResultsToDisk(this, res)
             fprintf("S2D: FS: Saving results.\n");
-            filename = sprintf("%s/%s%s", this.projPath, this.resultsPath, this.dataFilename);
+            filename = sprintf("%s/%s%s", this.projPath, this.resultsPath, this.data3DFilename);
             save(filename, '-struct', 'res', '-v7.3');                
         end
 
+        function save2DResultsToDisk(this, res)
+            fprintf("S2D: FS: Saving results.\n");
+            filename = sprintf("%s/%s%s", this.projPath, this.resultsPath, this.data2DFilename);
+            save(filename, '-struct', 'res', '-v7.3');                
+        end
+        
         function saveVarsToDisk(this, vars, path)
             % the path is relative to resDir given earlier and contain / at the end.
             fprintf("S2D: FS: Saving variables.\n");
@@ -189,16 +204,24 @@ classdef fileSystemS2D < handle
             save(filename, '-struct', 'vars', '-v7.3');
         end
         
-        function setDataFilenameModel(this, model)
-            this.dataFileNameModel = model;
+        function set3DDataFilenameModel(this, model)
+            this.data3DFileNameModel = model;
+        end
+        
+        function set2DDataFilenameModel(this, model)
+            this.data2DFileNameModel = model;
+        end
+       
+        function set3DDataFilenameVariables(this, stringVars)
+            this.data3DFilename = sprintf(this.data3DFileNameModel, stringVars{:});
+        end
+        
+        function set2DDataFilenameVariables(this, stringVars)
+            this.data2DFilename = sprintf(this.data2DFileNameModel, stringVars{:});
         end
         
         function setVarsFilenameModel(this, model)
             this.varsFileNameModel = model;
-        end
-        
-        function setDataFilenameVariables(this, stringVars)
-            this.dataFilename = sprintf(this.dataFileNameModel, stringVars{:});
         end
         
         function setVarsFilenameVariables(this, stringVars)
