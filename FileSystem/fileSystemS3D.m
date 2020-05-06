@@ -1,6 +1,9 @@
 classdef fileSystemS3D < handle
     
     properties
+        hAO %fileSystem Handle
+        AOFileNameModel
+        
         uVars
         
         % Paths
@@ -17,14 +20,6 @@ classdef fileSystemS3D < handle
         extProjResultsPath  % relative to projPath
         extProjFigsPath     % relative to projPath
         
-%         % Acousto Optics reconstruction saving indication 
-%         saveRawData
-%         saveNetSignal
-%         saveDemultiplexed
-%         saveReshapedSignal
-%         saveFFT
-%         savePhiChCmplx
-        
         % Full scan saving indication
         saveFigs
         saveResults
@@ -34,6 +29,7 @@ classdef fileSystemS3D < handle
         saveAny
         extProject
         
+        %Filenames
         data3DFileNameModel
         data2DFileNameModel
         data3DFilename
@@ -229,14 +225,14 @@ classdef fileSystemS3D < handle
         end
 
         function turnLogFileOn(this)
-            if this.saveAny
+            if this.saveAny && ~this.extProject
                 diary(sprintf("%s/log.txt", this.projPath));
                 diary on
             end
         end
         
         function turnLogFileOff(this)
-            if this.saveAny
+            if this.saveAny  && ~this.extProject
                 diary(sprintf("%s/log.txt", this.projPath))
                 diary off
             end

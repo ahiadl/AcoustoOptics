@@ -574,6 +574,12 @@ classdef Algo < handle
             this.timeTable.QuantAvg = toc(this.timeTable.QuantAvg);        
         end
         
+        function speckleDecorrelation(this)
+            
+            
+        end
+        
+        
         function timeTable = getTimeTable(this)
             timeTable = this.timeTable;
         end

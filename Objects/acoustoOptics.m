@@ -9,7 +9,7 @@ classdef acoustoOptics < handle
         fGen;
         digitizer;
         IO;
-        stages;
+%         stages;
         algo;
         fileSystem;
         graphics;
@@ -77,6 +77,7 @@ classdef acoustoOptics < handle
             
             % Acousto Optics
             uVars.useLoadedRawData  = [];
+            uVars.useVirtualData    = false;
             uVars.loadDataFilename  = [];
             uVars.measHere          = [];
             uVars.limitByN          = [];
@@ -143,7 +144,7 @@ classdef acoustoOptics < handle
             fprintf("AOI: 4. Creating an Algorithm Object\n");
             this.algo = Algo();
             fprintf("AOI: 5. Creating a Stages Object\n");
-            this.stages = stages('COM3');
+%             this.stages = stages('COM3');
             fprintf("AOI: 6. Creating a File System Object\n");
             this.fileSystem = fileSystemAO();
             fprintf("AOI: 7. Creating a Graphics Object\n");
@@ -157,8 +158,6 @@ classdef acoustoOptics < handle
             
             this.connected = false;
             this.runLive = false;
-            
-
         end 
 
         function init(this, owner)
@@ -177,8 +176,9 @@ classdef acoustoOptics < handle
                 this.digitizer.connect();
                 this.periAvail.digitizer = this.digitizer.system.hardwareAvailable; 
                 fprintf("AOI: 4. Connecting to Stages\n")
-                this.stages.connect();
-                this.periAvail.stages = this.stages.hardwareAvailable;
+%                 this.stages.connect();
+%                 this.periAvail.stages = this.stages.hardwareAvailable;
+%                 this.periAvail.stages = false;
                 fprintf("AOI: 5. Connecting to IO\n")
                 % Start the IO
                 this.IO.connect();
@@ -360,6 +360,7 @@ classdef acoustoOptics < handle
             
             % Set AO vars
             this.extVars.AO.useLoadedRawData = uVars.useLoadedRawData;
+            this.extVars.AO.useVirtualData   = uVars.useVirtualData;
             this.extVars.AO.loadDataFilename = uVars.loadDataFilename;
             this.extVars.AO.measHere         = uVars.measHere;
             this.extVars.AO.limitByN         = uVars.limitByN;
@@ -447,14 +448,14 @@ classdef acoustoOptics < handle
             this.fGen.configChannel(1);
             this.fGen.configChannel(2);
             
-            this.graphics.setData([], this.measVars.algo.usSignal.data', this.measVars.algo.extClk.Data')
+            this.graphics.setData([], sigData', clkData')
             
             if this.measVars.figs.validStruct.extClk
-                this.graphics.plotAFGSignals('extClk', this.measVars.algo.timing.tExtClk*1e6,  this.measVars.algo.extClk.Data');
+                this.graphics.plotAFGSignals('extClk');
             end
             
             if this.measVars.figs.validStruct.usSignal
-                this.graphics.plotAFGSignals('usSignal', this.measVars.algo.timing.tSig*1e6, this.measVars.algo.usSignal.data');
+                this.graphics.plotAFGSignals('usSignal');
             end
         end
     
@@ -482,7 +483,7 @@ classdef acoustoOptics < handle
             
             %Move stages to position
             if this.periAvail.stages
-                this.stages.moveStageAbs(pos);
+%                 this.stages.moveStageAbs(pos);
             else
                 fprintf("AOI: NOTICE: Stages unavailable. Performing AO in current arbitrary location.\n");
             end
@@ -499,7 +500,7 @@ classdef acoustoOptics < handle
             %move stages
             if ~this.measVars.AO.measHere
                 if this.periAvail.stages
-                    this.stages.moveStageAbs([this.measVars.stages.xPos, this.measVars.stages.yPos]);
+%                     this.stages.moveStageAbs([this.measVars.stages.xPos, this.measVars.stages.yPos]);
                 else
                     fprintf("AOI: NOTICE: Stages unavailable. Performing Live AO in current arbitrary location.\n");
                 end
@@ -547,36 +548,68 @@ classdef acoustoOptics < handle
                 this.saveVarsToDisk("");
             end
             
-%               this.timeTable.acq = tic;
-%             if ~this.uVars.useLoadedRawData && ~this.periAvail.completeHardwareAvail
-%                  fprintf("AOI: No source of data found.\n");  
-%                  res = [];
-%                  return;
-%             elseif this.uVars.useLoadedRawData
-%                 fprintf("AOI: loading rawData from file...\n");
-%                 bufferDataOut = load(this.measVars.AO.fileName);
-%                 if this.uVars.useGPU
-%                     bufferDataOut = gpuArray(bufferDataOut);
-%                 end
-%             else
-%                 bufferDataOut 
-%                 fprintf ("AOI: Acquiring...\n")
-%                 this.timeTable.acq = tic;
-%                 this.IO.open();
-%                 bufferDataOut      = this.digitizer.acquireDataTS();
-%                 this.IO.close();
-%                 this.timeTable.acq = toc(this.timeTable.acq);
-% 
-%                 this.timeTable.moveData = tic;
-%                 this.algo.setRawData(bufferDataOut);
-%                 bufferDataOut           = gather(bufferDataOut);
-%                 this.timeTable.moveData = toc(this.timeTable.moveData);
-%             end
-%             this.timeTable.acq = toc(this.timeTable.acq);
-            %*************************************************************%
-            %******************************TEMP***************************%
-            %*************************************************************%
-            this.timeTable.acq = tic;  
+%             this.timeTable.acq = tic;
+            if ~this.uVars.useVirtualData && ~this.periAvail.completeHardwareAvail
+                 fprintf("AOI: No source of data found.\n");  
+                 res = [];
+                 return;
+            elseif this.uVars.useLoadedRawData
+                fprintf("AOI: loading rawData from file...\n");
+                bufferDataOut = load(this.measVars.AO.fileName);
+                if this.uVars.useGPU
+                    bufferDataOut = gpuArray(bufferDataOut);
+                end
+            elseif this.uVars.useVirtualData
+                bufferDataOut = this.createVirtualData();
+            else  
+                fprintf ("AOI: Acquiring...\n")
+                this.timeTable.acq = tic;
+                this.IO.open();
+                bufferDataOut      = this.digitizer.acquireDataTS();
+                this.IO.close();
+                this.timeTable.acq = toc(this.timeTable.acq);
+
+                this.timeTable.moveData = tic;
+                this.algo.setRawData(bufferDataOut);
+                bufferDataOut           = gather(bufferDataOut);
+                this.timeTable.moveData = toc(this.timeTable.moveData);
+            end
+            
+            fprintf ("AOI: Analyzing!\n")
+            this.timeTable.analyse = tic;
+            res                    = this.algo.analyse();
+            this.result            = res;
+            this.result.rawData    = bufferDataOut;
+            this.timeTable.analyse = toc(this.timeTable.analyse);
+
+            % Plot reseults according to figs
+            this.timeTable.setResultsToGraphics = tic;
+            this.graphics.setData(this.result);
+            this.timeTable.setResultsToGraphics = toc(this.timeTable.setResultsToGraphics);
+            
+            this.timeTable.plotAll = tic;
+            this.plotAll();
+            this.timeTable.plotAll = toc(this.timeTable.plotAll);
+            
+            % Save results
+            if this.measVars.fileSystem.saveAny
+                fprintf("AOI: Saving Results To Disk\n");
+                this.timeTable.saveData = tic;
+                this.fileSystem.saveData(this.result)
+                this.timeTable.saveData = toc(this.timeTable.saveData);
+            end
+            
+            % Collect time statistics
+            if this.measVars.AO.dispTimeTable
+                this.updateTimeTable();
+            end
+            
+            fprintf ("AOI: Done AO\n")
+        end
+        
+        % Misc
+        function bufferDataOut = createVirtualData(this)
+            this.timeTable.acq = tic;
             fus              = this.measVars.algo.usSignal.fSin;
             samplesPerPulse  = this.measVars.algo.samples.samplesPerPulse;
             samplesPerTrain  = this.measVars.algo.samples.samplesPerTrain;
@@ -614,44 +647,8 @@ classdef acoustoOptics < handle
             this.algo.setRawData(bufferDataOut);
             this.timeTable.acq = toc(this.timeTable.acq);
             this.timeTable.moveData = tic;
-            this.timeTable.moveData = toc(this.timeTable.moveData);
-            %*************************************************************%
-            %*************************************************************%
-            %*************************************************************%
-            
-            fprintf ("AOI: Analyzing!\n")
-            this.timeTable.analyse = tic;
-            res                    = this.algo.analyse();
-            this.result            = res;
-            this.result.rawData    = bufferDataOut;
-            this.timeTable.analyse = toc(this.timeTable.analyse);
-
-            % Plot reseults according to figs
-            this.timeTable.setResultsToGraphics = tic;
-            this.graphics.setData(this.result);
-            this.timeTable.setResultsToGraphics = toc(this.timeTable.setResultsToGraphics);
-            
-            this.timeTable.plotAll = tic;
-            this.plotAll();
-            this.timeTable.plotAll = toc(this.timeTable.plotAll);
-            
-            % Save results
-            if this.measVars.fileSystem.saveAny
-                fprintf("AOI: Saving Results To Disk\n");
-                this.timeTable.saveData = tic;
-                this.fileSystem.saveData(this.result)
-                this.timeTable.saveData = toc(this.timeTable.saveData);
-            end
-            
-            % Collect time statistics
-            if this.measVars.AO.dispTimeTable
-                this.updateTimeTable();
-            end
-            
-            fprintf ("AOI: Done AO\n")
         end
         
-        % Misc
         function setSamplingTime(this, timeToSample)
             this.algo.uVars.timeToSample = timeToSample;
             this.vars.algo = this.algo.updateAlgoUserVars(this.vars.algo.uVars);

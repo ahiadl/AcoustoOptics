@@ -216,8 +216,8 @@ classdef AOGraphics < Graphics
         function setData(this, data, usSig, extClkSig)
             this.data = data;
             if nargin > 2
-                this.usSig = usSig;
-                this.extClkSig = extClkSig;
+                this.usSignal = usSig;
+                this.extClkSignal = extClkSig;
             end
         end
          
@@ -331,7 +331,7 @@ classdef AOGraphics < Graphics
                return
             end
             
-            signal = this.extractSingal(figName);
+            signal = this.extractSignal(figName);
             
             if ~isgraphics(this.figs.(figName).handles.cur.plot)
                 switch this.figs.(figName).type

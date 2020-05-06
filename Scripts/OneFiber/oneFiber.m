@@ -132,6 +132,14 @@ ylabel('\phi^2')
 
 figure()
 ax=axes();
+plot(ax, xAxisNorm, log10(phi_sq))
+% title("Single Mid-Line")
+xlabel("X(Depth)(mm)")
+ylabel('\phi^2 (log_{10})')
+set(ax, 'FontSize', axesFontSize, 'TickLabelInterpreter', 'latex')
+
+figure()
+ax=axes();
 set(ax, 'FontSize', axesFontSize, 'TickLabelInterpreter', 'latex')
 plot(ax, xAxisNorm, phi)
 % title("Single Mid-Line")

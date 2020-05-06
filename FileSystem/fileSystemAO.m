@@ -1,4 +1,4 @@
-classdef fileSystemAO < handle
+classdef fileSystemAO < fileSystem
     
     properties
         uVars

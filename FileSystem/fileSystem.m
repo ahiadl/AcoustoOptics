@@ -4,26 +4,29 @@ classdef fileSystem < handle
         uVars
         
         % Paths
-        dirPath    % directory in the disk in which this scan directory is opened
-        resDir     % this scan directory (full path) 
+        scanName    % As given from user (without date string)
+        dirPath     % Directory in the disk in which this scan directory is created
+        projPath    % this scan directory (full path) [resDir/scanName]
+        
         rawDataDir % resDir\rawData - full path
         figsDir    % resDir\Figures - full path
         scanName   % as given from user (without date string)
         
-        % Acousto Optics reconstruction saving indication 
-        saveRawData
-        saveNetSignal
-        saveDemultiplexed
-        saveReshapedSignal
-        saveFFT
-        savePhiChCmplx
+        % External Project path 
+        extProjPath         % absolute path
+        extProjRawDataPath  % relative to projPath
+        extProjResultsPath  % relative to projPath
+        extProjFigsPath     % relative to projPath
         
         % Full scan saving indication
         saveFigs
         saveResults
+        saveVars
         
         % Control Vars
         saveAny
+        extProject
+        
     end
     
     methods

@@ -4,6 +4,7 @@ classdef scan3DAO < handle
     
     properties
         ao
+        stages
         graphics
         fileSystem
         sf
@@ -26,6 +27,7 @@ classdef scan3DAO < handle
         curPos      %[first, second]              [mm]
         curPosIdx   %[r, firstIdx, secondIdx][#]
         owned
+        extStages
     end
     
     methods (Static)
@@ -65,7 +67,7 @@ classdef scan3DAO < handle
             
             uVars.grid.firstAxis  = 'Y';
             uVars.grid.secondAxis = 'X';
-            
+                        
             uVars.general.repeats   = 1;
             uVars.general.useQuant  = true;
             uVars.general.scan2D    = 0;
@@ -73,36 +75,75 @@ classdef scan3DAO < handle
     end
     
     methods
-        function this = scan3DAO(acoustoOpticHandle)
+        function this = scan3DAO(acoustoOpticHandle, stagesHandle)
             this.sf = statsFunctions("S3D");
             
-            if ~isempty(acoustoOpticHandle)
+            if nargin>0
                 this.ao = acoustoOpticHandle;
             else
                 this.ao = acoustoOptics();
             end
-
+            
+            if nargin>1
+                this.stages = stagesHandle;
+                this.extStages = true;
+            else
+                this.stages = stages();
+                this.extStages = false;
+                this.stages.connect();
+            end
+            
             this.graphics = scan3DGraphics();
             this.fileSystem = fileSystemS3D();
         end
 
         function configure3DScan(this)
-            this.fileSystem.turnLogFileOn();
+            this.fileSystem.turnLogFileOn(); 
             this.timeTable.scan = struct();
             this.initResultsArrays3D();
             this.initResultsArrays2D();
+            
+            
             this.ao.configPeripherals();
             this.graphics.setGraphicsScanVars();
             this.graphics.updateGraphicsConstruction();
         end
         
         function configure2DScan(this)
-            this.fileSystem.turnLogFileOn();
-            this.timeTable.scan = struct();
+            %Config scan3D Object
             this.initResultsArrays2D();
-            this.ao.configPeripherals();
+            this.timeTable.scan = struct();
+            
+            %Config subObjects
+            this.fileSystem.configFileSystem();
             this.graphics.setGraphicsScanVars();
             this.graphics.updateGraphicsConstruction();
+            
+            %Config AO
+            this.updateAOFileSystem();
+            this.ao.configPeripherals();
+        end
+        
+        function updateAOFileSystem(this)
+            if ~uVars.fileSystem.extProject
+                uVars.ao.fileSystem.varsFileNameModel  = "AOVars.mat";
+                uVars.ao.fileSystem.extProjPath        = this.fileSystemVars.projPath;
+                uVars.ao.fileSystem.extProjResultsPath = this.fileSystemVars.rawDataPath;
+                uVars.ao.fileSystem.extProjFigsPath    = this.fileSystemVars.figsPath;
+                
+                filenameAO = sprintf("AO-R%s%s%s%s%s.mat", "%d", this.grid.firstAxis, "%.2f", this.grid.secondAxis,"%.2f");
+            else
+                
+                uVars.ao.fileSystem.varsFileNameModel  = this.fileSystemVars.aoVarsFileNameModel;
+                uVars.ao.fileSystem.extProjPath        = this.fileSystemVars.extProjPath;
+                uVars.ao.fileSystem.extProjResultsPath = this.fileSystemVars.rawDataPath;
+                uVars.ao.fileSystem.extProjFigsPath    = this.fileSystemVars.figsPath;
+                
+                filenameAO = uVars.fileSystem.fileNameModelAO;
+            end
+            
+            this.ao.fileSystem.setVarsFilenameVariables({});
+            this.ao.fileSystem.setDataFilenameModel(filenameAO);
         end
         
         % Manage Variables
@@ -113,30 +154,34 @@ classdef scan3DAO < handle
             fprintf("S3D: 1. Setting general variables.\n");
             this.generalVars.useQuant = uVars.general.useQuant;
             this.generalVars.repeats  = uVars.general.repeats;
-            this.generalVars.scan2D    = uVars.general.scan2D;
+            this.generalVars.scan2D   = uVars.general.scan2D;
             
             fprintf("S3D: 2. Setting FileSystem variables.\n");
+            % Here, just notice wether or not this is an external project;
+            
             uVars.fileSystem.saveAny = uVars.fileSystem.saveVars || uVars.fileSystem.saveResults || uVars.fileSystem.saveFigs;
+            
             this.fileSystem.setUserVars(uVars.fileSystem);
             this.fileSystemVars = this.fileSystem.configFileSystem();
-
+            
             % Config AO File System
-            uVars.ao.fileSystem.saveVars = false; %don't save vars each measurement made
-%             uVars.ao.fileSystem.dataFileNameModel      = "AO-R%dX%.2fY%.2f.mat";
-            uVars.ao.fileSystem.varsFileNameModel      = "AOVars.mat";
+            % this is just to notify AO that this is an external project.
+            % The AO object must be updated later with the folders paths 
+            % made for this project.
             
-            uVars.ao.fileSystem.extProject         = true;
-            uVars.ao.fileSystem.extProjPath        = this.fileSystemVars.projPath;
-            uVars.ao.fileSystem.extProjResultsPath = this.fileSystemVars.rawDataPath;
-            uVars.ao.fileSystem.extProjFigsPath    = this.fileSystemVars.figsPath;
+            uVars.ao.fileSystem.extProject = true;
+            uVars.ao.fileSystem.saveVars   = false;
             
+            if ~uVars.fileSystem.extProject
+                filename = sprintf("2DScan-(%s-%s).mat", this.grid.secondAxis , "%.2f");
+                this.fileSystem.set2DDataFilenameModel(filename)
+            end
+
             fprintf("S3D: 3. Setting AcoustoOptivs variables.\n");
             this.ao.setMeasVars(uVars.ao);
-            this.ao.fileSystem.setVarsFilenameVariables({});
+            this.aoVars = this.ao.getAOVars();
             
-            this.aoVars = this.ao.getAOVars(); 
-            
-            fprintf("S3D: 4. Setting scan variables.\n");
+            fprintf("S3D: 4. Setting Grid variables.\n");
             this.grid.startFirst   = uVars.grid.startFirst;
             this.grid.strideFirst  = uVars.grid.strideFirst;
             this.grid.endFirst     = uVars.grid.endFirst;
@@ -151,15 +196,21 @@ classdef scan3DAO < handle
             
             this.calc3DGrid();
 
-            fprintf("S3D: 5. Setting strings models and variables\n");
-            %Complementary filesystem operation
-            if ~this.generalVars.scan2D
-                filename = sprintf("2DScan-(%s-%s).mat", this.grid.secondAxis , "%.2f");
-                this.fileSystem.set2DDataFilenameModel(filename)
+            fprintf("S3D: 5. Set Stages variables and Axes.\n");
+            % Only in case of internal stages (e.g. running from script and
+            % not from GUI).
+            % This describes in general which stage belongs to what axis.
+            if ~this.extStages
+                if this.generalVars.scan2D
+                    this.stages.assignStagesAxes(this.grid.firstAxis, this.uVars.stages.firstAxStageId);
+                else
+                    this.stages.assignStagesAxes(this.grid.firstAxis, this.uVars.stages.firstAxStageId,...
+                                                 this.grid.secondAxis, this.uVars.stages.secondAxStageId);
+                end
             end
-            filenameAO = sprintf("AO-R%s%s%s%s%s.mat", "%d", this.grid.firstAxis, "%.2f", this.grid.secondAxis,"%.2f");
-            this.ao.fileSystem.setDataFilenameModel(filenameAO);
             
+            fprintf("S3D: 5. Setting strings models and variables\n");
+                       
             strings{1} = "start3DScan";
             models{1}  = sprintf("Start Scan for (%s) = (%s)", this.grid.secondAxis, "%.2f");
             strings{2} = "start2DScan";
@@ -174,7 +225,7 @@ classdef scan3DAO < handle
             models{6}  = sprintf("R%s%s%s%s%s", "%d", this.grid.firstAxis, "%.2f", this.grid.secondAxis, "%.2f");
             this.sf.setStringModels(strings, models);
             
-            fprintf("S3D: 5. Setting figures variables.\n");
+            fprintf("S3D: 6. Setting figures variables.\n");
             figs = this.graphics.createGraphicsUserVars();
 
             figs.depthIdx = uVars.figs.depthIdx;
@@ -211,6 +262,7 @@ classdef scan3DAO < handle
             vars.uVars.ao.figs = AOGraphics.createGraphicsUserVars();
         end
         
+        
         % Results Functions
         
         function initResultsArrays3D(this)      
@@ -234,6 +286,20 @@ classdef scan3DAO < handle
         end
         
         function initResultsArrays2D(this)      
+            resArr = this.get2DResultsArrayModel();
+            
+            this.res2D.phiChCmplx = resArr.phiChCmplx;
+            this.res2D.phiCh      = resArr.phiCh;
+            this.res2D.phiQuant   = resArr.phiQuant;
+            this.res2D.phiStd     = resArr.phiStd;
+            this.res2D.phi        = resArr.phi;
+            this.res2D.phiAvg     = resArr.phiAvg;
+            this.res2D.phiAvgStd  = resArr.phiAvgStd;
+            
+            this.curPosIdx = zeros(1,3);
+        end
+        
+        function resArr = get2DResultsArrayModel(this)
             firstAxLen    = this.grid.firstIdxLen;
             depthLen      = this.aoVars.measVars.algo.samples.numOfPos;
             
@@ -241,15 +307,13 @@ classdef scan3DAO < handle
             numOfQuant = this.aoVars.measVars.algo.samples.numOfQuant;
             channels   = this.aoVars.measVars.algo.digitizer.channels;
             
-            this.res2D.phiChCmplx = zeros(firstAxLen, 1, depthLen, repeats, numOfQuant, channels);
-            this.res2D.phiCh      = zeros(firstAxLen, 1, depthLen, repeats, numOfQuant, channels);
-            this.res2D.phiQuant   = zeros(firstAxLen, 1, depthLen, repeats, numOfQuant);
-            this.res2D.phiStd     = zeros(firstAxLen, 1, depthLen, repeats);
-            this.res2D.phi        = zeros(firstAxLen, 1, depthLen, repeats);
-            this.res2D.phiAvg     = zeros(firstAxLen, 1, depthLen);
-            this.res2D.phiAvgStd  = zeros(firstAxLen, 1, depthLen);
-            
-            this.curPosIdx = zeros(1,3);
+            resArr.phiChCmplx = zeros(firstAxLen, 1, depthLen, repeats, numOfQuant, channels);
+            resArr.phiCh      = zeros(firstAxLen, 1, depthLen, repeats, numOfQuant, channels);
+            resArr.phiQuant   = zeros(firstAxLen, 1, depthLen, repeats, numOfQuant);
+            resArr.phiStd     = zeros(firstAxLen, 1, depthLen, repeats);
+            resArr.phi        = zeros(firstAxLen, 1, depthLen, repeats);
+            resArr.phiAvg     = zeros(firstAxLen, 1, depthLen);
+            resArr.phiAvgStd  = zeros(firstAxLen, 1, depthLen);
         end
         
         function putAOResTo1DResultsArray(this, res)
@@ -300,7 +364,7 @@ classdef scan3DAO < handle
                 this.sf.printStrModel("start3DScan", this.curPos, true);
 
                 this.graphics.updateCurPosAndIdx(this.getPos());    
-%                 this.stages.secondStage.move()
+                this.stages.moveStageAxisAbs(this.grid.secondAxis, this.curPos(2))
                 this.scan2D();
 
                 this.sf.startScanTime("timeTable3D", 'copyPlane', this.curPos(2));
@@ -335,7 +399,8 @@ classdef scan3DAO < handle
                     this.graphics.updateCurPosAndIdx(this.getPos()); 
                     this.ao.fileSystem.setDataFilenameVariables({r, this.curPos(1), this.curPos(2)}); 
                     this.sf.stopScanTime("timeTable1D", 'prepare', [this.curPosIdx(1), this.curPos]);
-%                     this.stages.firstStage.move()
+                    
+                    this.stages.moveStageAxisAbs(this.grid.firstAxis, this.curPos(1))
 
                     this.sf.startScanTime("timeTable1D", 'netAcoustoOptics', [this.curPosIdx(1), this.curPos]);
                     res = this.ao.measureAndAnalyse();
