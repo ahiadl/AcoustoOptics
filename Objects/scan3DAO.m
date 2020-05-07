@@ -1,12 +1,15 @@
 classdef scan3DAO < handle
-    %SCAN2D Summary of this class goes here
-    %   Detailed explanation goes here
+    %SCAN3D This object is the merging of 3 separate objects: scan 3D and
+    %scan 2D, this is for conviniece reasons that take effect in the manner
+    %the stages are managed and graphics are managed. Both to of the scan
+    %types have separate filesystem and operating mechanisms.
     
     properties
         ao
         stages
         graphics
-        fileSystem
+        fileSystem3D
+        fileSystem2D
         sf
         owner
         
@@ -23,7 +26,6 @@ classdef scan3DAO < handle
         fileSystemVars
         generalVars
         
-%         strings
         curPos      %[first, second]              [mm]
         curPosIdx   %[r, firstIdx, secondIdx][#]
         owned
@@ -94,30 +96,35 @@ classdef scan3DAO < handle
             end
             
             this.graphics = scan3DGraphics();
-            this.fileSystem = fileSystemS3D();
+            aoFSHandle = this.ao.fileSystem;
+            this.fileSystem2D = fileSystemS2D(aoFSHandle);
+            this.fileSystem3D = fileSystemS3D(this.fileSystem2D);
         end
 
         function configure3DScan(this)
-            this.fileSystem.turnLogFileOn(); 
+
             this.timeTable.scan = struct();
             this.initResultsArrays3D();
-            this.initResultsArrays2D();
-            
-            
-            this.ao.configPeripherals();
+
             this.graphics.setGraphicsScanVars();
             this.graphics.updateGraphicsConstruction();
+            
+            this.fileSystem3D.configFileSystem();
+            
+            this.configure2DScan();
         end
         
         function configure2DScan(this)
-            %Config scan3D Object
             this.initResultsArrays2D();
-            this.timeTable.scan = struct();
+            
+            if this.generalVars.scan2D
+                this.timeTable.scan = struct(); 
+                this.graphics.setGraphicsScanVars();
+                this.graphics.updateGraphicsConstruction();
+            end
             
             %Config subObjects
-            this.fileSystem.configFileSystem();
-            this.graphics.setGraphicsScanVars();
-            this.graphics.updateGraphicsConstruction();
+            this.fileSystem2D.configFileSystem();
             
             %Config AO
             this.updateAOFileSystem();
@@ -125,6 +132,21 @@ classdef scan3DAO < handle
         end
         
         function updateAOFileSystem(this)
+            
+            if this.generalVars.scan2D
+                if ~uVars.fileSystemVars.extProject
+                    
+                    
+                    
+                    
+                else
+                    
+                    
+                    
+                end               
+            end
+            
+            
             if ~uVars.fileSystem.extProject
                 uVars.ao.fileSystem.varsFileNameModel  = "AOVars.mat";
                 uVars.ao.fileSystem.extProjPath        = this.fileSystemVars.projPath;
@@ -353,10 +375,8 @@ classdef scan3DAO < handle
         % Scan Functions
         function res = scan3D(this)
             this.configure3DScan();
-            if this.fileSystemVars.saveVars
-                this.fileSystem.saveVarsToDisk(this.getScanVars(), "");
-                this.ao.saveVarsToDisk("");
-            end
+            this.fileSystem3D.saveVarsToDisk(this.getScanVars(), "");
+            this.ao.saveVarsToDisk(); % TODO: this will not work
             
             for i=1:this.grid.secondIdxLen
                 this.updateCurPosAndIdx( [], [], i);
@@ -384,7 +404,7 @@ classdef scan3DAO < handle
         end
         
         function res = scan2D(this)
-            this.fileSystem.set2DDataFilenameVariables({this.curPos(2)});
+            this.fileSystem2D.setDataFilenameVariables({this.curPos(2)});
             for r = 1:this.generalVars.repeats
                 this.updateCurPosAndIdx( r, [], []);
                 this.sf.startScanTime("timeTable2D", 'singleRep', [this.curPosIdx(1), this.curPos(2)]);
@@ -403,7 +423,7 @@ classdef scan3DAO < handle
                     this.stages.moveStageAxisAbs(this.grid.firstAxis, this.curPos(1))
 
                     this.sf.startScanTime("timeTable1D", 'netAcoustoOptics', [this.curPosIdx(1), this.curPos]);
-                    res = this.ao.measureAndAnalyse();
+                    res = this.ao.runAcoustoOptics();
                     this.sf.stopScanTime("timeTable1D", 'netAcoustoOptics', [this.curPosIdx(1), this.curPos]);
 
                     this.sf.startScanTime("timeTable1D", 'scan1DProcessingTime', [this.curPosIdx(1), this.curPos]);
@@ -422,7 +442,7 @@ classdef scan3DAO < handle
             end
             
             if this.fileSystemVars.saveResults
-                this.fileSystem.save2DResultsToDisk(this.res2D);
+                this.fileSystem2D.saveResultsToDisk(this.res2D);
             end
             
             res = this.res2D;

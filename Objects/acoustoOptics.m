@@ -59,9 +59,6 @@ classdef acoustoOptics < handle
             % algo & digitizer
             uVars.channels          = []; %update in digitizer
             
-            uVars.stages.xPos       = [];
-            uVars.stages.yPos       = [];
-            
             % IO
             uVars.IOPort            = [];
             uVars.IOLine            = [];
@@ -76,21 +73,10 @@ classdef acoustoOptics < handle
             uVars.fileSystem = fileSystemAO.uVarsCreate();
             
             % Acousto Optics
-            uVars.useLoadedRawData  = [];
             uVars.useVirtualData    = false;
-            uVars.loadDataFilename  = [];
-            uVars.measHere          = [];
             uVars.limitByN          = [];
             uVars.N                 = [];
             uVars.dispTimeTable     = true;
-            
-            %NOTICE: stages vars are included in the uVars, although uVars
-            %related to the AcoustoOptics and may remain constant while
-            %stages may vary from one measurement to another. these
-            %variables are independant. the presence of stage xPos and yPos
-            %variables in here are merely to alloy LiveAO to work
-            %correctly. localMeasureAndAnalyse receive the pos variables as
-            %an input argument.
         end
         
         function newExtVars = extVarsCreate()
@@ -143,18 +129,15 @@ classdef acoustoOptics < handle
             this.IO = IO();
             fprintf("AOI: 4. Creating an Algorithm Object\n");
             this.algo = Algo();
-            fprintf("AOI: 5. Creating a Stages Object\n");
-%             this.stages = stages('COM3');
-            fprintf("AOI: 6. Creating a File System Object\n");
+            fprintf("AOI: 5. Creating a File System Object\n");
             this.fileSystem = fileSystemAO();
-            fprintf("AOI: 7. Creating a Graphics Object\n");
+            fprintf("AOI: 6. Creating a Graphics Object\n");
             this.graphics = AOGraphics();
             
             this.uVars   = this.uVarsCreate();
             this.extVars = this.extVarsCreate();
             
             this.graphicsNames = this.graphics.getGraphicsNames();
-%             this.graphics.setGraphicsStaticVars();
             
             this.connected = false;
             this.runLive = false;
@@ -175,11 +158,7 @@ classdef acoustoOptics < handle
                 % Start the digitizer
                 this.digitizer.connect();
                 this.periAvail.digitizer = this.digitizer.system.hardwareAvailable; 
-                fprintf("AOI: 4. Connecting to Stages\n")
-%                 this.stages.connect();
-%                 this.periAvail.stages = this.stages.hardwareAvailable;
-%                 this.periAvail.stages = false;
-                fprintf("AOI: 5. Connecting to IO\n")
+                fprintf("AOI: 4. Connecting to IO\n")
                 % Start the IO
                 this.IO.connect();
                 this.periAvail.IO = this.IO.hardwareAvailable;
@@ -191,9 +170,6 @@ classdef acoustoOptics < handle
                     this.owned = true;
                 end
             end
-            % This indication does not includes the stage hardware available flag
-            % as it is not mandatory for activating the AO measurement and
-            % analysis
             this.periAvail.completeHardwareAvail =  this.periAvail.digitizer && this.periAvail.fGen && this.periAvail.IO;
         end
         
@@ -264,10 +240,7 @@ classdef acoustoOptics < handle
             algoVars.channels           = uVars.channels;
 
             digitizerVars.useGPU        = algoVars.useGPU;
-            digitizerVars.channels      = algoVars.channels;
-            
-            stagesVars.xPos = uVars.stages.xPos;
-            stagesVars.yPos = uVars.stages.yPos;            
+            digitizerVars.channels      = algoVars.channels;           
             
             % IO
             IOVars = this.IO.uVarsCreate;
@@ -300,23 +273,14 @@ classdef acoustoOptics < handle
             
             fileSystemVars.saveResults          = uVars.fileSystem.saveResults;
             fileSystemVars.saveFigs             = uVars.fileSystem.saveFigs;
-            fileSystemVars.saveVars             = uVars.fileSystem.saveVars;
             
-            fileSystemVars.saveAny = fileSystemVars.saveResults        || fileSystemVars.saveFigs      || ...
-                                     fileSystemVars.saveRawData        || fileSystemVars.saveNetSignal || fileSystemVars.saveDemultiplexed || ...
-                                     fileSystemVars.saveReshapedSignal || fileSystemVars.saveFFT       || fileSystemVars.savePhiChCmplx;                     
-            
-            fileSystemVars.scanName             = uVars.fileSystem.scanName;
             fileSystemVars.dirPath              = uVars.fileSystem.dirPath;
-            fileSystemVars.dataFileNameModel    = uVars.fileSystem.dataFileNameModel;
-            fileSystemVars.varsFileNameModel    = uVars.fileSystem.varsFileNameModel;
-            
-            
-            
+            fileSystemVars.projName             = uVars.fileSystem.projName;
+            fileSystemVars.resDirName           = uVars.fileSystem.resDirName;
+
             fileSystemVars.extProject           = uVars.fileSystem.extProject;
-            fileSystemVars.extProjPath          = uVars.fileSystem.extProjPath;
-            fileSystemVars.extProjResultsPath   = uVars.fileSystem.extProjResultsPath;
-            fileSystemVars.extProjFigsPath      = uVars.fileSystem.extProjFigsPath;
+            fileSystemVars.useExtVarsPath       = uVars.fileSystem.useExtVarsPath;
+            fileSystemVars.extVarsPath          = uVars.fileSystem.extVarsPath;
             
             this.fileSystem.setUserVars(fileSystemVars);
             
@@ -325,7 +289,6 @@ classdef acoustoOptics < handle
             newExtVars.algo       = algoVars;
             newExtVars.fGen       = fGenVars;
             newExtVars.digitizer  = digitizerVars;
-            newExtVars.stages     = stagesVars;
             newExtVars.IO         = IOVars;
             newExtVars.fileSystem = fileSystemVars;
            
@@ -359,10 +322,7 @@ classdef acoustoOptics < handle
             this.extVars = newExtVars;
             
             % Set AO vars
-            this.extVars.AO.useLoadedRawData = uVars.useLoadedRawData;
             this.extVars.AO.useVirtualData   = uVars.useVirtualData;
-            this.extVars.AO.loadDataFilename = uVars.loadDataFilename;
-            this.extVars.AO.measHere         = uVars.measHere;
             this.extVars.AO.limitByN         = uVars.limitByN;
             this.extVars.AO.N                = uVars.N;
             this.extVars.AO.dispTimeTable    = uVars.dispTimeTable;
@@ -392,6 +352,10 @@ classdef acoustoOptics < handle
         function configPeripherals(this)
             fprintf("AOI: ------- Configuring Peripheral ----------\n")
             
+            % Config the FS
+            fprintf("AOI:  ** Configuring FileSystem\n")
+            this.measVars.fileSystem = this.fileSystem.configFileSystem();
+            
             % Reconstruct figures
             % Should be before fGen configuration
             fprintf("AOI:  ** Configuring Graphics\n")
@@ -420,12 +384,7 @@ classdef acoustoOptics < handle
                     this.configIO()
                 end
             end
-            
-            % Config the FS
-            fprintf("AOI:  ** Configuring FileSystem\n")
-            this.measVars.fileSystem = this.fileSystem.configFileSystem();
-            
-            
+
             fprintf("AOI:  ** Done configuring Peripherals\n")
         end
         
@@ -475,67 +434,57 @@ classdef acoustoOptics < handle
         end
 
         % Measurements algorithms types     
-        function res = moveMeasureAndAnalyse(this, pos)
-            % This function moves according to input arg pos instead of
-            % xPos and yPos variables received in setUserVars, in order to
-            % allow scan objects rapidly move the stages without the need
-            % calling the function configurePeripherals
+        function res = runAcoustoOptics(this)
+            % Save AO variables (if needed, decided by fileSystem)
+            this.fileSystem.saveVarsToDisk(this.getAOVars());
             
-            %Move stages to position
-            if this.periAvail.stages
-%                 this.stages.moveStageAbs(pos);
-            else
-                fprintf("AOI: NOTICE: Stages unavailable. Performing AO in current arbitrary location.\n");
-            end
-            
-            % AO
+            % Measure data and analyse it with AO Algorithm
             res = this.measureAndAnalyse();
-        end
-
-        function res = liveAcoustoOptics(this)
-            %live acousto optics cannot be called by scan object and
-            %configurePeripherals is being called each time it is called
-            %and therefore it can use the values of xPos yPos in uVars.
             
-            %move stages
-            if ~this.measVars.AO.measHere
-                if this.periAvail.stages
-%                     this.stages.moveStageAbs([this.measVars.stages.xPos, this.measVars.stages.yPos]);
-                else
-                    fprintf("AOI: NOTICE: Stages unavailable. Performing Live AO in current arbitrary location.\n");
-                end
+            % Set data to graphics object
+            this.timeTable.setResultsToGraphics = tic;
+            this.graphics.setData(this.result);
+            this.timeTable.setResultsToGraphics = toc(this.timeTable.setResultsToGraphics);
+            
+            % Plot Results (if needed, decided by AO)
+            this.timeTable.plotAll = tic;
+            this.plotAll();
+            this.timeTable.plotAll = toc(this.timeTable.plotAll);
+            
+            % Save results (if needed, decided by fileSystem)
+            fprintf("AOI: Saving Results To Disk\n");
+            this.timeTable.saveData = tic;
+            this.fileSystem.saveResultsToDisk(this.result)
+            this.fileSystem.closeFileSystem();
+            this.timeTable.saveData = toc(this.timeTable.saveData);
+            
+            % Collect time statistics
+            if this.measVars.AO.dispTimeTable
+                this.updateTimeTable();
             end
             
-            if this.measVars.AO.limitByN %finit number of measurements
-                % Do one measurement in order the vars will be saved only
-                % once. Then cancel the variable savin option, and continue
-                % measuring in a loop.
-                if this.measVars.fileSystem.saveVars
-                    this.saveVarsToDisk("");
-                end
-                this.measVars.fileSystem.saveVars = false;
-                this.fileSystem.setDataFilenameModel("AO-%d.mat");
-                
+            fprintf ("AOI: Done AO\n") 
+        end
+        
+        function res = liveAcoustoOptics(this) 
+            if this.measVars.AO.limitByN
+                this.fileSystem.initLiveAOFS(this.getAOVars());
                 this.runLive = true;
                 for i=1:this.measVars.AO.N
-                    this.fileSystem.setDataFilenameVariables({i})
-                    this.measureAndAnalyse();
+                    this.fileSystem.setLiveAOInd(i);
+                    this.runAcoustoOptics();
                     pause(0.1)
                     if ~this.runLive
                         fprintf("AOI: Live AO was STOPPED.\n");
                         break;
                     end
                 end
-
+                this.fileSystem.closeLiveAoFileSystem();
             else %infinite number of measurements
+                %saving is not allowed in unlimited live AO
                 this.runLive = true;
-                % Saving vars and results is not allowed for infinite loop.
-                this.measVars.saveAny = false; this.measVars.saveVars = false;
-                this.fileSystem.saveAny = false; this.fileSystem.saveVars = false;
-
-                while(this.runLive) %TODO: Not sure if this will work. should be tested
-                   % Consider using unlimited AO only using GUI
-                   this.measureAndAnalyse();
+                while(this.runLive)
+                   this.runAcoustoOptics();
                    pause(0.1);
                 end
                 fprintf("AOI: Live AO was STOPPED.\n");
@@ -544,24 +493,11 @@ classdef acoustoOptics < handle
         end
         
         function res = measureAndAnalyse(this)
-            if this.measVars.fileSystem.saveVars
-                this.saveVarsToDisk("");
-            end
-            
-%             this.timeTable.acq = tic;
-            if ~this.uVars.useVirtualData && ~this.periAvail.completeHardwareAvail
-                 fprintf("AOI: No source of data found.\n");  
-                 res = [];
-                 return;
-            elseif this.uVars.useLoadedRawData
-                fprintf("AOI: loading rawData from file...\n");
-                bufferDataOut = load(this.measVars.AO.fileName);
-                if this.uVars.useGPU
-                    bufferDataOut = gpuArray(bufferDataOut);
-                end
-            elseif this.uVars.useVirtualData
+           if this.measVars.AO.useVirtualData
+               % Generate virtual data (DEBUG)
                 bufferDataOut = this.createVirtualData();
-            else  
+            elseif this.periAvail.completeHardwareAvail
+                % Get data from digitizer (Measure)
                 fprintf ("AOI: Acquiring...\n")
                 this.timeTable.acq = tic;
                 this.IO.open();
@@ -573,6 +509,11 @@ classdef acoustoOptics < handle
                 this.algo.setRawData(bufferDataOut);
                 bufferDataOut           = gather(bufferDataOut);
                 this.timeTable.moveData = toc(this.timeTable.moveData);
+            else
+                 % No source of data (Error)
+                 fprintf("AOI: No source of data found.\n");  
+                 res = [];
+                 return;
             end
             
             fprintf ("AOI: Analyzing!\n")
@@ -581,30 +522,6 @@ classdef acoustoOptics < handle
             this.result            = res;
             this.result.rawData    = bufferDataOut;
             this.timeTable.analyse = toc(this.timeTable.analyse);
-
-            % Plot reseults according to figs
-            this.timeTable.setResultsToGraphics = tic;
-            this.graphics.setData(this.result);
-            this.timeTable.setResultsToGraphics = toc(this.timeTable.setResultsToGraphics);
-            
-            this.timeTable.plotAll = tic;
-            this.plotAll();
-            this.timeTable.plotAll = toc(this.timeTable.plotAll);
-            
-            % Save results
-            if this.measVars.fileSystem.saveAny
-                fprintf("AOI: Saving Results To Disk\n");
-                this.timeTable.saveData = tic;
-                this.fileSystem.saveData(this.result)
-                this.timeTable.saveData = toc(this.timeTable.saveData);
-            end
-            
-            % Collect time statistics
-            if this.measVars.AO.dispTimeTable
-                this.updateTimeTable();
-            end
-            
-            fprintf ("AOI: Done AO\n")
         end
         
         % Misc
@@ -841,32 +758,28 @@ classdef acoustoOptics < handle
             % Setup graphics
             this.graphics.setGraphicsDynamicVars(this.measVars.algo);
             this.measVars.fileSystem = this.fileSystem.configFileSystem();
+            this.fileSystem.saveVarsToDisk(this.getAOVars());
 
-            if this.measVars.fileSystem.saveVars
-                this.fileSystem.saveVarsToDisk(this.getAOVars, "");
-            end
-            
             % Analyse
             fprintf ("AOI: Analyzing!\n")
             this.algo.setRawData(this.rawData);
             res                    = this.algo.analyse();
             this.result            = res;
             this.result.rawData    = this.rawData;
-            % Plot reseults according to gReq
+            
+            % Plot reseults
             this.plotAll();
             
             % Save results
-            if this.measVars.fileSystem.saveAny
-                fprintf("AOI: Saving Results To Disk\n");
-                this.fileSystem.saveData(this.result) 
-            end
+            fprintf("AOI: Saving Results To Disk\n");
+            this.fileSystem.saveResultsToDisk(this.result) 
             
             fprintf ("AOI: Done AO\n")
         end
         
         function saveVarsToDisk(this, path)
             % path is relative to projPath
-            this.fileSystem.saveVarsToDisk(this.getAOVars, path);
+            this.fileSystem.saveVarsToDisk(this.getAOVars(), path);
         end
         
     end

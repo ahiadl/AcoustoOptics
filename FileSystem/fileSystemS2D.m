@@ -1,6 +1,7 @@
-classdef fileSystemS3D < fileSystem
+classdef fileSystemS2D < fileSystem
     
     properties
+
         
     end
     
@@ -11,10 +12,10 @@ classdef fileSystemS3D < fileSystem
     end
     
     methods
-        function this = fileSystemS3D(subObjHandle)
+        function this = fileSystemS2D(subObjHandle)
             this@fileSystem(subObjHandle)
-            this.uVars = fileSystemS3D.uVarsCreate();
-            this.fsName = "3DScan";
+            this.uVars = fileSystemS2D.uVarsCreate();
+            this.fsName = "2DScan";
         end
         
         function setUserVars(this, uVars)

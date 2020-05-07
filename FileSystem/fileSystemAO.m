@@ -1,21 +1,8 @@
 classdef fileSystemAO < fileSystem
+    %FILESYSTEMAO Summary of this class goes here
+    %   Detailed explanation goes here
     
     properties
-        uVars
-        
-        % Paths
-        scanName    % As given from user (without date string)
-        dirPath     % Directory in the disk in which this scan directory is opened
-        
-        projPath    % this scan directory (full path)
-        resultsPath % relative to resPath
-        figsPath    % relative to resPath
-        
-        extProjPath         % absolute path
-        extProjResultsPath  % relative to projPath
-        extProjFigsPath     % relative to projPath
-        
-        % Acousto Optics reconstruction saving indication 
         saveRawData
         saveNetSignal
         saveDemultiplexed
@@ -23,55 +10,35 @@ classdef fileSystemAO < fileSystem
         saveFFT
         savePhiChCmplx
         
-        
-        % Full scan saving indication
-        saveFigs
-        saveResults
-        saveVars
-        
-        % Control Vars
-        saveAny
-        extProject
-        
-        dataFileNameModel
-        varsFileNameModel
-        dataFilename
-        varsFilename
+        liveAO
+        liveAOResDir
+        liveAOInd
     end
     
     methods (Static)
         function vars = uVarsCreate()
+            vars = fileSystem.uVarsCreate();
+            vars = rmfield(vars, 'stackAllSubObjRes');
+
             vars.saveRawData        = false;
             vars.saveNetSignal      = false;
             vars.saveDemultiplexed  = false;
             vars.saveReshapedSignal = false;
             vars.saveFFT            = false;
             vars.savePhiChCmplx     = false;
-            
-            vars.saveResults        = false;
-            vars.saveFigs           = false;
-            vars.saveVars           = false; 
-            
-            vars.saveAny            = [];
-            
-            vars.scanName           = [];
-            vars.dirPath            = [];
-            vars.dataFileNameModel  = [];
-            vars.varsFileNameModel  = [];
-            
-            vars.extProject         = false;
-            vars.extProjPath        = [];
-            vars.extProjResultsPath = []; %relative to extProjPath
-            vars.extProjFigsPath    = []; %relative to extProjPath
         end
     end
     
     methods
         function this = fileSystemAO()
+            this@fileSystem();
+            this.fsName  = "AOFS";
+            this.objName = "AO";
+            this.defaultScanIdentifierPrefix = "";
         end
-        
+
         function setUserVars(this, uVars)
-            this.uVars = uVars;
+            setUserVars@fileSystem(this, uVars)
             
             this.saveRawData        = uVars.saveRawData;
             this.saveNetSignal      = uVars.saveNetSignal;
@@ -80,94 +47,35 @@ classdef fileSystemAO < fileSystem
             this.saveFFT            = uVars.saveFFT;
             this.savePhiChCmplx     = uVars.savePhiChCmplx;
             
-            this.saveResults = uVars.saveResults;
-            this.saveFigs    = uVars.saveFigs;
-            this.saveVars    = uVars.saveVars;
+            saveAlgoData = this.saveRawData        || this.saveNetSignal || this.saveDemultiplexed || ...
+                           this.saveReshapedSignal || this.saveFFT       || this.savePhiChCmplx;
+            this.saveResults = this.saveResults    || saveAlgoData;
+            this.saveAny     = this.saveAny        || saveAlgoData;
+            this.saveVars    = this.saveAny;
+            %Save vars in case there is any saving option on. saving vars
+            %can be externally disabled later according to user
+            %requirements.
             
-            this.saveAny     = uVars.saveAny;
-            
-            this.scanName          = uVars.scanName;
-            this.dirPath           = uVars.dirPath;
-            this.dataFileNameModel = uVars.dataFileNameModel;
-            this.varsFileNameModel = uVars.varsFileNameModel;
-            
-            this.extProject            = uVars.extProject;            
-            this.extProjPath           = uVars.extProjPath;
-            this.extProjResultsPath    = uVars.extProjResultsPath; 
-            this.extProjFigsPath       = uVars.extProjFigsPath;    %relative to extProjPath
+            this.liveAO = false; %should be manualy on by liveAO function
         end
         
-        function  vars = configFileSystem(this)
-            if this.saveAny || this.saveVars
-                if this.extProject
-                    %in case acousto optics is called by another project
-                    %that already created results directory, AO should
-                    %save its results into the rawData directory of this
-                    %project. In that case, the supervising project should
-                    %turn the existingProject flag, and fill its directory
-                    %in the projDirPath variable
-                    
-                    this.projPath       = this.extProjPath;
-                    this.resultsPath    = this.extProjResultsPath;
-                    this.figsPath       = this.extProjFigsPath;      
-                else
-                    %in case acousto optics is independant, it creates its
-                    %own directories.
-                    
-                    dateStr          = strrep(datestr(datetime('now')), ':', '-');
-                    
-                    this.resultsPath = "Results";
-                    this.figsPath    = "Figures";
-                    
-                    this.projPath   = sprintf("%s/%s-%s", this.dirPath,  dateStr, this.scanName);
-                    resultsDir      = sprintf("%s/%s",    this.projPath, this.resultsPath);
-                    figsDir         = sprintf("%s/%s",    this.projPath, this.figsPath);
-                    
-                    this.dataFilename = "Results.mat";
-                    this.varsFilename = "Vars.mat";
-                    
-                    mkdir(this.projPath);
-                    mkdir(resultsDir);
-                    mkdir(figsDir);
-                end
-            end
-            
-            vars = this.getFilesystemVars();
+        function fsVars = configFileSystem(this)
+           configFileSystem@fileSystem(this)
+           if ~this.extProject
+              this.scanIdentifierPrefix = this.defaultScanIdentifierPrefix;
+           end
+           fsVars = [];
+%            fsVars = getFileSystemVars();
         end
         
-        function vars = getFilesystemVars(this)
-            vars.saveRawData        = this.saveRawData;
-            vars.saveNetSignal      = this.saveNetSignal;
-            vars.saveDemultiplexed  = this.saveDemultiplexed;
-            vars.saveReshapedSignal = this.saveReshapedSignal;
-            vars.saveFFT            = this.saveFFT;
-            vars.savePhiChCmplx     = this.savePhiChCmplx;
-            
-            vars.saveResults = this.saveResults;
-            vars.saveFigs    = this.saveFigs;            
-            vars.saveVars    = this.saveVars;
-            
-            vars.saveAny = this.saveAny;
-            
-            vars.scanName           = this.scanName;
-            vars.dirPath            = this.dirPath;
-            vars.dataFileNameModel  = this.dataFileNameModel;
-            vars.dataFilename       = this.dataFilename;
-            vars.varsFileNameModel  = this.varsFileNameModel;
-            vars.varsFilename       = this.varsFilename;
-            
-            vars.projPath           = this.projPath;
-            vars.resultsPath        = this.resultsPath;
-            vars.figsPath           = this.figsPath;
-            
-            vars.extProject         = this.extProject;
-            vars.extProjPath        = this.extProjPath;
-            vars.extProjResultsPath = this.extProjResultsPath;
-            vars.extProjFigsPath    = this.extProjFigsPath;
+        function saveLiveAOVarsToDisk(this, vars)
+           this.enableSaveVars(); 
+           this.saveVarsToDisk(vars)
+           this.disableSaveVars(); 
         end
         
-        function saveData(this, res)
-            if this.saveAny
+        function saveResultsToDisk(this, res)
+            if this.saveAnyTot
                 if this.saveRawData
                     data.rawData = res.rawData;    
                 end
@@ -187,39 +95,55 @@ classdef fileSystemAO < fileSystem
                     data.phiChCmplx = res.phiChCmplx;
                     data.phiCh      = res.phiCh;
                 end
-                
+
                 data.phiQuant = res.phiQuant;
                 data.phi      = res.phi;
                 data.phiStd   = res.phiStd;
 
-                filename = sprintf("%s/%s/%s", this.projPath, this.resultsPath, this.dataFilename);
-                save(filename, '-struct', 'data', '-v7.3');                
+                if this.liveAO
+                   if this.saveResults
+                        fprintf("%s: Saving Live AO results.\n", this.fsName);
+                        if strcmp(this.scanIdentifierPrefix, "")
+                            dataFileName = sprintf("%s/%s/%s-Results-%d.mat", this.projPath, this.liveAOResDir, this.objName, this.liveAOInd);
+                        else
+                            dataFileName = sprintf("%s/%s/%s-%s-Results-%d.mat", this.projPath, this.liveAOResDir, this.objName, this.scanIdentifierPrefix, this.liveAOInd);
+                        end
+                        save(dataFileName, '-struct', 'data', '-v7.3');
+                    end
+                else
+                   saveResultsToDisk@fileSystem(this, data); 
+                end
             end
         end
-
-        function saveVarsToDisk(this, vars, path)
-            % the path is relative to resDir given earlier.
-            fprintf("AOI: FS: Saving variables.\n");
-            filename = sprintf("%s/%s/%s.mat", this.projPath, path, this.varsFilename);
-            save(filename, '-struct', 'vars', '-v7.3');
+        
+        function initLiveAOFS(this, vars)
+            this.liveAO    = true;
+            this.liveAOInd = 1;
+            this.saveLiveAOVarsToDisk(vars);
+            if strcmp(this.scanIdentifierPrefix, "")  
+                this.liveAOResDir = "LiveAOResults";
+            else
+                this.liveAOResDir = sprintf("LiveAOResults-%s", this.scanIdentifierPrefix);
+            end
+            mkdir(sprintf("%s/%s", this.projPath, this.liveAOResDir));
         end
         
-        function setDataFilenameModel(this, model)
-            this.dataFileNameModel = model;
+        function setLiveAOInd(this, ind)
+            this.liveAOInd = ind;
         end
         
-        function setVarsFilenameModel(this, model)
-            this.varsFileNameModel = model;
+        function closeFileSystem(this)
+            if ~this.liveAO
+                closeFileSystem@fileSystem(this)
+            end
         end
         
-        function setDataFilenameVariables(this, stringVars)
-            this.dataFilename = sprintf(this.dataFileNameModel, stringVars{:});
+        function closeLiveAoFileSystem(this)
+            if this.liveAO && this.saveAnyTot && ~this.extProject
+                this.turnOffLogFile();
+            end
         end
         
-        function setVarsFilenameVariables(this, stringVars)
-            this.varsFilename = sprintf(this.varsFileNameModel, stringVars{:});
-        end
-
     end
 end
 
