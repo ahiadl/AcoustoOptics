@@ -44,6 +44,7 @@ classdef Graphics < handle
             this.figs.(gName).strings.xlabelModel = xlabel;
             this.figs.(gName).strings.ylabelModel = ylabel;
             this.figs.(gName).strings.legendModel = legend;
+            this.figs.(gName).strings.updateLegend = true;
         end        
         
         function setChAndPos(this, ch, zIdx, quant)
@@ -54,6 +55,13 @@ classdef Graphics < handle
         
         function setMarkersEnable(this, gName, enDis)
              this.figs.(gName).markers.plotMark = enDis;
+        end
+        
+        function setFonts(this, fonts)
+            this.figs.fonts.type       = fonts.type;
+            this.figs.fonts.titleSize  = fonts.titleSize;
+            this.figs.fonts.labelsSize = fonts.labelsSize;
+            this.figs.fonts.axisSize   = fonts.axisSize; 
         end
         
         % Dynamic Vars set functions
@@ -69,10 +77,14 @@ classdef Graphics < handle
         end
         
         function setAxesVar(this, gName, xName, yName)
+           if ~isempty(xName)
            this.figs.(gName).strings.xlabel = ...
                sprintf(this.figs.(gName).strings.xlabelModel, xName);
-           this.figs.(gName).strings.ylabel = ...
-               sprintf(this.figs.(gName).strings.ylabelModel, yName);
+           end
+           if ~isempty(yName)
+               this.figs.(gName).strings.ylabel = ...
+                   sprintf(this.figs.(gName).strings.ylabelModel, yName);
+           end
         end
         
         function setLimits(this, gName, xlims, ylims)
@@ -106,12 +118,12 @@ classdef Graphics < handle
                     this.figs.(this.figsNames{i}).handles.int       = this.figs.(this.figsNames{i}).handles.cur;
                 end
             end
-            
+
             % 2. Manage construction
             if (strcmp(this.uVars.intExt, 'int')) 
                 for i = 1:this.numOfFigs
                     if this.uVars.validStruct.(this.figsNames{i})
-                        if ~isgraphics(this.figs.(this.figsNames{i}).handles.int.ax)  % check if you can use the old figures, if not, open a new one
+                        if ~isgraphics(this.figs.(this.figsNames{i}).handles.int.ax) || this.uVars.reopenFigures % check if you can use the old figures, if not, open a new one
                             this.figs.(this.figsNames{i}).handles.int.fig = figure();  
                             this.figs.(this.figsNames{i}).handles.int.ax  = axes();
                             this.figs.(this.figsNames{i}).handles.int.plot = NaN;
@@ -155,7 +167,7 @@ classdef Graphics < handle
             ylabel(this.figs.(gName).handles.cur.ax, this.figs.(gName).strings.ylabel, ...
                  'FontSize', this.figs.fonts.labelsSize);
              
-            if length( this.figs.(gName).handles.cur.plot) > 1
+            if length( this.figs.(gName).handles.cur.plot) > 1 && this.figs.(gName).strings.updateLegend
                 this.figs.(gName).handles.cur.legend =...
                     legend(this.figs.(gName).handles.cur.ax, this.figs.(gName).strings.legend);
             end
@@ -172,6 +184,8 @@ classdef Graphics < handle
                 caxis(this.figs.(gName).handles.cur.ax, this.figs.(gName).lims.clims)
             end
         end
+        
+        
 
     end
 end

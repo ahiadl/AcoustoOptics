@@ -9,14 +9,29 @@ classdef scan3DGraphics < Graphics
     methods (Static)
   
        function figsNames = getGraphicsNames()
-            figsNames = {'curMainAxis'; 'curMainAxisAvg'; 'curMainPlane'; 'curMainPlaneAvg'; 'nav'; 'navAvg'};
+            figsNames = {'nav'; 'navAvg'};
        end 
         
-       function figs = createGraphicsVars()    
+       function figs  = createGraphicsVars()    
             % General Scan Parameters
-            figs.firstAxis   = [];
-            figs.secondAxis   = [];
-            figs.depthAxis   = [];
+            figs.firstAxType     = 'normal';
+            figs.firstAxis       = [];
+            figs.firstAxisCntr   = [];
+            figs.firstAxisZero   = [];
+            figs.firstAxisNorm   = [];
+            
+            figs.secondAxType     = 'normal';
+            figs.secondAxis       = [];
+            figs.secondAxisCntr   = [];
+            figs.secondAxisZero   = [];
+            figs.secondAxisNorm   = [];
+            
+            figs.depthAxType     = 'normal';
+            figs.depthAxis       = [];
+            figs.depthAxisCntr   = [];
+            figs.depthAxisZero   = [];
+            figs.depthAxisNorm   = [];
+            
             figs.repeats = [];
             figs.normColorsToPlane = true;
             
@@ -25,11 +40,7 @@ classdef scan3DGraphics < Graphics
             figs.depthAxLabel   = 'Z';
             figs.mainPlaneLabel = 'YZ';
             
-            figs.firstAxLimsToPlot = [];
             figs.dxFirstAx         = [];
-            
-            figs.depthIdx    = 1; 
-            figs.depthPos    = 0; % the z value related to zIdx;
             
             % Current Position
             figs.curPosFirst  = 0;
@@ -53,8 +64,8 @@ classdef scan3DGraphics < Graphics
             figs.navYname = 'Y';
             
             % Color Limits
-            figs.scan3DClims    = [0, 1];
-            figs.scanAvg3DClims = [0, 1];
+            figs.scan3DClims     = [0, 1];
+            figs.scanAvg3DClims  = [0, 1];
             figs.scan2DClims     = [0, 1];
             figs.scanAvg2DClims  = [0, 1];
             
@@ -63,9 +74,9 @@ classdef scan3DGraphics < Graphics
             figsNames    = scan3DGraphics.getGraphicsNames();
             
             figs.fonts.type       = [];
-            figs.fonts.titleSize  = 18;
-            figs.fonts.labelsSize = 18;
-            figs.fonts.axisSize   = 18;
+            figs.fonts.titleSize  = 14;
+            figs.fonts.labelsSize = 14;
+            figs.fonts.axisSize   = 14;
             
             for i = 1:length(figsNames)  
                 figs.(figsNames{i}).type      = []; 
@@ -92,36 +103,44 @@ classdef scan3DGraphics < Graphics
                 figs.(figsNames{i}).lims.clims  = [];
             end
        end  
-        
-       function uVars = createGraphicsUserVars() %for Reduced Operation
-            uVars.depthIdx = 1;
-            
-            uVars.useQuant   = true;
+       
+       function figs  = createUserVars()
+           figs.normColorsToPlane = false;
+           figs.reopenFigures     = false;
+           
+           figs.firstAxType  = 'normal';
+           figs.secondAxType = 'normal';
+           figs.depthAxType  = 'normal';
+           
+           figsNames = scan3DGraphics.getGraphicsNames();
+           figs.intExt       = 'int';
+           for i=1:length(figsNames)
+               figs.validStruct.(figsNames{i}) = false;
+           end
+
+           for i=1:length(figsNames)
+               figs.extH.(figsNames{i}) =  Graphics.createHandlesStruct();
+           end
+           
+           figs.fonts.type       = [];
+           figs.fonts.titleSize  = 14;
+           figs.fonts.labelsSize = 14;
+           figs.fonts.axisSize   = 14;
+       end
+       
+       function uVars = createOwnerVars() %for Reduced Operation
+            uVars = scan3DGraphics.createUserVars();
+           
             uVars.repeats    = 1;
-            uVars.firstAxis  = [];
-            uVars.secondAxis = [];
-            uVars.depthAxis  = [];
             
-            uVars.firstAxLabel  = 'Y';
-            uVars.secondAxLabel = 'X';
-            uVars.depthAxLabel  = 'Z';
+            uVars.firstAxisNorm   = [];
+            uVars.secondAxisNorm  = [];
+            uVars.depthAxisNorm   = [];
+
+            uVars.firstAxLabel   = 'Y';
+            uVars.secondAxLabel  = 'X';
+            uVars.depthAxLabel   = 'Z';
             uVars.mainPlaneLabel = 'YZ';
-            
-            figsNames = scan3DGraphics.getGraphicsNames();
-            
-            uVars.intExt = [];
-            for i=1:length(figsNames)
-                uVars.validStruct.(figsNames{i}) = false;
-            end
-            
-            for i=1:length(figsNames)
-                uVars.extH.(figsNames{i}) =  Graphics.createHandlesStruct();
-            end
-            
-            uVars.fonts.type       = [];
-            uVars.fonts.titleSize  = 14;
-            uVars.fonts.labelsSize = 14;
-            uVars.fonts.axisSize   = 14;
        end
        
        function navVars = createNavigatorVars()
@@ -136,29 +155,13 @@ classdef scan3DGraphics < Graphics
             this@Graphics()
             this.figsNames = scan3DGraphics.getGraphicsNames();
             this.figs      = scan3DGraphics.createGraphicsVars();
-            this.uVars     = scan3DGraphics.createGraphicsUserVars();
+            this.uVars     = scan3DGraphics.createOwnerVars();
             this.setGraphicsStaticVars();
             this.numOfFigs = length(this.figsNames);
         end
  
         % Set vars Functions
         function setGraphicsStaticVars(this)
-            % curMainAxis
-            this.setType('curMainAxis', 'stem');
-            this.setStrings('curMainAxis', "Current Main Axis %s: (R, %s, %s) = (%d, %.2f, %.2f)", "%s[mm]", "\\phi[v]", []);
-            
-            % curMainAxisAvg
-            this.setType('curMainAxisAvg', 'errorbar');
-            this.setStrings('curMainAxisAvg', "Current Main Axis %s (Averaged): (R, %s, %s) = (%d, %.2f, %.2f)", "%s[mm]",  "\\phi[v]", []);
-            
-            % curMainPlane
-            this.setType('curMainPlane', 'imagesc');
-            this.setStrings('curMainPlane', "Current Main Plane %s: (R, %s) = (%d, %.2f)", "%s [mm]", "%s[mm]", []);
-            
-            % curMainPlaneAvg
-            this.setType('curMainPlaneAvg', 'imagesc');
-            this.setStrings('curMainPlaneAvg', "Current Main Plane %s (Averaged): (R, %s) = (%d, %.2f)", "%s [mm]", "%s[mm]", []);
-           
             % navPlane
             this.setType('nav', 'imagesc');
             this.setStrings('nav', "Navigator Plane %s: (R, %s) = (%d, %.2f)", "%s[mm]", "%s[mm]", []);
@@ -170,58 +173,54 @@ classdef scan3DGraphics < Graphics
         end
                  
         function setGraphicsScanVars(this)
-            this.figs.useQuant   = this.uVars.useQuant;
             this.figs.repeats    = this.uVars.repeats;
-            this.figs.firstAxis  = this.uVars.firstAxis;
-            this.figs.secondAxis = this.uVars.secondAxis;
-            this.figs.depthAxis  = this.uVars.depthAxis*1e3;
-            
-            this.figs.normColorsToPlane = this.uVars.normColorsToPlane;
-            
-            % reset data arrays:
-            this.initDataArray();
-            
-            if this.uVars.depthIdx > length(this.figs.depthAxis)
-                this.figs.depthIdx = 1;
-            else
-                this.figs.depthIdx = this.uVars.depthIdx;
-            end
-            this.figs.depthPos = this.figs.depthAxis(this.figs.depthIdx);
             
             this.figs.firstAxLabel   = this.uVars.firstAxLabel;
             this.figs.secondAxLAbel  = this.uVars.secondAxLabel;
             this.figs.depthAxLabel   = this.uVars.depthAxLabel;
             this.figs.mainPlaneLabel = this.uVars.mainPlane;
             
+            this.figs.firstAxType   = this.uVars.firstAxType;
+            this.figs.firstAxisNorm = this.uVars.firstAxisNorm;
+            this.figs.firstAxisCntr = this.figs.firstAxisNorm - mean(this.figs.firstAxisNorm);
+            this.figs.firstAxisZero = abs(this.figs.firstAxisNorm - this.figs.firstAxisNorm(1));
+            this.setAxisType(this.figs.firstAxLabel, this.figs.firstAxType);
+            
+            this.figs.secondAxType   = this.uVars.secondAxType;
+            this.figs.secondAxisNorm = this.uVars.secondAxisNorm;
+            this.figs.secondAxisCntr = this.figs.secondAxisNorm - mean(this.figs.secondAxisNorm);
+            this.figs.secondAxisZero = abs(this.figs.secondAxisNorm - this.figs.secondAxisNorm(1));
+            this.setAxisType(this.figs.secondAxLabel, this.figs.secondAxType);
+            
+            this.figs.depthAxType     = this.uVars.depthAxType;
+            this.figs.depthAxisNorm   = this.uVars.depthAxisNorm*1e3;
+            this.figs.depthAxisCntr   = this.figs.depthAxisNorm - mean(this.figs.depthAxisNorm);
+            this.figs.depthAxisZero   = abs(this.figs.depthAxisNorm - this.figs.depthAxisNorm(1));
+            this.setAxisType(this.figs.depthAxLabel, this.figs.depthAxType);
+            
+            this.figs.normColorsToPlane = this.uVars.normColorsToPlane;
+            
+            % reset data arrays:
+            this.initDataArray();
+
             this.figs.dxFirstAx         = abs(this.figs.firstAxis(1) - this.figs.firstAxis(2));
-            this.figs.firstAxLimsToPlot = [this.figs.firstAxis(1) - this.figs.dxFirstAx,...
-                                           this.figs.firstAxis(end)   + this.figs.dxFirstAx];
             
             this.figs.validStruct = this.uVars.validStruct;
 
-            if this.figs.useQuant
-                this.setType('curMainAxis', 'errorbar');
-            else
-                this.setType('curMainAxis', 'stem');
-            end
-            
-            if this.figs.repeats > 1
-                this.setType('curMainAxisAvg', 'errorbar');
-            else
-                this.setType('curMainAxisAvg', 'stem');
-            end
-
-            this.figs.fonts = this.uVars.fonts;
-            
+            %extH and intExt flag should not be transferred at this point.
+            %it is updated by the updateGraphicsConstruction function
             this.resetNavigator();
         end
-
-        function updateCurPosAndIdx(this, pns)
+        
+        function updateS3DCurPosAndIdx(this, curIdx, curPos)
+            this.figs.curIdxSecond = curIdx;
+            this.figs.curPosSecond = curPos;
+        end
+        
+        function updateS2DCurPosAndIdx(this, pns)
             this.figs.curRep       = pns.curPosIdx(1);
             this.figs.curIdxFirst  = pns.curPosIdx(2);
-            this.figs.curIdxSecond = pns.curPosIdx(3);
             this.figs.curPosFirst  = pns.curPos(1);
-            this.figs.curPosSecond = pns.curPos(2);
         end
 
         function setNavVars(this, navVars)
@@ -269,15 +268,6 @@ classdef scan3DGraphics < Graphics
             this.dispNavPlaneAvg();
         end
         
-        function setDepthToMainAxis(this, idx)
-            if idx > length(this.figs.depthAxis)
-                this.figs.depthIdx = 1;
-            else
-                this.figs.depthIdx = idx;
-            end
-            this.figs.depthPos = this.figs.depthAxis(this.figs.depthIdx); 
-        end
-        
         function setLoadedDataClims(this, data)
             this.figs.scan3DClims(1) = min(data.phi(:));
             this.figs.scan3DClims(2) = max(data.phi(:));
@@ -289,20 +279,61 @@ classdef scan3DGraphics < Graphics
            this.figs.normColorsToPlane = normColorsToPlane; 
         end
         
+        function setAxisType(this, ax, type)
+            if strcmp(ax, this.figs.firstAxLabel)
+                this.figs.firstAxType = type;
+                switch type
+                    case 'Normal'
+                        this.figs.firstAxis = this.figs.firstAxisNorm;
+                    case 'Center'
+                        this.figs.firstAxis = this.figs.firstAxisCntr;
+                    case 'Zero'
+                        this.figs.firstAxis = this.figs.firstAxisZero;
+                    case 'Index'
+                        this.figs.firstAxis = 1:length(this.figs.firstAxisNorm);
+                end
+                this.figs.dxFirstAx         = abs(this.figs.firstAxis(1) - this.figs.firstAxis(2));
+                this.figs.firstAxLimsToPlot = [min(this.figs.firstAxis) - this.figs.dxFirstAx,...
+                               max(this.figs.firstAxis) + this.figs.dxFirstAx];
+            elseif strcmp(ax, this.figs.secondAxLabel)
+                this.figs.depthAxType = type;
+                switch type
+                    case 'Normal'
+                        this.figs.secondAxis = this.figs.secondAxisNorm;
+                    case 'Center'
+                        this.figs.secondAxis = this.figs.secondAxisCntr;
+                    case 'Zero'
+                        this.figs.secondAxis = this.figs.secondAxisZero;
+                    case 'Index' 
+                        this.figs.secondAxis = 1:length(this.figs.secondAxisNorm);
+                end
+            elseif strcmp(ax, this.figs.depthAxLabel)
+                this.figs.depthAxType = type;
+                switch type
+                    case 'Normal'
+                        this.figs.depthAxis = this.figs.depthAxisNorm;
+                    case 'Center'
+                        this.figs.depthAxis = this.figs.depthAxisCntr;
+                    case 'Zero'
+                        this.figs.depthAxis = this.figs.depthAxisZero;
+                    case 'Index' 
+                        this.figs.firstAxis = 1:length(this.figs.depthAxisNorm);
+                end
+            end  
+        end
+        
         %Set Data functions
         function initDataArray(this)
             rstPhi    = zeros(length(this.figs.firstAxis), length(this.figs.secondAxis), length(this.figs.depthAxis), this.uVars.repeats);
             rstPhiAvg = zeros(length(this.figs.firstAxis), length(this.figs.secondAxis), length(this.figs.depthAxis));
             
             this.data.phi       = rstPhi;
-            this.data.phiStd    = rstPhi;
             this.data.phiAvg    = rstPhiAvg;
             this.data.phiAVgStd = rstPhiAvg;
         end
         
         function set1DData(this, data)
             this.data.phi(this.figs.curIdxFirst, this.figs.curIdxSecond, :, this.figs.curRep) = data.phi;
-            this.data.phiStd(this.figs.curIdxFirst, this.figs.curIdxSecond, :) = data.phiStd;
 
             if (this.figs.curIdxFirst == 1)
                this.figs.scan2DClims  = [inf, 0];
@@ -342,7 +373,6 @@ classdef scan3DGraphics < Graphics
 
         function setLoadedData(this, data)
             this.data.phi = data.phi;
-            this.data.phiStd = data.phiStd;
             this.data.phiAvg = data.phiAvg;
             this.data.phiAvgStd = data.phiAvgStd;
             
@@ -350,37 +380,6 @@ classdef scan3DGraphics < Graphics
         end
         
         % Extract data functions
-        function data = extractMainAxisFromData(this, isAvg)
-            if ~isAvg
-                data.yData  = this.data.phi(:, this.figs.curIdxSecond, this.figs.depthIdx, this.figs.curRep);
-                data.stdVec = this.data.phiStd(:, this.figs.curIdxSecond, this.figs.depthIdx, this.figs.curRep);
-            else
-                data.yData  = this.data.phiAvg (:, this.figs.curIdxSecond, this.figs.depthIdx);
-                data.stdVec = this.data.phiStd(:, this.figs.curIdxSecond, this.figs.depthIdx);
-            end
-        end
-        
-        function data = extractMainPlaneFromData(this, isAvg)
-            if ~isAvg
-                if this.figs.normColorsToPlane 
-                    data.clims = this.figs.scan2DClims;
-                else
-                    data.clims = this.figs.scan3DClims;
-                end
-                data.cData = permute(this.data.phi(:, this.figs.curIdxSecond, :, this.figs.curRep), [3,1,2,4]);
-            else
-                if this.figs.normColorsToPlane 
-                    data.clims = this.figs.scanAvg2DClims;
-                else
-                    data.clims = this.figs.scanAvg3DClims;
-                end
-                data.cData = permute(this.data.phiAvg(:, this.figs.curIdxSecond, :), [3,1,2]);
-            end
-            if data.clims(1) == data.clims(2)
-                data.clims(2) = data.clims(1)+ 0.1;
-            end
-        end
-        
         function data = extractNavPlaneFromData(this, isAvg)
             if ~isAvg
 %                 data.clims = [min(min(min(min(this.data.phi)))), max(max(max(max(this.data.phi))))];
@@ -430,156 +429,11 @@ classdef scan3DGraphics < Graphics
         end
         
         % Display Functions
-        function dispCurMainAxis(this)
-            if ~isgraphics(this.figs.curMainAxis.handles.cur.ax)
-               return
-            end
-            
-            this.setTitleVariables('curMainAxis',...
-                                   {{this.figs.firstAxLabel, this.figs.secondAxLabel, this.figs.depthAxLabel...
-                                     this.figs.curRep, this.figs.curPosSecond, this.figs.depthPos}})
-            
-            %extract relevent data
-            plotData = this.extractMainAxisFromData(false);
-
-            if ~isgraphics(this.figs.curMainAxis.handles.cur.plot) ||...
-               this.figs.curMainAxis.update
-                
-                this.setAxesVar('curMainAxis', this.figs.firstAxLabel, 'Fluence');
-                this.setLimits('curMainAxis', this.figs.firstAxLimsToPlot, []);
-                
-                switch this.figs.curMainAxis.type
-                    case 'stem'
-                        this.figs.curMainAxis.handles.cur.plot = ...
-                            stem(this.figs.curMainAxis.handles.cur.ax,...
-                            this.figs.firstAxis, plotData.yData); 
-                    case 'errorbar'
-                        this.figs.curMainAxis.handles.cur.plot = ...
-                            errorbar(this.figs.curMainAxis.handles.cur.ax,...
-                            this.figs.firstAxis, plotData.yData, plotData.stdVec);
-                end
-                
-                this.setLimsToPlot('curMainAxis'); %apply limits to the plot
-                this.setStringsToPlot('curMainAxis'); %allocate title and labels handles
-                drawnow();
-                this.figs.curMainAxis.update = false;
-            else
-                quickPlot(this, 'curMainAxis', this.figs.firstAxis, plotData.yData, [], plotData.stdVec)
-            end
+        function updatePlots(this)
+            this.dispNavPlane();
+            this.dispNavPlaneAvg();
         end
         
-        function dispCurMainAxisAvg(this)
-            % yData - (xLen, yLen, zLen)
-            % stdMat - (xLen, yLen, zLen)
-            if ~isgraphics(this.figs.curMainAxisAvg.handles.cur.ax)
-               return
-            end
-            %"Current Main Axis %s (Averaged): (R, %s, %s) = (%d, %.2f, %.2f)"
-            this.setTitleVariables('curMainAxisAvg', ...
-                                   {{this.figs.firstAxLabel, this.figs.secondAxLabel, this.figs.depthAxLabel,...
-                                     this.figs.curRep,       this.figs.curPosSecond,  this.figs.depthPos}});            
-            %extract relevent data
-            plotData = this.extractMainAxisFromData(true);
-            
-            if ~isgraphics(this.figs.curMainAxisAvg.handles.cur.plot) ||...
-                this.figs.curMainAxisAvg.update
-                
-                this.setAxesVar('curMainAxisAvg', this.figs.firstAxLabel, 'Fluence')
-                this.setLimits('curMainAxisAvg', this.figs.firstAxLimsToPlot, [])
-                switch this.figs.curMainAxisAvg.type
-                    case 'stem'
-                        this.figs.curMainAxisAvg.handles.cur.plot = ...
-                            stem(this.figs.curMainAxisAvg.handles.cur.ax,...
-                            this.figs.firstAxis, plotData.yData); 
-                    case 'errorbar'
-                        this.figs.curMainAxisAvg.handles.cur.plot = ...
-                            errorbar(this.figs.curMainAxisAvg.handles.cur.ax,...
-                            this.figs.firstAxis, plotData.yData, plotData.stdVec);
-                end
-                this.setLimsToPlot('curMainAxisAvg')
-                this.setStringsToPlot('curMainAxisAvg');
-                drawnow();
-                this.figs.curMainAxisAvg.update = false;
-            else
-                quickPlot(this, 'curMainAxisAvg', this.figs.firstAxis, plotData.yData, [], plotData.stdVec)
-            end
-        end
-        
-        function dispCurMainPlane(this)
-            % yData - (xLen, yLen, zLen)
-            % stdMat - (xLen, yLen, zLen)
-            if ~isgraphics(this.figs.curMainPlane.handles.cur.ax)
-               return
-            end
-            % "Current Main Plane %s: (R, %s) = (%d, %.2f)"
-            this.setTitleVariables('curMainPlane',...
-                                   {{ this.figs.mainPlaneLabel, this.figs.secondAxLabel,...
-                                      this.figs.curRep,         this.figs.curPosSecond}});
-            
-            plotData = this.extractMainPlaneFromData(false);
-                                                  
-            this.figs.curMainPlane.lims.clims = plotData.clims;
-
-            if ~isgraphics(this.figs.curMainPlane.handles.cur.plot) ||...
-                this.figs.curMainPlane.update
-                
-                cla(this.figs.curMainPlane.handles.cur.ax)
-                this.setAxesVar('curMainPlane', this.figs.firstAxLabel, 'Z');
-                
-                this.figs.curMainPlane.handles.cur.plot = ...
-                    imagesc(this.figs.curMainPlane.handles.cur.ax,...
-                    'XData', this.figs.firstAxis, 'Ydata', this.figs.depthAxis, 'CData', plotData.cData,...
-                    plotData.clims);
-                
-                %title
-                axis(this.figs.curMainPlane.handles.cur.ax, 'tight')
-                colorbar(this.figs.curMainPlane.handles.cur.ax);
-                this.setLimsToPlot('curMainPlane');
-                this.setStringsToPlot('curMainPlane');
-                drawnow();
-                this.figs.curMainPlane.update = false;
-            else
-                quickPlot(this, 'curMainPlane', this.figs.firstAxis, this.figs.depthAxis, plotData.cData)
-            end
-        end
-        
-        function dispCurMainPlaneAvg(this)
-            % yData - (xLen, yLen, zLen)
-            % stdMat - (xLen, yLen, zLen)
-            if ~isgraphics(this.figs.curMainPlaneAvg.handles.cur.ax)
-               return
-            end
-            %"Current Main Plane %s (Averaged): (R, %s) = (%d, %.2f)"
-            this.setTitleVariables('curMainPlane', ...
-                                   {{ this.figs.mainPlaneLabel, this.figs.secondAxLabel,...
-                                      this.figs.curRep,        this.figs.curPosSecond}});
-                                                                 
-            plotData = this.extractMainPlaneFromData(true);
-            this.figs.curMainPlaneAvg.lims.clims = plotData.clims;
-
-            if ~isgraphics(this.figs.curMainPlaneAvg.handles.cur.plot) ||...
-                this.figs.curMainPlane.update
-                
-                cla(this.figs.curMainPlaneAvg.handles.cur.ax)
-                this.setAxesVar('curMainPlaneAvg', this.figs.firstAxLabel, 'Z');
-                
-                this.figs.curMainPlaneAvg.handles.cur.plot = ...
-                    imagesc(this.figs.curMainPlaneAvg.handles.cur.ax,...
-                    'XData', this.figs.firstAxis, 'Ydata', this.figs.depthAxis, 'CData', plotData.cData,...
-                    plotData.clims);
-                
-                axis(this.figs.curMainPlaneAvg.handles.cur.ax, 'tight')
-                colorbar(this.figs.curMainPlaneAvg.handles.cur.ax);
-                this.setLimsToPlot('curMainPlaneAvg')
-                this.setStringsToPlot('curMainPlaneAvg');
-                
-                drawnow();
-                this.figs.curMainPlaneAvg.update = false;
-            else
-                quickPlot(this, 'curMainPlaneAvg', this.figs.firstAxis, this.figs.depthAxis, plotData.cData)
-            end
-        end
-
         function dispNavPlane(this)
             % yData  - (xLen, yLen, zLen, rep)
             if ~isgraphics(this.figs.nav.handles.cur.ax)

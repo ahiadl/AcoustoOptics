@@ -357,7 +357,6 @@ classdef Digitizer < handle
         
         function data = getData(this)
            data = this.bufferDataOut;
-%            this.bufferDataOut = [];
         end
         
         function [dataOut, status] = acquireDataTS(this)
@@ -433,6 +432,7 @@ classdef Digitizer < handle
                 this.rawDataDeMultiplexing();
             end
             dataOut = this.Data;
+            this.Data = [];
             this.timeTable.fullAcquisition = toc(this.timeTable.fullAcquisition); 
         end
 
@@ -443,7 +443,7 @@ classdef Digitizer < handle
             bitsRange = 2^16/2;
 
             this.uData = (cast(this.bufferDataOut, 'single') - bitsRange) * this.system.voltsRange / (bitsRange * shiftFact);
-            
+            this.bufferDataOut = [];
             this.timeTable.convertUnsignedSampleToVolts = toc(this.timeTable.convertUnsignedSampleToVolts);
         end
         
@@ -454,7 +454,7 @@ classdef Digitizer < handle
 
             this.Data = reshape(reshape(this.uData', this.vars.samplesPerAcqAllCh, 1),...
                                       this.vars.channels,  this.vars.samplesPerAcq);
-
+            this.uData = [];
             this.timeTable.rawDataDeMultiplexing = toc(this.timeTable.rawDataDeMultiplexing);             
         end
 

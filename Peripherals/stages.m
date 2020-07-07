@@ -50,6 +50,16 @@ classdef stages < handle
             this.curPos(2) = Zaber_ReadPosition(this.devices(2)); 
         end
         
+        function moveStageRelId(this, id, rel)
+            Zaber_MoveRel(this.devices(id), rel);
+            this.curPos(id) = Zaber_ReadPosition(this.devices(id));
+        end
+        
+        function moveStageAbsId(this, id, pos)
+            Zaber_MoveAbs(this.devices(id), pos);
+            this.curPos(id) = Zaber_ReadPosition(this.devices(id));
+        end
+        
         function moveStageAbs(this, pos)
             Zaber_MoveAbs(this.devices(1), pos(1));
             Zaber_MoveAbs(this.devices(2), pos(2));

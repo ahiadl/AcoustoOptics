@@ -13,11 +13,13 @@ classdef Algo < handle
         len;
         freq;
         hadamard;
+        general;
         
         data
         reshapedData
         Wn
         
+        measLimit
         timeTable;
         res;
     end
@@ -39,22 +41,19 @@ classdef Algo < handle
             uVars.fSclk             = [];
             uVars.timeToSample      = [];
             uVars.extClkDcyc        = []; % [%]
-            
+            uVars.envDC             = [];
+            uVars.envUS             = [];
             uVars.useQuant          = false;
             uVars.quantTime         = [];
             uVars.fastAnalysis      = false;
             uVars.useGPU            = false;
             uVars.useHadamard       = false;
             
-            % Do i need this? should be tested on a PC with GPU
-            % see if gather takes long time.
-%             uVars.exportRawData.rawData       = false;
-%             uVars.exportRawData.netSignal     = false;
-%             uVars.exportRawData.deMultiplexed = false;
-%             uVars.exportRawData.reshape       = false;
-%             uVars.exportRawData.FFT           = false;
-
-            %uVars.gReq              = Algo.createGraphicRequest();
+            uVars.export.netSignal      = true;
+            uVars.export.deMultiplexed  = true;
+            uVars.export.reshapedSignal = true;
+            uVars.export.fftRes         = true;
+            uVars.export.usCompCmplx    = true;
         end
        
         function gReq = createGraphicRequest()
@@ -65,7 +64,12 @@ classdef Algo < handle
     
     methods
         function this = Algo()
-            this.initTimeTable();          
+            this.initTimeTable();  
+            this.measLimit = 20;
+        end
+        
+        function setMeasLimit(this, limit)
+           this.measLimit = limit; 
         end
         
         function initTimeTable(this)
@@ -79,7 +83,9 @@ classdef Algo < handle
             this.timeTable.CopyNetSignal            = 0;
             this.timeTable.ExtractNetSignal         = 0;
             
-            this.timeTable.deMultiplex              = 0;
+            this.timeTable.deMulReshape1            = 0;
+            this.timeTable.deMultiplex              = 0; 
+            this.timeTable.deMulReshape2            = 0;
             this.timeTable.CopyDeMultiplexed        = 0;
             
             this.timeTable.ReshapeQuant             = 0;
@@ -94,13 +100,13 @@ classdef Algo < handle
             this.timeTable.totalFastAnalysis        = 0;
             this.timeTable.FFT                      = 0;
             this.timeTable.copyFFT                  = 0;
-            this.timeTable.meanFFT                  = 0;
-            this.timeTable.extractFreq              = 0;
-            this.timeTable.squeezeCmplxPhi          = 0;
-            this.timeTable.absPhi                   = 0;
-            this.timeTable.PowerSpectrunm           = 0;
-            this.timeTable.ChAvg                    = 0;
-            this.timeTable.QuantAvg                 = 0;
+            this.timeTable.savePhases               = 0;
+            this.timeTable.meanQuantFFT             = 0;
+            this.timeTable.meanChFFT                = 0;
+            this.timeTable.fftShift                 = 0;
+            this.timeTable.createFit                = 0;
+            this.timeTable.subFit                   = 0;
+            this.timeTable.phiExtract               = 0;
             this.timeTable.SignalProcessing         = 0;
             
             this.timeTable.FullAnalysis             = 0;
@@ -121,22 +127,35 @@ classdef Algo < handle
            this.uVars.fSclk             = user.fSclk;
            this.uVars.fExtClk           = user.fExtClk; %raw fs
            this.uVars.extClkDcyc        = user.extClkDcyc;
+           this.uVars.envDC             = user.envDC;
+           this.uVars.envUS             = user.envUS;
+           this.uVars.envHar            = user.envHar;
            this.uVars.useQuant          = user.useQuant;
            this.uVars.quantTime         = user.quantTime;
            this.uVars.fastAnalysis      = user.fastAnalysis;
            this.uVars.useGPU            = user.useGPU;
-%            this.uVars.exportRawData     = user.exportRawData;
            this.uVars.useHadamard       = user.useHadamard;
-           
+           this.uVars.longMeas          = user.longMeas;
+           this.uVars.export            = user.export;
+
            vars = this.calcDimensions();
+        end
+        
+        function calcGeneral(this)
+           this.general.longMeas = this.uVars.longMeas;  
+           this.general.fitToShift = true;
+           this.general.useGPU = this.uVars.useGPU;
+           this.general.useHadamard = this.uVars.useHadamard;
            
-%            this.graphics.gReq = user.gReq;
-%            this.graphics.obj.setGlobalReq(user.gReq);
-%            this.setGraphicsDynamicVars();
-           
+           this.general.export.netSignal      = this.uVars.export.netSignal      && ~this.general.longMeas;
+           this.general.export.deMultiplexed  = this.uVars.export.deMultiplexed  && ~this.general.longMeas ;
+           this.general.export.reshapedSignal = this.uVars.export.reshapedSignal && ~this.general.longMeas;
+           this.general.export.fftRes         = this.uVars.export.fftRes         && ~this.general.longMeas;
+           this.general.export.usCompCmplx    = this.uVars.export.usCompCmplx    && ~this.general.longMeas;
         end
         
         function vars = calcDimensions(this)
+            this.calcGeneral();
             this.calcGeometry();
             this.calcExtClkDim();
             this.calcUSSignalDim();
@@ -228,68 +247,74 @@ classdef Algo < handle
         end
         
         function calcSamples(this)
-                if ~this.uVars.useQuant
-                    this.uVars.quantTime = this.uVars.timeToSample;
-                end
-            
-                this.samples.samplesPerSin         = this.digitizer.fs / this.usSignal.fSin;
-                this.samples.samplesPerPulse       = this.samples.samplesPerSin * this.usSignal.cycInPulse;
-%                 this.samples.samplesPerTrain       = floor(this.digitizer.fs / this.usSignal.fTrain);
-                this.samples.samplesPerTrain       = this.usSignal.SclkSamplesInTrain / (this.extClk.fSclk / this.digitizer.fs);
-                
-                this.samples.numOfTrains     = ceil(this.uVars.timeToSample * this.usSignal.fTrain);
-                this.samples.trainsPerQuant  = ceil(this.uVars.quantTime *this.usSignal.fTrain);
-                this.samples.numOfTrains     = ceil(this.samples.numOfTrains/this.samples.trainsPerQuant)*this.samples.trainsPerQuant;
-                this.samples.numOfQuant      = this.samples.numOfTrains / this.samples.trainsPerQuant;
-                
-                this.samples.samplesPerQuant       = this.samples.trainsPerQuant*this.samples.samplesPerTrain;
-                this.samples.samplesPerPos         = this.samples.samplesPerPulse * this.samples.trainsPerQuant;
-                this.samples.prePhantomSamples     = ceil( (this.geometry.distFromPhantom / this.geometry.c) * this.digitizer.fs );
-                this.samples.inPhantomPropSamples  = this.samples.samplesPerTrain - this.samples.samplesPerPulse; 
-                this.samples.samplesPerSignal      = this.samples.samplesPerTrain * this.samples.numOfTrains;
-                if this.uVars.useHadamard
-                    this.samples.samplesPerMeas        = this.uVars.preTriggerSamples + this.samples.prePhantomSamples + this.samples.inPhantomPropSamples + this.samples.samplesPerSignal;
-                else
-                    this.samples.samplesPerMeas        = this.uVars.preTriggerSamples + this.samples.prePhantomSamples + this.samples.samplesPerSignal;
-                end
-                this.samples.samplesPerSignalAllCh = this.samples.samplesPerSignal * this.uVars.channels;
-                this.samples.samplesPerMeasAllCh   = this.samples.samplesPerMeas   * this.uVars.channels;
-            
-                this.samples.numOfPos        = this.samples.samplesPerTrain / this.samples.samplesPerPulse;
-                this.samples.samplesPerZAxis = this.samples.numOfPos * this.samples.samplesPerPulse;
-                
-                if this.uVars.useHadamard
-                    A = speye(this.samples.numOfTrains);
-%                     eye(this.samples.numOfTrains);
-                    % create sparse matrix for single vec demultiplexing
-                    % (single sVec)
-                    this.hadamard.nSVecPad = this.samples.numOfPos * this.samples.samplesPerPulse;
-                    this.hadamard.singleSVecDeMulMat = zeros(this.samples.numOfPos, this.hadamard.nSVecPad);
-                    this.hadamard.singleSVecDeMulMat(:,1:(this.samples.samplesPerPulse):end) = this.hadamard.sMatInv;
-                                        
-                    % Expand the matrix to keep order of demultiplexing
-                    this.hadamard.singleTrainMat = kron( flip(this.hadamard.singleSVecDeMulMat, 1), ones(  this.samples.samplesPerPulse,1) ); 
-%                     this.hadamard.singleTrainMat = kron( this.hadamard.singleSVecDeMulMat, ones(  this.samples.samplesPerPulse,1) ); 
-                    
-                    % create sparse matrix for a single train
-                    this.hadamard.singleTrainDeMulMat = zeros(this.hadamard.nSVecPad, this.hadamard.nSVecPad);
-                    for i = 1:this.samples.samplesPerPulse
-                        this.hadamard.singleTrainDeMulMat( i:this.samples.samplesPerPulse:end, :) = ...
-                                                            circshift(this.hadamard.singleTrainMat( i:this.samples.samplesPerPulse:end, :), (i-1), 2);
-                    end
+            if ~this.uVars.useQuant
+                this.uVars.quantTime = this.uVars.timeToSample;
+            end
 
-                    % expand the matrix to demultiplex all of the trains
-                    this.hadamard.invSMatFullSig = kron( sparse(A),...
-                                                         sparse(this.hadamard.singleTrainDeMulMat));
-                                                     
-%                     this.hadamard.invSMatFullSig = kron( sparse( A ),...
-%                                                          sparse( this.hadamard.singleTrainDeMulMat ) );
-                    if this.uVars.useGPU
-                        this.hadamard.invSMatFullSig = gpuArray(this.hadamard.invSMatFullSig);
-                    end
+            this.samples.samplesPerSin         = this.digitizer.fs / this.usSignal.fSin;
+            this.samples.samplesPerPulse       = this.samples.samplesPerSin * this.usSignal.cycInPulse;
+%                 this.samples.samplesPerTrain       = floor(this.digitizer.fs / this.usSignal.fTrain);
+            this.samples.samplesPerTrain       = this.usSignal.SclkSamplesInTrain / (this.extClk.fSclk / this.digitizer.fs);
+
+            this.samples.numOfTrains      = ceil(this.uVars.timeToSample * this.usSignal.fTrain);
+            this.samples.trainsPerQuant   = ceil(this.uVars.quantTime *this.usSignal.fTrain);
+            this.samples.numOfTrains      = ceil(this.samples.numOfTrains/this.samples.trainsPerQuant)*this.samples.trainsPerQuant;
+            this.samples.numOfTrainsAllCh = this.samples.numOfTrains * this.uVars.channels;
+            this.samples.numOfQuant       = this.samples.numOfTrains / this.samples.trainsPerQuant;
+            
+            this.samples.samplesPerQuant       = this.samples.trainsPerQuant*this.samples.samplesPerTrain;
+            this.samples.samplesPerPos         = this.samples.samplesPerPulse * this.samples.trainsPerQuant; %this is practically perPosPerQuant
+            this.samples.prePhantomSamples     = ceil( (this.geometry.distFromPhantom / this.geometry.c) * this.digitizer.fs );
+            this.samples.inPhantomPropSamples  = this.samples.samplesPerTrain - this.samples.samplesPerPulse; 
+            this.samples.samplesPerSignal      = this.samples.samplesPerTrain * this.samples.numOfTrains;
+            
+            if this.uVars.useHadamard
+                this.samples.samplesPerMeas = this.uVars.preTriggerSamples + this.samples.prePhantomSamples + this.samples.inPhantomPropSamples + this.samples.samplesPerSignal;
+                this.samples.preCut         = this.uVars.preTriggerSamples + this.samples.prePhantomSamples + this.samples.inPhantomPropSamples;
+            else
+                this.samples.samplesPerMeas = this.uVars.preTriggerSamples + this.samples.prePhantomSamples + this.samples.samplesPerSignal;
+                this.samples.preCut         = this.uVars.preTriggerSamples + this.samples.prePhantomSamples;
+            end
+            this.samples.signalInd = this.samples.preCut + this.samples.samplesPerSignal;
+            
+            this.samples.samplesPerSignalAllCh = this.samples.samplesPerSignal * this.uVars.channels;
+            this.samples.samplesPerMeasAllCh   = this.samples.samplesPerMeas   * this.uVars.channels;
+
+            this.samples.numOfPos        = this.samples.samplesPerTrain / this.samples.samplesPerPulse;
+            this.samples.samplesPerZAxis = this.samples.numOfPos * this.samples.samplesPerPulse;
+            
+            this.timing.trueQuantTime = this.samples.samplesPerQuant /this.uVars.fExtClk;
+            this.timing.trainTime = this.samples.samplesPerTrain / this.uVars.fExtClk;
+            
+            if this.general.longMeas 
+               this.samples.trainsPerLimit = floor(this.measLimit/this.timing.trainTime);
+               this.samples.trainsPerChunk = this.uVars.channels * this.samples.trainsPerLimit;
+               this.samples.numOfChunks    = ceil(this.samples.numOfTrainsAllCh/this.samples.trainsPerChunk);
+               this.samples.trainsInLastChunk = this.samples.numOfTrainsAllCh - (this.samples.numOfChunks-1)*this.samples.trainsPerChunk;
+            end
+            
+            if this.uVars.useHadamard  
+                % create sparse matrix for single vec demultiplexing (single sVec)
+                this.hadamard.nSVecPad = this.samples.numOfPos * this.samples.samplesPerPulse; %samplesPerTrain
+                this.hadamard.singleSVecDeMulMat = zeros(this.samples.numOfPos, this.hadamard.nSVecPad);
+                this.hadamard.singleSVecDeMulMat(:,1:(this.samples.samplesPerPulse):end) = this.hadamard.sMatInv;
+
+                % Expand the matrix to keep order of demultiplexing
+                this.hadamard.singleTrainMat = kron( flip(this.hadamard.singleSVecDeMulMat, 1), ones(  this.samples.samplesPerPulse,1) );
+
+                % create sparse matrix for a single train
+                this.hadamard.singleTrainDeMulMat = zeros(this.hadamard.nSVecPad, this.hadamard.nSVecPad);
+                for i = 1:this.samples.samplesPerPulse
+                    this.hadamard.singleTrainDeMulMat( i:this.samples.samplesPerPulse:end, :) = ...
+                                                        circshift(this.hadamard.singleTrainMat( i:this.samples.samplesPerPulse:end, :), (i-1), 2);
                 end
                 
+                this.hadamard.singleTrainDeMulMat = single(this.hadamard.singleTrainDeMulMat);
                 
+                if this.uVars.useGPU
+                    this.hadamard.singleTrainDeMulMat = gpuArray(this.hadamard.singleTrainDeMulMat);
+                end
+            end
         end
         
         function calcTiming(this)
@@ -306,13 +331,23 @@ classdef Algo < handle
             
             this.timing.tExtClk    = (0:1:(this.extClk.extClkSigSamples-1)    ) * this.timing.dtSclk;
             this.timing.tUS        = (0:1:(this.usSignal.SclkSamplesInTrain-1)) * this.timing.dtSclk;
-            this.timing.tPulseVec  = (0:1:this.samples.samplesPerPulse  - 1)*this.timing.dts;
-            this.timing.tTrainMeas = (0:1:this.samples.samplesPerTrain  - 1)*this.timing.dts;
-            this.timing.tSigVec    = (0:1:this.samples.samplesPerSignal - 1)*this.timing.dts;
-            this.timing.tMeasVec   = (0:1:this.samples.samplesPerMeas   - 1)*this.timing.dts;
-            this.timing.tPosVec    = (0:1:this.samples.samplesPerPos    - 1)*this.timing.dts;
-            this.timing.tAcqVec    = (0:1:this.digitizer.samplesPerAcq  - 1)*this.timing.dts;
-            this.timing.tQuantVec  = (0:1:this.samples.samplesPerQuant  - 1)*this.timing.dts;
+            if ~this.general.longMeas
+                this.timing.tPulseVec  = (0:1:this.samples.samplesPerPulse  - 1)*this.timing.dts;
+                this.timing.tTrainMeas = (0:1:this.samples.samplesPerTrain  - 1)*this.timing.dts;
+                this.timing.tSigVec    = (0:1:this.samples.samplesPerSignal - 1)*this.timing.dts;
+                this.timing.tMeasVec   = (0:1:this.samples.samplesPerMeas   - 1)*this.timing.dts;
+                this.timing.tPosVec    = (0:1:this.samples.samplesPerPos    - 1)*this.timing.dts;
+                this.timing.tAcqVec    = (0:1:this.digitizer.samplesPerAcq  - 1)*this.timing.dts;
+                this.timing.tQuantVec  = (0:1:this.samples.samplesPerQuant  - 1)*this.timing.dts;
+            else
+                this.timing.tPulseVec  = [];
+                this.timing.tTrainMeas = [];
+                this.timing.tSigVec    = [];
+                this.timing.tMeasVec   = [];
+                this.timing.tPosVec    = [];
+                this.timing.tAcqVec    = [];
+                this.timing.tQuantVec  = [];
+            end
         end
         
         function calcDigitizerParams(this)
@@ -348,9 +383,62 @@ classdef Algo < handle
             this.freq.frequencyBarShifted = [this.freq.frequencyBar( (this.samples.samplesPerPos/2+1):end ) - this.digitizer.fs,...
                                              this.freq.frequencyBar( 1:(this.samples.samplesPerPos/2) )] ;
             this.freq.df                  = abs(this.freq.frequencyBar(2) - this.freq.frequencyBar(1));
-            this.freq.fSinIdx             = (this.usSignal.fSin / this.digitizer.fs) * this.samples.samplesPerPos + 1;
-            this.freq.fs                  = this.extClk.fSclk;
-            this.Wn = exp((-1j*(2*pi)/this.samples.samplesPerPos)*(this.freq.fSinIdx-1)*(0:(this.samples.samplesPerPos-1)))';
+            this.freq.fs                  = this.extClk.fExtClk;
+%             this.Wn = exp((-1j*(2*pi)/this.samples.samplesPerPos)*(this.freq.fUSIdx-1)*(0:(this.samples.samplesPerPos-1)))';
+            this.freq.envDC  =  this.uVars.envDC;
+            this.freq.envUS  =  this.uVars.envUS;
+            this.freq.envHar =  this.uVars.envHar;
+            this.freq.samplesFFT = this.samples.samplesPerPos;
+            this.freq.fUS = this.usSignal.fSin;
+            
+            this.freq.fIdxPos = ((this.freq.fUS * this.freq.samplesFFT)/this.freq.fs)+1;
+            this.freq.fIdxNeg = ( ( (this.freq.fUS + this.freq.fs/2) * this.freq.samplesFFT)/this.freq.fs)+1;
+            this.freq.DcIdx   = 1;
+            
+            this.freq.shiftFactor = floor(this.freq.samplesFFT/2);
+            
+            this.freq.fIdxPosShift = this.freq.fIdxPos + this.freq.shiftFactor;
+            this.freq.fIdxNegShift = this.freq.fIdxNeg - this.freq.shiftFactor;
+            this.freq.DcIdxShift   = this.freq.DcIdx   + this.freq.shiftFactor;
+            this.freq.envUsIdx     = sum(abs(this.freq.frequencyBar-this.freq.fUS) < this.freq.envUS);
+            this.freq.envDcIdx     = sum(abs(this.freq.frequencyBar) < this.freq.envDC);
+            this.freq.envHarIdx    = sum(abs(this.freq.frequencyBar - this.freq.fs) < this.freq.envHar); 
+            if this.general.fitToShift
+                this.freq.fUSIdx = this.freq.fIdxPosShift;
+            else
+                this.freq.fUSIdx = this.freq.fIdxPos;
+            end
+            
+            this.freq.fitIdxShift = [ this.freq.envHarIdx                          :(this.freq.fIdxNegShift - this.freq.envUsIdx),...
+                                     (this.freq.fIdxNegShift + this.freq.envUsIdx) :(this.freq.DcIdxShift   - this.freq.envDcIdx),...
+                                     (this.freq.DcIdxShift   + this.freq.envDcIdx) :(this.freq.fIdxPosShift - this.freq.envUsIdx), ...
+                                     (this.freq.fIdxPosShift + this.freq.envUsIdx) : this.freq.samplesFFT   - this.freq.envHarIdx];
+            
+            this.freq.fitIdx = [ this.freq.envDcIdx                      : (this.freq.fIdxPos    - this.freq.envUsIdx),...
+                                (this.freq.fIdxPos + this.freq.envUsIdx) : (this.freq.fIdxNeg    - this.freq.envUsIdx),...
+                                (this.freq.fIdxNeg + this.freq.envUsIdx) : (this.freq.samplesFFT - this.freq.envDcIdx)];
+            
+                            
+            if this.uVars.useGPU
+                this.freq.frequencyBar        = gpuArray(this.freq.frequencyBar);
+                this.freq.frequencyBarShifted = gpuArray(this.freq.frequencyBarShifted);
+                this.freq.fitIdxShift         = gpuArray(this.freq.fitIdxShift);
+                this.freq.fitIdx              = gpuArray(this.freq.fitIdx);
+            end
+            
+            this.freq.linearft = fittype(  {'1',...
+                                            'x',...
+                                            '(1/2)*(3*x^2 - 1)',...
+                                            '(1/2)*(5*x^3 - 3*x)',...
+                                            '(1/8)*(35*x^4 - 30*x^2 + 3)',...
+                                            '(1/8)*(63*x^5 - 70*x^3 + 15*x)',...
+                                            '(1/16)*(231*x^6 - 315*x^4 + 105*x^2 - 5)',...
+                                            '(1/16)*(429*x^7 - 693*x^5 + 315*x^3 - 35*x)',...
+                                            '(1/128)*(6435*x^8 - 12012*x^6 + 6930*x^4 - 1260*x^2 + 35)',...
+                                            '(1/128)*(12155*x^9 - 25740*x^7 + 18018*x^5 - 4620*x^3 + 315*x)',...
+                                            '(1/256)*(46189*x^10 - 109395*x^8 + 90090*x^6 - 30030*x^4 + 3465*x^2 - 63)'});
+                                        
+            warning('off','curvefit:fit:equationBadlyConditioned');
         end
         
         function [sigData, clkData] = createSignalsForfGen(this)
@@ -387,7 +475,8 @@ classdef Algo < handle
             % algorith, slowdown.
             
             this.timeTable.FullAnalysis = tic;
-      
+            this.res = [];
+            
             this.timeTable.ExtractNetSignal = tic;
             this.extractNetSignal();
             this.timeTable.ExtractNetSignal = toc(this.timeTable.ExtractNetSignal);
@@ -405,67 +494,73 @@ classdef Algo < handle
             this.timeTable.SignalProcessing = toc(this.timeTable.SignalProcessing);
 
             res = this.res;
-
+            
              %all data in res is CPU
             this.data = [];
+            if this.general.longMeas
+                this.res = [];
+            end
             this.timeTable.FullAnalysis = toc(this.timeTable.FullAnalysis);
-            
         end
         
         function extractNetSignal(this)
             % rawData(input)  - [ch x samplesPerAcq]
             % rawData(output) - [ch x samplesPerSignal]
            
-            % Chop unneccesarry cycles
-            digiPreSamplesIdx = this.digitizer.preTriggerSamples+1;
-            propPreSamplesIdx = this.samples.prePhantomSamples +1;
-            propInPhantomIdx  = this.samples.inPhantomPropSamples+1;
+            % Chop unneccesarry cycles 
+%             digiPreSamplesIdx = this.digitizer.preTriggerSamples;
+%             propPreSamplesIdx = this.samples.prePhantomSamples;
+%             propInPhantomIdx  = this.samples.inPhantomPropSamples;
+%             
+%             if this.uVars.useHadamard
+%                 preCut    = digiPreSamplesIdx + propPreSamplesIdx + propInPhantomIdx;
+%                 signalInd = preCut + this.samples.samplesPerSignal;
+%             else
+%                 preCut    = digiPreSamplesIdx + propPreSamplesIdx;
+%                 signalInd = preCut + this.samples.samplesPerSignal;
+%             end
+            this.data = this.data(:,this.samples.preCut+1:this.samples.signalInd);
             
-            this.timeTable.CopyMeasSignal1 = tic;
-            this.res.measSignal = this.data(:, 1:this.samples.samplesPerMeas);
-            this.timeTable.CopyMeasSignal1 = toc(this.timeTable.CopyMeasSignal1);
-            
-            this.timeTable.CutDigiPreSamples = tic;
-            this.data = this.data(:,digiPreSamplesIdx:end); % Card Bug 
-            this.timeTable.CutDigiPreSamples = toc(this.timeTable.CutDigiPreSamples);
-            
-            this.timeTable.CutPropPreSamples = tic;
-            this.data      = this.data(:,propPreSamplesIdx:end); % Spread untill first pulse hitting the phantom
-            this.timeTable.CutPropPreSamples = toc(this.timeTable.CutPropPreSamples);
-            
-            if this.uVars.useHadamard
-                this.timeTable.CutInPhantopmPropSamples = tic;
-                this.data = this.data(:,propInPhantomIdx:end);
-                this.timeTable.CutInPhantopmPropSamples = toc(this.timeTable.CutInPhantopmPropSamples);
+            if this.general.export.netSignal
+                this.timeTable.CopyNetSignal = tic;
+                this.res.netSignal = gather(this.data);
+                this.timeTable.CopyNetSignal = toc(this.timeTable.CopyNetSignal);
             end
-            
-            this.timeTable.CutPostSamples = tic;
-            this.data = this.data(:,1:this.samples.samplesPerSignal); % extra trains to fill a buffer
-            this.timeTable.CutPostSamples = toc(this.timeTable.CutPostSamples);
-            
-            this.timeTable.CopyNetSignal = tic;
-            this.res.netSignal = gather(this.data);
-            this.timeTable.CopyNetSignal = toc(this.timeTable.CopyNetSignal);
 
         end
         
         function demultiplexSignal(this)
+            this.timeTable.deMulReshape1 = tic;
+            this.data = reshape(this.data', this.samples.samplesPerTrain, this.samples.numOfTrainsAllCh);
+            this.timeTable.deMulReshape1 = toc(this.timeTable.deMulReshape1);
             
             this.timeTable.deMultiplex = tic;
-            this.data = (this.hadamard.invSMatFullSig * double(this.data'))';
-            this.timeTable.deMultiplexed = toc(this.timeTable.deMultiplex);
+            if this.general.longMeas
+                
+                for i=1:this.samples.numOfChunks
+                    if i == this.samples.numOfChunks
+                        this.data(:, (i-1)*this.samples.trainsPerChunk+1: end) =...
+                            this.hadamard.singleTrainDeMulMat * this.data(:, (i-1)*this.samples.trainsPerChunk+1: end);
+                    else
+                        this.data(:, (i-1)*this.samples.trainsPerChunk+1: i*this.samples.trainsPerChunk) =...
+                            this.hadamard.singleTrainDeMulMat * this.data(:, (i-1)*this.samples.trainsPerChunk+1: i*this.samples.trainsPerChunk);
+                    end
+                end
+            else
+                this.data = (this.hadamard.singleTrainDeMulMat * this.data);
+            end
+            this.timeTable.deMultiplex = toc(this.timeTable.deMultiplex);
+            
+            this.timeTable.deMulReshape2 = tic;
+            this.data = reshape(this.data, this.samples.samplesPerSignal, this.digitizer.channels)';
+            this.timeTable.deMulReshape2 = toc(this.timeTable.deMulReshape2);
             
             this.timeTable.CopyDeMultiplexed = tic;
-            this.res.deMultiplexed = gather(this.data);
+            if this.general.export.deMultiplexed
+                this.res.deMultiplexed = gather(this.data);
+            end
             this.timeTable.CopyDeMultiplexed = toc(this.timeTable.CopyDeMultiplexed);
-            
-            
-%             figure();
-%             plot(this.data())
-%             if this.graphics.gReq.validStruct.deMul
-%                 this.graphics.obj.plotSignal('deMul', this.timing.tSigVec*1e6, this.data) 
-%             end
-            
+                       
         end
         
         function reshapeSignal(this)
@@ -509,76 +604,151 @@ classdef Algo < handle
                 this.timeTable.Reshape3 = toc(this.timeTable.Reshape3);                           
                  
                 this.timeTable.copyReshaped = tic;
-                this.res.reshapedSignal = gather(this.data);
+                if this.general.export.reshapedSignal
+                    this.res.reshapedSignal = gather(this.data);
+                end
                 this.timeTable.copyReshaped = toc(this.timeTable.copyReshaped);
         end
         
         function signalProcessing(this)
-            % signal(input)      - [quants x ch x samplesPerPos x numOfPos]
-            % fftRes(output)     - [quants x ch x samplesPerPos x numOfPos]
-            % qAvgFFT(output)    - [1 x ch x samplesPerPos x numOfPos]
-            % phiChCmplx(output) - [quants x ch x numOfPos]
-            % phiCh(output)      - [quants x ch x numOfPos]
-            % phiQuant(output)   - [quant x numOfPos]
-            % phi(output)        - [numOfPos]
+            % data(input)              - [quants x ch x samplesPerPos x numOfPos]
+            % fftRes(output)           - [quants x ch x samplesPerPos x numOfPos]
+            % usCompCmplx(output)      - [quants x ch x numOfPos]
+            % qAvgChFFT(output)        - [ch x samplesPerPos x numOfPos]
+            % unFittedFFT(output)      - [samplesPerPos x numOfPos]
+            % unFittedFFTShift(output) - [samplesPerPos x numOfPos]
+            % fitModel(output)         - [samplesPerPos x numOfPos]
+            % fittedFFT(output)        - [samplesPerPos x numOfPos]
+            % phi(output)              - [1 x numOfPos]
             
-            if this.uVars.fastAnalysis
-                this.timeTable.totalFastAnalysis = tic;
-                for k = 1:this.samples.numOfQuant
-                    for j = 1:this.digitizer.channels
-                        for i=1:this.samples.numOfPos
-                        a = tic;
-                        this.res.phiCh(k,j,i) = (2./this.samples.samplesPerPos) * abs(reshape(this.data(k,j,:,i), 1, this.samples.samplesPerPos, []) * this.Wn);
-                        this.timeTable.fastAnalysis(i) = toc(a);
-                        end
-                    end
-                end
-                this.timeTable.totalFastAnalysis = toc(this.timeTable.totalFastAnalysis); 
-            else
-                this.timeTable.FFT = tic;
-                this.data = (2./this.samples.samplesPerPos) * fft(cast(this.data, 'single'),[],3); %casting is not needed, already single
-                this.timeTable.FFT = toc(this.timeTable.FFT); 
+            this.timeTable.FFT = tic;
+            this.data = (2./this.samples.samplesPerPos) * fft(this.data,[],3);
 
-                this.timeTable.copyFFT = tic;
+            this.timeTable.FFT = toc(this.timeTable.FFT);
+
+            this.timeTable.copyFFT = tic;
+            if this.general.export.fftRes
                 this.res.fftRes = gather(this.data);
-                this.timeTable.copyFFT = toc(this.timeTable.copyFFT);
-                
-                this.timeTable.meanFFT = tic;
-                this.res.qAvgFFT = mean(abs(this.res.fftRes), 1);
-                this.timeTable.meanFFT = toc(this.timeTable.meanFFT);
-                
-                this.timeTable.PowerSpectrunm = tic;
-
-                this.timeTable.extractFreq = tic;
-                this.res.phiChCmplx = gather(this.data(:,:,this.freq.fSinIdx,:));
-                this.timeTable.extractFreq = toc(this.timeTable.extractFreq);
-
-                this.timeTable.squeezeCmplxPhi = tic;
-                this.res.phiChCmplx = permute(this.res.phiChCmplx, [1,2,4,3]);
-                this.timeTable.squeezeCmplxPhi = toc(this.timeTable.squeezeCmplxPhi);
-                
-                this.timeTable.absPhi = tic;
-                this.res.phiCh = abs(this.res.phiChCmplx); %TODO: square?
-                this.timeTable.absPhi = toc(this.timeTable.absPhi);
-
-                this.timeTable.PowerSpectrunm = toc(this.timeTable.PowerSpectrunm);
             end
+            this.timeTable.copyFFT = toc(this.timeTable.copyFFT);
+            
+            this.timeTable.savePhases = tic;
+            if this.general.export.usCompCmplx
+                this.res.usCompCmplx = squeeze(this.data(:,:, this.freq.fIdxPos, :)); %quite large
+            end
+            this.timeTable.savePhases = toc(this.timeTable.savePhases);
+            
+            this.timeTable.meanQuantFFT = tic;
+            this.res.qAvgChFFT = squeeze(mean(abs(this.data).^2, 1));
+            this.timeTable.meanQuantFFT = toc(this.timeTable.meanQuantFFT);
+            
+%             if ~this.general.longMeas
+                this.timeTable.meanChFFT = tic;
+                this.res.unFittedFFT = squeeze(mean(this.res.qAvgChFFT, 1));
+                this.timeTable.meanChFFT = toc(this.timeTable.meanChFFT);
 
-            this.timeTable.ChAvg = tic;
-            this.res.phiQuant = gather(permute(mean(this.res.phiCh,2), [1,3,2]));    
-            this.timeTable.ChAvg = toc(this.timeTable.ChAvg);   
+                this.timeTable.fftShift = tic;
+                this.res.unFittedFFTShift = fftshift(this.res.unFittedFFT, 1);
+                this.timeTable.fftShift = toc(this.timeTable.fftShift);
+
+                this.timeTable.createFit = tic;                  
+                this.res.fitModel = this.calcFittedFFT();
+                this.timeTable.createFit = toc(this.timeTable.createFit);
+
+                this.timeTable.subFit = tic;
+                if this.general.fitToShift
+                    this.res.fittedFFT = this.res.unFittedFFTShift - this.res.fitModel;
+                else
+                    this.res.fittedFFT = this.res.unFittedFFT - this.res.fitModel;
+                end
+                this.timeTable.subFit = toc(this.timeTable.subFit);
+
+                this.timeTable.phiExtract = tic;
+                this.res.phi = sqrt(abs(this.res.fittedFFT(this.freq.fUSIdx, :)));
+                this.timeTable.phiExtract = toc(this.timeTable.phiExtract);
+%             end
+        end        
+                
+        function res = analyseSplittedData(this, resArr, splitNum)
+            % usCompCmplx(output)      - [quants x ch x numOfPos]
+            % qAvgFFT(output)          - [ch x samplesPerPos x numOfPos]
+            % unFittedFFT(output)      - [samplesPerPos x numOfPos]
+            % unFittedFFTShift(output) - [samplesPerPos x numOfPos]
+            % fitModel(output)         - [samplesPerPos x numOfPos]
+            % fittedFFT(output)        - [samplesPerPos x numOfPos]
+            % phi(output)              - [1 x numOfPos]
             
-            this.timeTable.QuantAvg = tic;
-            this.res.phi    = gather(squeeze(mean(this.res.phiQuant,1)));
-            this.res.phiStd = gather(squeeze(std(this.res.phiQuant, 0 ,1))); 
-            this.timeTable.QuantAvg = toc(this.timeTable.QuantAvg);        
+            fprintf("ALGO: Analyzing splitted data.\n");
+            this.res = [];
+            splitQAVGFFT = zeros(this.uVars.channels, this.samples.samplesPerPos, this.samples.numOfPos, splitNum);
+            
+            this.timeTable.meanQuantFFT = tic;
+            for i = 1:splitNum
+                splitQAVGFFT(:,:,:,i) = resArr(i).qAvgChFFT;
+            end
+            this.res.qAvgChFFT          = mean(splitQAVGFFT, 4);
+            this.timeTable.meanQuantFFT = toc(this.timeTable.meanQuantFFT);
+            
+            this.timeTable.meanChFFT = tic;
+            this.res.unFittedFFT     = squeeze(mean(this.res.qAvgChFFT, 1));
+            this.timeTable.meanChFFT = toc(this.timeTable.meanChFFT);
+            
+            this.timeTable.fftShift   = tic;
+            this.res.unFittedFFTShift = fftshift(this.res.unFittedFFT, 1);
+            this.timeTable.fftShift   = toc(this.timeTable.fftShift);
+            
+            this.timeTable.createFit = tic;  
+            this.res.fitModel        = this.calcFittedFFT();
+            this.timeTable.createFit = toc(this.timeTable.createFit);
+            
+            this.timeTable.subFit = tic;
+            if this.general.fitToShift
+                this.res.fittedFFT = this.res.unFittedFFTShift - this.res.fitModel;
+            else
+                this.res.fittedFFT = this.res.unFittedFFT - this.res.fitModel;
+            end
+            this.timeTable.subFit = toc(this.timeTable.subFit);
+            
+            this.timeTable.phiExtract = tic;
+            this.res.phi = sqrt(abs(this.res.fittedFFT(this.freq.fUSIdx, :)));
+            this.timeTable.phiExtract = toc(this.timeTable.phiExtract);
+            
+            res = this.res;
         end
         
-        function speckleDecorrelation(this)
+        function fittedData = calcFittedFFT(this)
+            fittedData = zeros(size(this.res.unFittedFFT));
             
+            if this.general.useGPU
+                fittedData = gpuArray(fittedData);
+            end 
             
+            if this.general.fitToShift
+                fBar = this.freq.frequencyBarShifted;
+                idxs = this.freq.fitIdxShift;
+                dataToFit = double(this.res.unFittedFFTShift);
+            else
+                fBar = this.freq.frequencyBar;
+                idxs = this.freq.fitIdx;
+                dataToFit = double(this.res.unFittedFFT);
+            end
+            
+            for i = 1:size(fittedData, 2)
+                fitModel = fit(fBar(idxs)', dataToFit(idxs,i), this.freq.linearft);
+                    
+                fittedData(:, i) = fitModel.a + ...
+                    fitModel.b*fBar + ...
+                    fitModel.c*(1/2)*(3*fBar.^2-1) + ...
+                    fitModel.d*(1/2)*(5*fBar.^3-3*fBar) + ...
+                    fitModel.e*(1/8)*(35*fBar.^4-30*fBar.^2+3) + ...
+                    fitModel.f*(1/8)*(63*fBar.^5-70*fBar.^3+15*fBar)+ ...
+                    fitModel.g*(1/16)*(231*fBar.^6-315*fBar.^4+105*fBar.^2-5) + ...
+                    fitModel.h*(1/16)*(429*fBar.^7-693*fBar.^5+315*fBar.^3-35*fBar) + ...
+                    fitModel.k*(1/128)*(6435*fBar.^8 - 12012*fBar.^6 + 6930*fBar.^4 - 1260*fBar.^2 + 35) + ...
+                    fitModel.l*(1/128)*(12155*fBar.^9 - 25740*fBar.^7 + 18018*fBar.^5 - 4620*fBar.^3 + 315*fBar) + ...
+                    fitModel.m*(1/256)*(46189*fBar.^10 - 109395*fBar.^8 + 90090*fBar.^6 - 30030*fBar.^4 + 3465*fBar.^2 - 63);
+            end
         end
-        
         
         function timeTable = getTimeTable(this)
             timeTable = this.timeTable;
@@ -601,6 +771,81 @@ classdef Algo < handle
         
         function setRawData (this, rawData)
             this.data = rawData;
+        end
+        
+        function res = analyseLoadedData(this, resArr, splitNum)
+            % usCompCmplx(output)      - [quants x ch x numOfPos]
+            % qAvgFFT(output)          - [ch x samplesPerPos x numOfPos]
+            % unFittedFFT(output)      - [samplesPerPos x numOfPos]
+            % unFittedFFTShift(output) - [samplesPerPos x numOfPos]
+            % fitModel(output)         - [samplesPerPos x numOfPos]
+            % fittedFFT(output)        - [samplesPerPos x numOfPos]
+            % phi(output)              - [1 x numOfPos]
+            
+            fprintf("ALGO: Analyzing splitted data.\n");
+            this.res = [];
+            splitQAVGFFT = zeros(this.uVars.channels, this.samples.samplesPerPos, this.samples.numOfPos, splitNum);
+            
+            this.timeTable.meanQuantFFT = tic;
+            for i = 1:splitNum
+                splitQAVGFFT(:,:,:,i) = resArr(i).qAvgChFFT;
+            end
+            this.res.qAvgChFFT          = mean(splitQAVGFFT, 4);
+            this.timeTable.meanQuantFFT = toc(this.timeTable.meanQuantFFT);
+            
+            this.res.fitModel        = this.calcFittedFFTNew();
+            
+            this.timeTable.subFit = tic;
+            if this.general.fitToShift
+                this.res.fittedFFT = fftshift(this.res.qAvgChFFT, 2) - this.res.fitModel;
+            else
+                this.res.fittedFFT = this.res.qAvgChFFT - this.res.fitModel;
+            end
+            this.timeTable.subFit = toc(this.timeTable.subFit);
+            
+            this.res.fittedMeanFFT = squeeze(mean( this.res.fittedFFT,1));
+            
+            this.timeTable.phiExtract = tic;
+            this.res.phi = sqrt(abs(this.res.fittedMeanFFT(this.freq.fUSIdx, :)));
+            this.timeTable.phiExtract = toc(this.timeTable.phiExtract);
+            
+            res = this.res;
+        end
+        
+        function fittedData = calcFittedFFTNew(this)
+            fittedData = zeros(size(this.res.qAvgChFFT));
+            
+            if this.general.useGPU
+                fittedData = gpuArray(fittedData);
+            end 
+            
+            if this.general.fitToShift
+                fBar = this.freq.frequencyBarShifted;
+                idxs = this.freq.fitIdxShift;
+                dataToFit = double(fftshift(this.res.qAvgChFFT, 2));
+            else
+                fBar = this.freq.frequencyBar;
+                idxs = this.freq.fitIdx;
+                dataToFit = double(this.res.unFittedFFT);
+            end
+            
+            for i = 1:size(fittedData, 1)
+                for j = 1:size(fittedData, 3)
+                    fitModel = fit(fBar(idxs)', dataToFit(i, idxs, j)', this.freq.linearft);
+
+                    fittedData(i, :, j) = fitModel.a + ...
+                        fitModel.b*fBar + ...
+                        fitModel.c*(1/2)*(3*fBar.^2-1) + ...
+                        fitModel.d*(1/2)*(5*fBar.^3-3*fBar) + ...
+                        fitModel.e*(1/8)*(35*fBar.^4-30*fBar.^2+3) + ...
+                        fitModel.f*(1/8)*(63*fBar.^5-70*fBar.^3+15*fBar)+ ...
+                        fitModel.g*(1/16)*(231*fBar.^6-315*fBar.^4+105*fBar.^2-5) + ...
+                        fitModel.h*(1/16)*(429*fBar.^7-693*fBar.^5+315*fBar.^3-35*fBar) + ...
+                        fitModel.k*(1/128)*(6435*fBar.^8 - 12012*fBar.^6 + 6930*fBar.^4 - 1260*fBar.^2 + 35) + ...
+                        fitModel.l*(1/128)*(12155*fBar.^9 - 25740*fBar.^7 + 18018*fBar.^5 - 4620*fBar.^3 + 315*fBar) + ...
+                        fitModel.m*(1/256)*(46189*fBar.^10 - 109395*fBar.^8 + 90090*fBar.^6 - 30030*fBar.^4 + 3465*fBar.^2 - 63);
+                end
+            end
         end
         
     end

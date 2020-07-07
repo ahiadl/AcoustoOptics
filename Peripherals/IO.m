@@ -40,13 +40,15 @@ classdef IO < handle
         function allocPorts(this, uVars)
             for i =1:length(uVars.port)
                 portAndLine = ['Port', num2str(uVars.port(i)), '/Line', num2str(uVars.line(i))];
-                if uVars.mode(i)
-                    this.s.addDigitalChannel(this.deviceString.ID, portAndLine, 'InputOnly');
-                else
-                    this.s.addDigitalChannel(this.deviceString.ID, portAndLine, 'OutputOnly');
+                if ~this.vars.allocPorts(uVars.port(i), uVars.line(i))
+                    if uVars.mode(i)
+                        this.s.addDigitalChannel(this.deviceString.ID, portAndLine, 'InputOnly');
+                    else
+                        this.s.addDigitalChannel(this.deviceString.ID, portAndLine, 'OutputOnly');
+                    end
+                    this.vars.allocPorts(uVars.port(i), uVars.line(i)) = 1;
+                    this.vars.portsMode(uVars.port(i), uVars.line(i))  = uVars.mode(i);
                 end
-                this.vars.allocPorts(uVars.port(i), uVars.line(i)) = 1;
-                this.vars.portsMode(uVars.port(i), uVars.line(i))  = uVars.mode(i);
             end
         end
         

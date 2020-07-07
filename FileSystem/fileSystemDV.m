@@ -1,4 +1,4 @@
-classdef fileSystemS3D < fileSystem
+classdef fileSystemDV < fileSystem
     
     properties
         
@@ -11,12 +11,13 @@ classdef fileSystemS3D < fileSystem
     end
     
     methods
-        function this = fileSystemS3D(hOwner, subObjHandle)
+        function this = fileSystemDV(hOwner, subObjHandle)
             this@fileSystem(hOwner, subObjHandle)
             this.uVars   = fileSystemS3D.uVarsCreate();
-            this.fsName  = "S3D";
-            this.objName = "3DScan";
-            this.resDirName = "2DResults";
+            this.fsName  = "DV";
+            this.objName = "DeepView";
+            this.resDirName = "TimeResults";
+            this.scanIdentifierSuffixModel = "T=%d";
         end
         
         function setUserVars(this, uVars)
@@ -24,15 +25,14 @@ classdef fileSystemS3D < fileSystem
            setUserVars@fileSystem(this, uVars);
         end
         
-        function configFileSystem(this, secondAxis)
+        function configFileSystem(this)
            configFileSystem@fileSystem(this);
-           this.scanIdentifierSuffixModel =  sprintf("%s-%s", secondAxis, "%.2f");
-           this.hSubFS.setExtVars(this.projPath, "");
+%            this.hSubFS.setExtVars(this.projPath, "");
         end
         
         function saveVarsToDisk(this)
             saveVarsToDisk@fileSystem(this);
-%             this.saveSubFSVarsToDisk();
+%             this.saveSubFSVarsToDisk(); 
         end
     end
 end

@@ -16,14 +16,10 @@ classdef scan3DAO < handle
         
         % Vars
         uVars
-        grid
         s2DVars
         figsVars
         fileSystemVars
-        generalVars
         
-        curPos      %[second]              [mm]
-        curPosIdx   %[secondIdx][#]
         owned
         extStages
     end
@@ -32,25 +28,11 @@ classdef scan3DAO < handle
         function uVars = uVarsCreate()
             uVars.ao         = acoustoOptics.uVarsCreate();
             uVars.s2D        = scan2DAO.uVarsCreate();
-            uVars.figs       = scan3DGraphics.createUserVars();
-            uVars.fileSystem = fileSystemS3D.uVarsCreate();
+            uVars.figs       = templateGraphics.createUserVars();
+            uVars.fileSystem = templateFS.uVarsCreate();
            
-            uVars.grid.repeats   = 1;
+            % add here the vars needed for operation 
             
-            uVars.grid.firstStart   = 0;
-            uVars.grid.firstStride  = 0;
-            uVars.grid.firstEnd     = 0;
-
-            uVars.grid.secondStart  = 0;
-            uVars.grid.secondStride = 0;
-            uVars.grid.secondEnd    = 0;
-            
-            uVars.grid.firstAxis  = 'Y';
-            uVars.grid.secondAxis = 'X';
-            
-            uVars.stages.firstAxStageId  = 1;
-            uVars.stages.secondAxStageId = 2;
-            uVars.stages.stagesOwnedByParent = false;
         end
     end
     
@@ -64,7 +46,7 @@ classdef scan3DAO < handle
             % stages handle must be given as well
             this.sf       = statsFunctions("S3D");
             this.graphics = scan3DGraphics();
-
+            
             if (nargin > 0) && isfield(handles, 'stages')
                 this.stages = handles.stages;
                 this.extStages = true;
@@ -74,11 +56,10 @@ classdef scan3DAO < handle
             end
             
             if (nargin > 0) && isfield(handles, 's2D')
-                this.s2D = handles.s2D;
+                this.s2D = handles.s2d;
             else
                 this.s2D = scan2DAO([], this.stages);
             end 
-            
             
             % this must be here so AO instrreset will not ruin stages
             % connection
@@ -100,8 +81,7 @@ classdef scan3DAO < handle
             % Only in case of internal stages (e.g. running from script and
             % not from GUI).
             % This describes in general which stage belongs to what axis.
-            this.generalVars.stagesOwnedByParent = uVars.stages.stagesOwnedByParent;
-            if ~this.generalVars.stagesOwnedByParent
+            if ~this.extStages
                 this.stages.assignStagesAxes([uVars.grid.firstAxis,        uVars.grid.secondAxis],...
                                              [uVars.stages.firstAxStageId, uVars.stages.secondAxStageId]);
             end
@@ -128,23 +108,13 @@ classdef scan3DAO < handle
             s2DuVars.grid.firstAxis  = uVars.grid.firstAxis;
             s2DuVars.grid.secondAxis = uVars.grid.secondAxis;
             
-            %Stages
-            s2DuVars.stages.moveSecondStage = false;
-            s2DuVars.stages.stagesOwnedByParent = true;
-            
             %Graphics
             s2DuVars.figs = uVars.s2D.figs;
-            
-            s2DuVars.figs.depthIdx = uVars.figs.depthIdx;
-            
+
             s2DuVars.figs.intExt             = uVars.figs.intExt;
             s2DuVars.figs.hOwnerGraphics     = this.graphics;
             s2DuVars.figs.validOwnerGraphics = true;
             s2DuVars.figs.useExtClims        = uVars.figs.normColorsToPlane;
-            
-            s2DuVars.figs.firstAxType = uVars.figs.firstAxType;
-            s2DuVars.figs.depthAxType = uVars.figs.depthAxType;
-            s2DuVars.figs.reopenFigures = uVars.figs.reopenFigures;
             
             s2DuVars.figs.fonts              = uVars.figs.fonts;
             
@@ -185,18 +155,13 @@ classdef scan3DAO < handle
             
             % Misc
             figs.normColorsToPlane = uVars.figs.normColorsToPlane;
-            figs.reopenFigures = uVars.figs.reopenFigures;
             
             % Vectors
             figs.repeats    = uVars.grid.repeats;
+            figs.firstAxis  = this.grid.firstVec;
+            figs.secondAxis = this.grid.secondVec;
+            figs.depthAxis  = this.grid.depthVec;
             
-            figs.firstAxType     = uVars.figs.firstAxType;
-            figs.firstAxisNorm   = this.grid.firstVec;
-            figs.secondAxType    = uVars.figs.firstAxType;
-            figs.secondAxisNorm  = this.grid.secondVec;
-            figs.depthAxType     = uVars.figs.depthAxType;
-            figs.depthAxisNorm   = this.s2DVars.ao.measVars.algo.len.zVecUSRes;
-
             % Labels
             figs.firstAxLabel = uVars.grid.firstAxis;
             figs.secondAxLabe = uVars.grid.secondAxis;
@@ -231,7 +196,13 @@ classdef scan3DAO < handle
             depthLen       = this.grid.depthIdxLen;
             
             repeats    = this.grid.repeats;
+            numOfQuant = this.s2DVars.ao.measVars.algo.samples.numOfQuant;
+            channels   = this.s2DVars.ao.measVars.algo.digitizer.channels;
             
+            this.res.phiChCmplx = zeros(firstAxLen, secondAxLen, depthLen, repeats, numOfQuant, channels);
+            this.res.phiCh      = zeros(firstAxLen, secondAxLen, depthLen, repeats, numOfQuant, channels);
+            this.res.phiQuant   = zeros(firstAxLen, secondAxLen, depthLen, repeats, numOfQuant);
+            this.res.phiStd     = zeros(firstAxLen, secondAxLen, depthLen, repeats);
             this.res.phi        = zeros(firstAxLen, secondAxLen, depthLen, repeats);
             this.res.phiAvg     = zeros(firstAxLen, secondAxLen, depthLen);
             this.res.phiAvgStd  = zeros(firstAxLen, secondAxLen, depthLen);
@@ -239,10 +210,14 @@ classdef scan3DAO < handle
             this.curPosIdx = zeros(1,3);
         end
 
-        function put2DResTo3DResultsArray(this, res2D)
+        function putAOResTo3DResultsArray(this, res2D)
+            this.res.phiChCmplx( :, this.curPosIdx, :, :, :, :) = res2D.phiChCmplx;
+            this.res.phiCh(      :, this.curPosIdx, :, :, :, :) = res2D.phiCh;
+            this.res.phiQuant(   :, this.curPosIdx, :, :, :)    = res2D.phiQuant;
             this.res.phi(        :, this.curPosIdx, :, :)       = res2D.phi;
-            this.res.phiAvg(     :, this.curPosIdx, :)          = res2D.phiAvg;
-            this.res.phiAvgStd(  :, this.curPosIdx, :)          = res2D.phiAvgStd;
+            this.res.phiStd(     :, this.curPosIdx, :, :)       = res2D.phiStd;
+            this.res.phiAvg(     :, this.curPosIdx, :)          = res2D.phi;
+            this.res.phiAvgStd(  :, this.curPosIdx, :)          = res2D.phiStd;
         end
         
         % Config Functions
@@ -277,7 +252,7 @@ classdef scan3DAO < handle
                 res2D = this.s2D.scan2D();
 
                 this.sf.startScanTime("timeTable3D", 'copyPlane', this.curPos);
-                this.put2DResTo3DResultsArray(res2D);
+                this.putAOResTo3DResultsArray(res2D);
                 this.sf.stopScanTime("timeTable3D", 'copyPlane', this.curPos);
 
                 this.sf.stopScanTime("timeTable3D", 'singlePlane', this.curPos);
@@ -312,22 +287,19 @@ classdef scan3DAO < handle
             this.grid.firstLen     = this.s2DVars.grid.firstLen;
             this.grid.firstIdxLen  = this.s2DVars.grid.firstIdxLen;
             this.grid.firstIdx     = this.s2DVars.grid.firstIdx;
-            this.grid.firstCntr    = this.s2DVars.grid.firstCntr;
-            this.grid.firstZero    = this.s2DVars.grid.firstZero;
+            this.grid.firstNorm    = this.s2DVars.grid.firstNorm;
             
             this.grid.depthVec     = this.s2DVars.grid.depthVec;
             this.grid.depthLen     = this.s2DVars.grid.depthLen;
             this.grid.depthIdxLen  = this.s2DVars.grid.depthIdxLen;
             this.grid.depthIdx     = this.s2DVars.grid.depthIdx;
-            this.grid.depthCntr    = this.s2DVars.grid.depthCntr;
-            this.grid.depthZero    = this.s2DVars.grid.depthZero;
+            this.grid.depthNorm    = this.s2DVars.grid.depthNorm;
             
             this.grid.secondVec    = this.grid.secondStart : this.grid.secondStride : this.grid.secondEnd;
             this.grid.secondLen    = abs(this.grid.secondStart - this.grid.secondEnd);
             this.grid.secondIdxLen = length(this.grid.secondVec);
             this.grid.secondIdx    = 1:1:this.grid.secondIdxLen;
-            this.grid.secondCntr   = this.grid.secondVec - min(this.grid.secondVec);
-            this.grid.secondZero   = abs(this.grid.secondVec - this.grid.secondVec(1));
+            this.grid.secondNorm   = this.grid.secondVec - min(this.grid.secondVec);
 
             switch this.grid.firstAxis
                 case 'X'
@@ -380,13 +352,6 @@ classdef scan3DAO < handle
             gH = this.graphics;
         end
         
-        function setNavVars(this, ax, idx, rep)
-            navVars.navAx  = ax;
-            navVars.navIdx = idx;
-            navVars.navRep = rep; 
-            
-            this.graphics.setNavVars(navVars);
-        end
         % Loaded data vars
         function setLoadedVars(this, uVars)
             % Deactivate FileSystem

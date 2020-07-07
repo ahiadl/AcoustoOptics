@@ -6,6 +6,7 @@ classdef AOGraphics < Graphics
         data
         usSignal
         extClkSignal
+        
         tUS
         tExtClk
         tRawData
@@ -13,11 +14,13 @@ classdef AOGraphics < Graphics
         tNetSig
         tPos
         zAxis
+        zIndVec
+        fBar
     end
     
     methods (Static)
         function gNames = getGraphicsNames()
-            gNames = {'extClk';'usSignal';'fullSignal';'measSamples';'netSignal'; 'deMul'; 'reshapedSignal';'FFT'; 'qAvgFFT'; 'phiCh';'phi'; 'deMul'};
+            gNames = {'extClk';'usSignal';'fullSignal';'measSamples';'netSignal'; 'deMul'; 'reshapedSignal'; 'qAvgChFFT'; 'unFittedFFT'; 'fittedFFT'; 'phi'};
         end
         
         function figs  = createGraphicsVars()
@@ -25,16 +28,20 @@ classdef AOGraphics < Graphics
             figs.ch    = 1;
             figs.quant = 1;
             
-            figs.fBar      = [];
-            figs.fBarShift = [];
-            figs.fIdx      = [];
-            figs.zVec      = [];
-            figs.displayFullFFT = false;
-            figs.FFTenv = [];
-            figs.FFTIdxs = [];
+            figs.plotPhiInd     = false;
+            figs.fitToShift     = true;
+            figs.fIdx           = [];
+            figs.displayFullFFT = true;
+            figs.FFTenv         = [];
+            figs.FFTIdxs        = [];
             
             figs.intExt  = 'int';
             figsNames = AOGraphics.getGraphicsNames();
+
+            figs.fonts.type       = [];
+            figs.fonts.titleSize  = 14;
+            figs.fonts.labelsSize = 14;
+            figs.fonts.axisSize   = 14;
             
             for i = 1:length(figsNames)  
                 figs.(figsNames{i}).type      = []; 
@@ -49,6 +56,7 @@ classdef AOGraphics < Graphics
                 figs.(figsNames{i}).strings.ylabel      = [];
                 figs.(figsNames{i}).strings.legend      = [];
                 figs.(figsNames{i}).strings.legendModel = [];
+                figs.(figsNames{i}).strings.updateLegend = true;
 
                 figs.(figsNames{i}).dims.zDim  = [];
                 figs.(figsNames{i}).dims.chDim   = [];
@@ -59,25 +67,19 @@ classdef AOGraphics < Graphics
                 figs.(figsNames{i}).lims.xlims  = [];
                 figs.(figsNames{i}).lims.ylims  = [];
                 figs.(figsNames{i}).lims.clims = [];
-
-                figs.(figsNames{i}).fonts.type       = [];
-                figs.(figsNames{i}).fonts.titleSize  = 18;
-                figs.(figsNames{i}).fonts.labelsSize = 18;
-                figs.(figsNames{i}).fonts.axisSize   = 18;
             end
         end 
         
-        function uVars = createGraphicsUserVars() 
+        function uVars = createUserVars()
+            %Variables that comes from the user
             figsNames = AOGraphics.getGraphicsNames();
             
             uVars.ch    = 1;
             uVars.zIdx  = 1;
             uVars.quant = 1;
-             
-            uVars.fBar = [];
-            uVars.fBarShift = [];
-            uVars.fIdx = [];
-            uVars.zVec = [];
+            
+            uVars.reopenFigures = false;
+            uVars.plotPhiInd = false;
             uVars.displayFullFFT = false;
             uVars.FFTenv = [];
             
@@ -89,13 +91,26 @@ classdef AOGraphics < Graphics
             for i=1:length(figsNames)
                 uVars.extH.(figsNames{i}) =  Graphics.createHandlesStruct();
             end
-            
-            uVars.fonts.type       = [];
-            uVars.fonts.titleSize  = 14;
-            uVars.fonts.labelsSize = 14;
-            uVars.fonts.axisSize   = 14;
         end
         
+        function vars  = createOwnerVars()
+            %Variables that comes from the AO Object
+            vars = AOGraphics.createUserVars();
+            
+            vars.numOfChannels   = [];
+            vars.df              = [];
+            vars.fIdx            = [];
+            vars.fitToShift      = [];
+            
+            vars.tUS       = [];
+            vars.tExtClk   = [];
+            vars.tRawData  = [];
+            vars.tMeasSig  = [];
+            vars.tNetSig   = [];
+            vars.tPos      = [];
+            vars.zAxis     = [];
+            vars.fBar      = [];
+        end 
     end
     
     methods
@@ -107,17 +122,41 @@ classdef AOGraphics < Graphics
             
             this.figs     = AOGraphics.createGraphicsVars();
             
-            this.uVars    = AOGraphics.createGraphicsUserVars();
+            this.uVars    = AOGraphics.createOwnerVars();
             
             this.setGraphicsStaticVars();
         end
         
         % Set Functions
-        
-        function setFrequencyBar(this, fBar, fBarShift, fIdx)
-            this.figs.fBar      = fBar;
-            this.figs.fBarShift = fBarShift;
-            this.figs.fIdx      = fIdx;            
+        function setUserVars(this, uVars)
+            this.uVars.zIdx  = uVars.zIdx;
+            this.uVars.quant = uVars.quant;
+            this.uVars.ch    = uVars.ch;
+            
+            this.uVars.displayFullFFT = uVars.displayFullFFT;
+            this.uVars.FFTenv         = uVars.FFTenv;
+            this.uVars.plotPhiInd     = uVars.plotPhiInd;
+            this.uVars.reopenFigures  = uVars.reopenFigures;
+            
+            this.uVars.intExt      = uVars.intExt;
+            this.uVars.validStruct = uVars.validStruct;
+            this.uVars.extH        = uVars.extH;
+            
+            this.uVars.numOfChannels  = uVars.numOfChannels;
+            this.uVars.df             = uVars.df;
+            this.uVars.fIdx           = uVars.fIdx;
+            
+            this.tUS         = uVars.tUS*1e6;
+            this.tExtClk     = uVars.tExtClk*1e6;
+            
+            this.tRawData    = uVars.tRawData*1e6;
+            this.tMeasSig    = uVars.tMeasSig*1e6;
+            this.tNetSig     = uVars.tNetSig*1e6;
+            this.tPos        = uVars.tPos*1e6;
+            this.zAxis       = uVars.zAxis*1e3;
+            this.fBar        = uVars.fBar*1e-6;
+            
+            this.zIndVec = 1:length(this.zAxis);
         end
         
         function setGraphicsStaticVars(this)
@@ -152,65 +191,46 @@ classdef AOGraphics < Graphics
             % reshapedSignal [ch x samplesPerPos x numOfPos]
             this.setType('reshapedSignal', 'stem');
             this.setStrings('reshapedSignal', "Reshaped Signal Channel: %d, Z: %.2f[mm] (idx:(%d))", "t[\mu s]", "Amp[V]", []);
-                        
-            %FFT [ch x samplesPerPos x numOfPos]
-            this.setType('FFT', 'plot');
-            this.setStrings('FFT', "FFT Z: %.2f[mm] (idx:(%d)), Quant: %d", "f[MHz]", "Power Spectrum", "Ch %d");
-            this.setMarkersEnable('FFT', true);
             
-            this.setType('qAvgFFT', 'plot');
-            this.setStrings('qAvgFFT', "Quant AVG FFT Z: %.2f[mm] (idx: %d)", "f[MHz]", "Power Spectrum", "Ch %d");
-            this.setMarkersEnable('qAvgFFT', true);
+            this.setType('qAvgChFFT', 'plot');
+            this.setStrings('qAvgChFFT', "Quant-AVG FFT Per Channel Z: %.2f[mm] (idx: %d)", "f[MHz]", "Power Spectrum", "Ch %d");
+            this.setMarkersEnable('qAvgChFFT', false);
             
-            % phiCh [ch x numOfPos]
-            this.setType('phiCh', 'stem');
-            this.setStrings('phiCh', "\\phi_{ch}", "z[mm]", "\phi", "Ch %d");
+            this.setType('unFittedFFT', 'plot');
+            this.setStrings('unFittedFFT', "Ch-AVG FFT (Raw) Z: %.2f[mm] (idx: %d)", "f[MHz]", "Power Spectrum", []);
+            this.figs.unFittedFFT.strings.legend = {'Raw FFT'; 'Fit'};
+            this.figs.unFittedFFT.strings.updateLegend = false;
+            this.setMarkersEnable('unFittedFFT', false);
+            
+            this.setType('fittedFFT', 'plot');
+            this.setStrings('fittedFFT', "Fitted FFT Z: %.2f[mm] (idx: %d)", "f[MHz]", "Power Spectrum", []);
+            this.setMarkersEnable('fittedFFT', true);
             
             % phi [numOfPos]
             this.setType('phi', 'stem');
             this.setStrings('phi', "\\phi", "z[mm]", "\phi", []);
         end
         
-        function setGraphicsDynamicVars(this, algoVars)
+        function setGraphicsDynamicVars(this)
             %this function assums that uVars are updated
             this.setChAndPos(this.uVars.ch, this.uVars.zIdx, this.uVars.quant)
             
-%             z    = algoVars.len.zVecUSRes(this.uVars.zIdx)*1e3;
-            ch   = algoVars.digitizer.channels;
-%             fSin = algoVars.usSignal.fSin;
-            
+            this.figs.fIdx           = this.uVars.fIdx;
             this.figs.displayFullFFT = this.uVars.displayFullFFT;
-            this.figs.FFTenv = this.uVars.FFTenv;
-            envIdx = floor(this.uVars.FFTenv / algoVars.freq.df);
-            this.figs.FFTIdxs = algoVars.freq.fSinIdx + [-envIdx, envIdx];
+            this.figs.FFTenv         = this.uVars.FFTenv;
+            envIdx                   = floor(this.uVars.FFTenv / this.uVars.df);
+            this.figs.FFTIdxs        = this.uVars.fIdx + [-envIdx, envIdx];
+            this.figs.plotPhiInd     = this.uVars.plotPhiInd;
             
-            this.setFrequencyBar(algoVars.freq.frequencyBar*1e-6, algoVars.freq.frequencyBarShifted*1e-6, algoVars.freq.fSinIdx);
-            this.setZVec(algoVars.len.zVecUSRes);
-            
-            this.setLegendVariables('FFT', 1:ch);
-            this.setLegendVariables('qAvgFFT', 1:ch);
-            this.setLegendVariables('phiCh', 1:ch);
-            
-            this.figs.fonts = this.uVars.fonts;
+            ch   = this.uVars.numOfChannels;
+            this.setLegendVariables('qAvgChFFT', 1:ch);
             
             this.updateGraphicsConstruction()
-            if algoVars.uVars.useQuant
+            if this.uVars.quant > 1
                 this.setType('phi', 'stem');
             else
                 this.setType('phi', 'stem');
             end
-            
-            this.tUS         = algoVars.timing.tUS*1e6;
-            this.tExtClk     = algoVars.timing.tExtClk*1e6;
-            this.tRawData    = algoVars.timing.tAcqVec*1e6;
-            this.tMeasSig    = algoVars.timing.tMeasVec*1e6;
-            this.tNetSig     = algoVars.timing.tSigVec*1e6;
-            this.tPos        = algoVars.timing.tPosVec*1e6;
-            this.zAxis       = algoVars.len.zVecUSRes*1e3;
-        end
-        
-        function setZVec(this, zVec)
-            this.figs.zVec = zVec;
         end
         
         function setData(this, data, usSig, extClkSig)
@@ -251,49 +271,46 @@ classdef AOGraphics < Graphics
                     signal.quant = this.figs.quant;
                     signal.xData = this.tPos;
                     signal.yData = permute( this.data.reshapedSignal(signal.quant ,signal.ch, :, signal.zIdx), [2,3,1,4]);
-                case 'phiCh'
-                    signal.quant = this.figs.quant;
-                    signal.xData = this.zAxis;
-                    signal.yData = this.data.phiCh(signal.quant, :, :);
                 case 'phi'
-                    signal.xData = this.zAxis;
+                    if this.figs.plotPhiInd
+                        signal.xData = this.zIndVec;
+                    else
+                        signal.xData = this.zAxis;
+                    end
                     signal.yData = this.data.phi;
-                    signal.std   = this.data.phiStd;
             end
         end
         
         function signal = extractFFTSignal(this, figName)
             signal.zIdx  = this.figs.zIdx;
-            signal.zVec  = this.figs.zVec;
-            switch figName
-                case 'FFT'
-                    signal.yData = abs(this.data.fftRes);
-                    signal.quant = this.figs.quant;
-                    signal.titleVars = {{signal.zVec(signal.zIdx)*1e3, signal.zIdx, signal.quant}};
-                case 'qAvgFFT'
-                    signal.yData = abs(this.data.qAvgFFT);
-                    signal.quant = 1;
-                    signal.titleVars = {{signal.zVec(signal.zIdx)*1e3, signal.zIdx}};
-            end
-            
+            signal.zVec  = this.zAxis;
             if ~this.figs.displayFullFFT
                 % plot user defined enviroment around the signal
                 signal.fidxs = this.figs.FFTIdxs(1):this.figs.FFTIdxs(2);
-                this.figs.(figName).lims.xlims = ...
-                    [this.figs.fBar(this.figs.FFTIdxs(1)), this.figs.fBar(this.figs.FFTIdxs(2))];
-                signal.xData = this.figs.fBar(signal.fidxs);
             else
-                signal.fidxs = 1:length(this.figs.fBar);
-                this.figs.(figName).lims.xlims = ...
-                    [this.figs.fBarShift(1), this.figs.fBarShift(end)];
-                signal.xData = this.figs.fBarShift;
-                signal.yData = fftshift(signal.yData, 3);
+                signal.fidxs = 1:length(this.fBar);
             end
-                     
-            signal.markerX = this.figs.fBar(this.figs.fIdx);
-            signal.markerY = squeeze(signal.yData(signal.quant, :, this.figs.fIdx, signal.zIdx));
+            this.figs.(figName).lims.xlims = [this.fBar(signal.fidxs(1)), this.fBar(signal.fidxs(end))]; 
+            signal.xData = this.fBar(signal.fidxs);
+            switch figName
+                case 'qAvgChFFT'
+                    signal.yData     = fftshift(this.data.qAvgChFFT(:, :, signal.zIdx), 2);
+                    signal.markerY   = squeeze(this.data.qAvgChFFT(:,this.figs.fIdx, signal.zIdx));
+                    signal.yData     = squeeze(signal.yData(:,signal.fidxs));
+                    signal.titleVars = {{signal.zVec(signal.zIdx), signal.zIdx}};
+                case 'unFittedFFT'
+                    signal.yData(1,:,1) = permute(this.data.unFittedFFTShift(signal.fidxs, signal.zIdx), [3,1,2]);
+                    signal.yData(2,:,1) = permute(this.data.fitModel(signal.fidxs, signal.zIdx), [3,1,2]);
+                    signal.titleVars    = {{signal.zVec(signal.zIdx), signal.zIdx}};
+                    signal.markerY(1)   = squeeze(this.data.unFittedFFTShift(this.figs.fIdx, signal.zIdx));
+                    signal.markerY(2)   = squeeze(this.data.fitModel(this.figs.fIdx, signal.zIdx));
+                case 'fittedFFT'
+                    signal.yData     = this.data.fittedFFT(signal.fidxs, signal.zIdx)';
+                    signal.titleVars = {{signal.zVec(signal.zIdx), signal.zIdx}};
+                    signal.markerY   = squeeze(this.data.fittedFFT(this.figs.fIdx, signal.zIdx));
+            end
+            signal.markerX = this.fBar(this.figs.fIdx);
             
-            signal.yData = squeeze(signal.yData(signal.quant, :, signal.fidxs, signal.zIdx));
         end
         
         % Disply Functions
@@ -379,7 +396,7 @@ classdef AOGraphics < Graphics
                 end
                 setStringsToPlot(this, 'phi')
             else
-                quickPlot(this, 'phi', signal.xData, signal.yData, signal.std, [], []);
+                quickPlot(this, 'phi', signal.xData, signal.yData, [], [], []);
                 pause(0.01);
                 drawnow();
             end
@@ -484,16 +501,9 @@ classdef AOGraphics < Graphics
             if ~isgraphics(this.figs.(figName).handles.cur.plot(1))
             	hold(this.figs.(figName).handles.cur.ax, 'on');
                 for i = 1:size(signal.yData, 1)
-                    switch this.figs.(figName).type
-                        case 'stem'
-                           this.figs.(figName).handles.cur.plot(i) = ...
-                               stem(this.figs.(figName).handles.cur.ax,...
-                               signal.xData, signal.yData( i, :, :));    
-                        case 'plot'
-                           this.figs.(figName).handles.cur.plot(i) = ...
-                               plot(this.figs.(figName).handles.cur.ax,...
-                               signal.xData, signal.yData( i, :, :));  
-                    end
+                   this.figs.(figName).handles.cur.plot(i) = ...
+                       plot(this.figs.(figName).handles.cur.ax,...
+                       signal.xData, signal.yData( i, :));  
                 end
                 
                 for i = 1:length(signal.markerY)            
@@ -505,7 +515,7 @@ classdef AOGraphics < Graphics
                 this.setLimsToPlot(figName)
             else
                 for i = 1:size(signal.yData, 1)
-                    this.quickPlot(figName, signal.xData, signal.yData(i, :, :),[], signal.markerX, signal.markerY(i), i)
+                    this.quickPlot(figName, signal.xData, signal.yData(i, :),[], signal.markerX, signal.markerY(i), i)
                 end
                 this.setLimsToPlot(figName)
                 pause(0.01);
@@ -514,13 +524,15 @@ classdef AOGraphics < Graphics
         end
         
         function plotMarkers(this, gName, xMarker, yMarker, hIdx)
-            if ~exist('hIdx', 'var')
-                hIdx = 1;
-            end
-            for i =1:size(yMarker,1)
-                this.figs.(gName).handles.cur.plotMarker(hIdx) = ...
-                                plot(this.figs.(gName).handles.cur.ax,...
-                                     xMarker, yMarker, 'g+');
+            if this.figs.(gName).markers.plotMark 
+                if ~exist('hIdx', 'var')
+                    hIdx = 1;
+                end
+                for i =1:size(yMarker,1)
+                    this.figs.(gName).handles.cur.plotMarker(hIdx) = ...
+                                    plot(this.figs.(gName).handles.cur.ax,...
+                                         xMarker, yMarker, 'g+');
+                end
             end
         end
         
