@@ -23,7 +23,7 @@ classdef acoustoOptics < handle
         extVars;  % Extended from acoustoOptics to submodules
         measVars; % Measurement vars (after calculation) given from submodules to acoustoOptics
         oldExtVars;
-        limits
+        
         % Control Vars:
         changeLog;
         connected;
@@ -36,43 +36,59 @@ classdef acoustoOptics < handle
     methods (Static) 
         function aoVars = aoVarsCreate()
             % Algo
-            aoVars.c                 = [];
-            aoVars.fSin              = [];              
-            aoVars.fTrain            = [];
-            aoVars.cycInPulse        = []; 
-            aoVars.phantomDepth      = [];
-            aoVars.distFromPhantom   = [];
-            aoVars.fExtClk           = []; %fs
-            aoVars.timeToSample      = [];
-            aoVars.extClkDcyc        = []; % [%]
-            aoVars.fastAnalysis      = false;
-            aoVars.useQuant          = false;
-            aoVars.quantTime         = [];
-            aoVars.useHadamard       = false;
-            aoVars.envDC             = [];
-            aoVars.envUS             = [];
-            aoVars.envHar            = [];  
-            % algo & fGen
-            aoVars.fSclk             = [];     %update in fGen
-            
-            % algo & digitizer
-            aoVars.channels          = []; %update in digitizer
+            aoVars.cycPerPulse       = 1;      %[#] 
+            aoVars.fSin              = 1.25e6; %[Hz]              
+            aoVars.fSqnc             = 10e3; %[Hz]
+            aoVars.frameTime         = 0.002; %[s]
+
+            % Sampling Clk
+            aoVars.fs                = 5e6;    %[Hz]
+            aoVars.sClkDcyc          = 50;     %[%]
+            aoVars.fgClk             = 100e6;  %[S/s]
+
+            % Digitizer
+            aoVars.timeToSample      = 0.1; %[s]
+            aoVars.channels          = 2; %[#]
+
+            % Frequency
+            aoVars.envDC             = 100e3;
+            aoVars.envUS             = 78e3;
+
+            % Geometry & Length
+            aoVars.c                 = 1500;   %[m/s]
+            aoVars.distFromPhantom   = 0; %[m]
+
+            % General Operation
+            aoVars.useFrame            = true;
+            aoVars.useGPU              = true;
+            aoVars.useHadamard         = true;
+            aoVars.contHadamard        = false;
+            aoVars.highResAO           = false;
+            aoVars.analyzeSingleCh     = true;
+            aoVars.contSpeckleAnalysis = false;
+
+            aoVars.useVirtualData   = false;
+            aoVars.limitByN         = true;
+            aoVars.N                = 10;
+            aoVars.dispTimeTable    = true; % relevant only with GUI
+            aoVars.skipParamsCheck  = false;
+            aoVars.extCropDef       = false;
+            aoVars.extCropSamples   = 1000;
             
             % IO
-            aoVars.IOPort            = [];
-            aoVars.IOLine            = [];
-            
-            % General: algo & digitizer
-            aoVars.useGPU            = false; %algo, digitizer;
-            
-            aoVars.useVirtualData    = false;
-            aoVars.limitByN          = [];
-            aoVars.N                 = [];
-            aoVars.dispTimeTable     = true;
-            aoVars.skipParamsCheck   = false;
+            aoVars.IOPort = 1;
+            aoVars.IOLine = 4;
+
+            % Export
+            aoVars.exportData.meas        = false;
+            aoVars.exportData.signal      = false;
+            aoVars.exportData.deMul       = false;
+            aoVars.exportData.reshaped    = false;
+            aoVars.exportData.fft         = false;
+            aoVars.exportData.usCompCmplx = false;
         end
         
-        function uVars  = uVarsCreate()
+        function uVars  = createUserVars()
             % Algo and Peripherals
             uVars.ao         = acoustoOptics.aoVarsCreate();
             % Figures
@@ -80,15 +96,9 @@ classdef acoustoOptics < handle
             % File system     
             uVars.fileSystem = fileSystemAO.uVarsCreate();
         end
-        
-        function ouVars = ownerObjUserVarsCreate()
-           ouVars.ao         =  acoustoOptics.aoVarsCreate();
-           ouVars.figs       =  AOGraphics.createGraphicsUserVars();
-           ouVars.fileSystem =  AOFileSystem.aoFSVarsCreate();
-        end
-        
+
         function newExtVars = extVarsCreate()
-            newExtVars.algo      = Algo.uVarsCreate();
+            newExtVars.algo      = Algo.createUserVars();
             newExtVars.fGen      = fGen.uVarsCreate();
             newExtVars.digitizer = Digitizer.uVarsCreate();
             newExtVars.IO        = IO.uVarsCreate();
@@ -110,7 +120,7 @@ classdef acoustoOptics < handle
                         (~isequal(oldVars.(fields{i}).(names{j}), newVars.(fields{i}).(names{j})));
                         
                     if log.(fields{i}) && strcmp(fields{i}, 'algo') && ...
-                             (strcmp(names{j}, 'fSin')       || strcmp(names{j}, 'fTrain') ||...
+                             (strcmp(names{j}, 'fSin')       || strcmp(names{j}, 'fSqnc') ||...
                               strcmp(names{j}, 'cycInPulse') || strcmp(names{j}, 'channels') || strcmp(names{j}, 'useHadamard'))
                         log.fGen = 1;
                     end
@@ -142,11 +152,11 @@ classdef acoustoOptics < handle
             fprintf("AOI: 6. Creating a Graphics Object\n");
             this.graphics = AOGraphics();
             
-            this.uVars   = this.uVarsCreate();
+            this.uVars   = this.createUserVars();
             this.extVars = this.extVarsCreate();
             
-            this.limits.measLimit = 10;
-            this.algo.setMeasLimit(this.limits.measLimit);
+%             this.limits.measLimit = 10;
+            this.algo.setMeasLimit(10);
             
             this.graphicsNames = this.graphics.getGraphicsNames();
             
@@ -185,7 +195,7 @@ classdef acoustoOptics < handle
         end
         
         % Variables handling
-        function setMeasVars(this, uVars)
+        function setVars(this, uVars)
 %             user gives reduced variables. this function convert these 
 %             variables to extended variables suitable for each
 %             submodule\peripheral. this function extend the variables by
@@ -193,53 +203,68 @@ classdef acoustoOptics < handle
 %             variables
             fprintf("AOI: ------- Sets Extended Vars From Reduced Vars ----------\n")
             this.uVars = uVars;
-            
-            fprintf("AOI:  1. Sets Algorithm reduced Vars\n")
+
+            %-----------------
             % Algo 
-            algoVars      = this.algo.uVarsCreate();
+            %-----------------
+            fprintf("AOI:  1. Set & Calculate Algorithm Vars\n")
+            algoVars      = this.algo.createUserVars();
 
-            algoVars.c               = uVars.ao.c;
-            algoVars.bufferSizeBytes = 8*2^20;
-            algoVars.bytesPerSample  = 2;
+            % US Signal
+            algoVars.cycPerPulse     = uVars.ao.cycPerPulse;
             algoVars.fSin            = uVars.ao.fSin;
-            algoVars.fTrain          = uVars.ao.fTrain;
-            algoVars.cycInPulse      = uVars.ao.cycInPulse;
-            algoVars.phantomDepth    = uVars.ao.phantomDepth;
+            algoVars.fSqnc           = uVars.ao.fSqnc;
+            algoVars.frameTime       = uVars.ao.frameTime;
+            
+            % Sampling Clk
+            algoVars.fs              = uVars.ao.fs;
+            algoVars.sClkDcyc        = uVars.ao.sClkDcyc;
+            algoVars.fgClk           = uVars.ao.fgClk;
+            
+            % Geometry
+            algoVars.c               = uVars.ao.c;
             algoVars.distFromPhantom = uVars.ao.distFromPhantom;
-            algoVars.fExtClk         = uVars.ao.fExtClk;
+            
+            % Digitizer
+            algoVars.timeToSample       = uVars.ao.timeToSample;
+            algoVars.channels           = uVars.ao.channels;
 
-            algoVars.extClkDcyc      = uVars.ao.extClkDcyc;
-            algoVars.fastAnalysis    = uVars.ao.fastAnalysis;
-            algoVars.useQuant        = uVars.ao.useQuant;
-            algoVars.quantTime       = uVars.ao.quantTime;
-            algoVars.useHadamard     = uVars.ao.useHadamard;
+            % Frequency
             algoVars.envDC           = uVars.ao.envDC;
             algoVars.envUS           = uVars.ao.envUS;
-            algoVars.envHar          = uVars.ao.envHar;
             
-            if uVars.ao.timeToSample > this.limits.measLimit
-                AO.splitMeas = true;
-                algoVars.longMeas = true;
-                [algoVars.timeToSample, AO.splitNum] = this.calcSplitTimeToSample(uVars.ao.timeToSample);
-            else 
-                AO.splitMeas = false;
-                AO.splitNum = 1;
-                algoVars.longMeas = false;
-                algoVars.timeToSample    = uVars.ao.timeToSample;
-            end
+            % General Operation
+            algoVars.useFrame            = uVars.ao.useFrame;
+            algoVars.useGPU              = uVars.ao.useGPU;
+            algoVars.useHadamard         = uVars.ao.useHadamard;
+            algoVars.contHadamard        = uVars.ao.contHadamard;
+            algoVars.highResAO           = uVars.ao.highResAO;
+            algoVars.analyzeSingleCh     = uVars.ao.analyzeSingleCh;
+            algoVars.contSpeckleAnalysis = uVars.ao.contSpeckleAnalysis;
             
-            algoVars.export.netSignal      = uVars.figs.validStruct.netSignal || uVars.fileSystem.saveNetSignal;
-            algoVars.export.deMultiplexed  = uVars.figs.validStruct.deMul || uVars.fileSystem.saveDemultiplexed;
-            algoVars.export.reshapedSignal = uVars.figs.validStruct.reshapedSignal || uVars.fileSystem.saveReshapedSignal;
-            algoVars.export.fftRes         = uVars.fileSystem.saveFFT;
-            algoVars.export.usCompCmplx    = uVars.fileSystem.saveFFT;
+            algoVars.cutArtfct           = uVars.ao.cutArtfct;
+            algoVars.artfctIdxVec        = uVars.ao.artfctIdxVec;
+            
+            % Export
+            algoVars.export.meas           = uVars.ao.exportData.meas        || uVars.figs.validStruct.meas     || uVars.fileSystem.saveMeas;
+            algoVars.export.signal         = uVars.ao.exportData.signal      || uVars.figs.validStruct.signal   || uVars.fileSystem.saveSignal;
+            algoVars.export.deMul          = (uVars.ao.exportData.deMul      || uVars.figs.validStruct.deMul    || uVars.fileSystem.saveDeMul) && algoVars.useHadamard;
+            algoVars.export.reshaped       = uVars.ao.exportData.reshaped    || uVars.figs.validStruct.reshaped || uVars.fileSystem.saveReshaped;
+            algoVars.export.fft            = uVars.ao.exportData.fft         || uVars.fileSystem.saveFFT;
+            algoVars.export.usCompCmplx    = uVars.ao.exportData.usCompCmplx || uVars.fileSystem.saveFFT;
 
-            fprintf("AOI:  2. Sets Function Generator reduced Vars\n")
-            %fGen - static configurations
+            this.measVars.algo = this.algo.setVars(algoVars);
+            AO.splitMeas = this.measVars.algo.general.splitMeas;
+            AO.splitNum  = this.measVars.algo.general.splitNum;
+            
+            %-----------------
+            %fGen
+            %-----------------
+            fprintf("AOI:  2. Set Function Generator Vars\n")
             fGenVars      = this.fGen.uVarsCreate();
 
             fGenVars.ch{1}.daqFilter     = 50;
-            fGenVars.ch{1}.amp           = 1;
+            fGenVars.ch{1}.amp           = 2;
             fGenVars.ch{1}.bias          = 0;
             fGenVars.ch{1}.triggerOwner  = true;
             fGenVars.ch{1}.triggerWidth  = 512;
@@ -252,143 +277,172 @@ classdef acoustoOptics < handle
             fGenVars.ch{2}.triggerWidth  = 16;
             fGenVars.ch{2}.useExtSclkSrc = false;
 
-            % Algo & fGen
-            algoVars.fSclk      = uVars.ao.fSclk; %update in fGen
-            fGenVars.ch{1}.Sclk = algoVars.fSclk;
-            fGenVars.ch{2}.Sclk = algoVars.fSclk; 
+            fGenVars.ch{1}.Sclk = algoVars.fgClk;
+            fGenVars.ch{2}.Sclk = algoVars.fgClk; 
 
-            fprintf("AOI:  3. Sets Digitizer reduced Vars\n")
-            % Digitizer 
-            digitizerVars = this.digitizer.uVarsCreate();
+            %-----------------
+            % Digitizer
+            %-----------------
+            fprintf("AOI:  3. Sets Digitizer Vars\n")
+            digiVars = this.digitizer.uVarsCreate();
 
-            digitizerVars.mode = 'TS'; 
-            digitizerVars.fs   = algoVars.fExtClk;
+            digiVars.mode     = 'TS'; 
+            digiVars.fs       = algoVars.fs;
+            digiVars.useGPU   = algoVars.useGPU;
+            digiVars.channels = algoVars.channels;           
             
-            % Algo & Digitizer
-            algoVars.preTriggerSamples  = digitizerVars.preTriggerSamples;
-            algoVars.useGPU             = uVars.ao.useGPU;
-            algoVars.channels           = uVars.ao.channels;
-
-            digitizerVars.useGPU        = algoVars.useGPU;
-            digitizerVars.channels      = algoVars.channels;           
+            digiVars.triggerDelay = 0;
+            digiVars.extClk  = true;
+            digiVars.extTrig = true;
+            digiVars.draw    = false;
             
+            digiVars.bufferSizeBytes = 4*(2^20);
+            digiVars.samplesPerMeas  = this.measVars.algo.samples.samplesPerMeas;
+            
+            digiVars.exportCropped = uVars.figs.validStruct.cropped && ~AO.splitMeas;
+            if this.uVars.ao.extCropDef
+                digiVars.croppedSamples = this.uVars.ao.extCropSamples;
+            else
+                digiVars.croppedSamples = 2*this.measVars.algo.samples.samplesPerSqnc;
+            end
+            %-----------------
             % IO
+            %-----------------
             IOVars = this.IO.uVarsCreate;
 
             IOVars.mode = 0; % Output Only
             IOVars.port = uVars.ao.IOPort;
             IOVars.line = uVars.ao.IOLine;
 
-            % Calculate measurement variables and dimensions
-            fprintf("AOI:  4. Calculating Algorithm Variables\n");
-            this.measVars.algo = this.algo.updateAlgoUserVars(algoVars);
-
-            % Complete digitizer variables from calculated algorithm vars
-            fprintf("AOI:  5. Extracting Digitizer Variables from Algorithm\n");
-            digitizerVars.numOfBuffers          = this.measVars.algo.digitizer.numOfBuffers;
-            digitizerVars.bufferSizeBytes       = this.measVars.algo.digitizer.bufferSizeBytes;
-            digitizerVars.samplesPerAcq         = this.measVars.algo.digitizer.samplesPerAcq;
-            digitizerVars.samplesPerBuffer      = this.measVars.algo.digitizer.samplesPerBuffer;
-            digitizerVars.samplesPerAcqAllCh    = this.measVars.algo.digitizer.samplesPerAcqAllCh;
-            digitizerVars.samplesPerBufferAllCh = this.measVars.algo.digitizer.samplesPerBufferAllCh;
-           
+            %-----------------
             % FileSystem Vars
-            fprintf("AOI:  6. Extracting File system variables.\n");
+            %-----------------
+            fprintf("AOI:  4. Extracting File system variables.\n");
             if AO.splitMeas
-                fileSystemVars.saveNetSignal        = false;
-                fileSystemVars.saveDemultiplexed    = false;
-                fileSystemVars.saveReshapedSignal   = false;
-                fileSystemVars.saveFFT              = false;
+                fileSystemVars.saveSignal   = false;
+                fileSystemVars.saveDeMul    = false;
+                fileSystemVars.saveReshaped = false;
+                fileSystemVars.saveFFT      = false;
             else
-                fileSystemVars.saveNetSignal        = uVars.fileSystem.saveNetSignal;
-                fileSystemVars.saveDemultiplexed    = uVars.fileSystem.saveDemultiplexed && uVars.useHadamard;
-                fileSystemVars.saveReshapedSignal   = uVars.fileSystem.saveReshapedSignal;
-                fileSystemVars.saveFFT              = uVars.fileSystem.saveFFT;
+                fileSystemVars.saveSignal   = uVars.fileSystem.saveSignal;
+                fileSystemVars.saveDeMul    = uVars.fileSystem.saveDeMul && uVars.useHadamard;
+                fileSystemVars.saveReshaped = uVars.fileSystem.saveReshaped;
+                fileSystemVars.saveFFT      = uVars.fileSystem.saveFFT;
             end
-            fileSystemVars.saveRawData          = uVars.fileSystem.saveRawData;
+            fileSystemVars.saveMeas = uVars.fileSystem.saveMeas;
             
             fileSystemVars.splitMeas = AO.splitMeas;
             fileSystemVars.splitNum  = AO.splitNum;
+            fileSystemVars.useFrame  = algoVars.useFrame;
+            fileSystemVars.chToAnalyze = this.measVars.algo.general.analysisReps;
             
-            fileSystemVars.saveResults          = uVars.fileSystem.saveResults;
-            fileSystemVars.saveFigs             = uVars.fileSystem.saveFigs;
-            fileSystemVars.dontSaveVars         = uVars.fileSystem.dontSaveVars;
+            fileSystemVars.saveResults  = uVars.fileSystem.saveResults;
+            fileSystemVars.saveFigs     = uVars.fileSystem.saveFigs;
+            fileSystemVars.dontSaveVars = uVars.fileSystem.dontSaveVars;
             
-            fileSystemVars.dirPath              = uVars.fileSystem.dirPath;
-            fileSystemVars.projName             = uVars.fileSystem.projName;
-            fileSystemVars.resDirName           = uVars.fileSystem.resDirName;
+            fileSystemVars.dirPath    = uVars.fileSystem.dirPath;
+            fileSystemVars.projName   = uVars.fileSystem.projName;
+            fileSystemVars.resDirName = uVars.fileSystem.resDirName;
 
-            fileSystemVars.extProject            = uVars.fileSystem.extProject;
+            fileSystemVars.extProject = uVars.fileSystem.extProject;
 
             this.fileSystem.setUserVars(fileSystemVars);
 
-            % Set Graphics variables
-            fprintf("AOI:  7. Sets Graphic Variables.\n")
+            %-----------------
+            % Graphics
+            %-----------------
+            fprintf("AOI:  5. Sets Graphic Variables.\n")
 
-            figsVars = AOGraphics.createGraphicsVars();
+            figsVars = this.graphics.createGraphicsVars();
             
-            if uVars.figs.zIdx > this.measVars.algo.samples.numOfPos
-                figsVars.zIdx = 1;
+            if uVars.figs.depthIdx > this.measVars.algo.samples.numOfPos
+                figsVars.depthIdx = 1;
             else
-                figsVars.zIdx = uVars.figs.zIdx;
+                figsVars.depthIdx = uVars.figs.depthIdx;
             end
             
-            if uVars.figs.ch > this.measVars.algo.digitizer.channels
+            if uVars.figs.ch > this.measVars.algo.general.channels
                 figsVars.ch = 1;
             else
                 figsVars.ch = uVars.figs.ch;
             end
             
-            if uVars.figs.quant > this.measVars.algo.samples.numOfQuant
-                figsVars.quant = 1;
+            if uVars.figs.frame > this.measVars.algo.samples.framesPerSignal
+                figsVars.frame = 1;
             else
-                figsVars.quant = uVars.figs.quant;
+                figsVars.frame = uVars.figs.frame;
             end
             figsVars.reopenFigures   = uVars.figs.reopenFigures;
-            figsVars.plotPhiInd      = uVars.figs.plotPhiInd;
             figsVars.displayFullFFT  = uVars.figs.displayFullFFT;
             figsVars.FFTenv          = uVars.figs.FFTenv;
             figsVars.intExt          = uVars.figs.intExt;
-            figsVars.validStruct     = uVars.figs.validStruct;
             
-            if uVars.ao.fastAnalysis
-%                 figsVars.validStruct.FFT     = false;
-                figsVars.validStruct.qAvgChFFT = false;
+            figsVars.validStruct.usSignal = uVars.figs.validStruct.usSignal;
+            figsVars.validStruct.extClk   = uVars.figs.validStruct.extClk;
+            
+            figsVars.validStruct.cropped  = uVars.figs.validStruct.cropped  && ~AO.splitMeas;
+            figsVars.validStruct.meas     = uVars.figs.validStruct.meas     && this.measVars.algo.general.export.meas;
+            figsVars.validStruct.signal   = uVars.figs.validStruct.signal   && this.measVars.algo.general.export.signal;
+            figsVars.validStruct.deMul    = uVars.figs.validStruct.deMul    && this.measVars.algo.general.export.deMul && algoVars.useHadamard;
+            figsVars.validStruct.reshaped = uVars.figs.validStruct.reshaped && this.measVars.algo.general.export.reshaped;
+            
+            figsVars.validStruct.unFittedFFTAllCh    = uVars.figs.validStruct.unFittedFFTAllCh;
+            figsVars.validStruct.unFittedFFTSingleCh = uVars.figs.validStruct.unFittedFFTSingleCh;
+            figsVars.validStruct.fittedFFTSingleCh   = uVars.figs.validStruct.fittedFFTSingleCh;
+            figsVars.validStruct.fittedFFTAllCh      = uVars.figs.validStruct.fittedFFTAllCh;
+            figsVars.validStruct.avgFFT              = uVars.figs.validStruct.avgFFT;
+            figsVars.validStruct.normFFT             = uVars.figs.validStruct.normFFT;
+            
+            figsVars.validStruct.phi    = uVars.figs.validStruct.phi;
+            figsVars.validStruct.rawPhi = uVars.figs.validStruct.rawPhi;
+            figsVars.validStruct.phiLog = uVars.figs.validStruct.phiLog;
+            
+            figsVars.depthAxType     = uVars.figs.depthAxType;
+            
+            if ~uVars.ao.useFrame
+                figsVars.validStruct.unFittedFFT = false;
             end
             
             figsVars.extH = uVars.figs.extH;
             
             figsVars.numOfChannels = uVars.ao.channels;
             figsVars.df            = this.measVars.algo.freq.df;
-            figsVars.fBar          = this.measVars.algo.freq.frequencyBarShifted;
-            figsVars.fIdx          = this.measVars.algo.freq.fIdxPosShift;
-            figsVars.zVec          = this.measVars.algo.len.zVecUSRes;
+            figsVars.fBar          = gather(this.measVars.algo.freq.fBar);
+            figsVars.fIdx          = this.measVars.algo.freq.fUSIdx;
+            figsVars.depthVecNorm  = this.measVars.algo.len.depthNorm;
+            figsVars.depthVecCntr  = this.measVars.algo.len.depthCntr;
+            figsVars.depthVecZero  = this.measVars.algo.len.depthZero;
+            figsVars.depthVecIdx   = this.measVars.algo.len.depthIdx;
+
+            figsVars.depthVecNormRaw = this.measVars.algo.len.depthVecAlgo;
             
-            figsVars.tUS      = this.measVars.algo.timing.tUS;
-            figsVars.tExtClk  = this.measVars.algo.timing.tExtClk;
+            figsVars.tVecUS      = this.measVars.algo.timing.tVecUS;
+            figsVars.tVecSampleClk  = this.measVars.algo.timing.tVecSampleClk;
             
             if ~AO.splitMeas
-                figsVars.tRawData = this.measVars.algo.timing.tAcqVec;
-                figsVars.tMeasSig = this.measVars.algo.timing.tMeasVec;
-                figsVars.tNetSig  = this.measVars.algo.timing.tSigVec;
-                figsVars.tPos     = this.measVars.algo.timing.tPosVec; 
+                figsVars.tVecMeas = this.measVars.algo.timing.tVecMeas;
+                figsVars.tVecSig  = this.measVars.algo.timing.tVecSig;
+                figsVars.tVecPos  = this.measVars.algo.timing.tVecPosPerFrame; 
             else
-                figsVars.validStruct.fullSignal     = false;
-                figsVars.validStruct.measSamples    = false;
-                figsVars.validStruct.netSignal      = false;
-                figsVars.validStruct.deMul          = false;
-                figsVars.validStruct.reshapedSignal = false;
+%                 figsVars.validStruct.measSamples    = false;
+%                 figsVars.validStruct.netSignal      = false;
+%                 figsVars.validStruct.deMul          = false;
+%                 figsVars.validStruct.reshaped = false;
                 
-                figsVars.tRawData = [];
-                figsVars.tMeasSig = [];
-                figsVars.tNetSig  = [];
-                figsVars.tPos     = [];
+                figsVars.tVecMeas = [];
+                figsVars.tVecSig  = [];
+                figsVars.tVecPos  = [];
             end
-                
-            figsVars.zAxis    = this.measVars.algo.len.zVecUSRes;
             
-            this.measVars.figs = figsVars;
+            figsVars.analyzeSingleCh = uVars.ao.analyzeSingleCh;
+            figsVars.singleChIdx     = uVars.figs.singleChIdx;
+            
             this.graphics.setUserVars(figsVars);
+            this.measVars.figs = figsVars;
+
+            %-----------------
+            % AO
+            %-----------------
             
             % Writing Extended Vars to Acousto Optics Object
             fprintf("AOI:  8. Set AO Object Variables.\n");
@@ -399,11 +453,10 @@ classdef acoustoOptics < handle
             AO.dispTimeTable    = uVars.ao.dispTimeTable;
             AO.skipParamsCheck  = uVars.ao.skipParamsCheck;
             
-            fprintf("AOI:  9. Set Extended Vars\n")
             newExtVars.AO         = AO;
             newExtVars.algo       = algoVars;
             newExtVars.fGen       = fGenVars;
-            newExtVars.digitizer  = digitizerVars;
+            newExtVars.digitizer  = digiVars;
             newExtVars.IO         = IOVars;
             newExtVars.fileSystem = fileSystemVars;
             newExtVars.figs       = figsVars;
@@ -420,8 +473,7 @@ classdef acoustoOptics < handle
             else
                 this.changeLog = this.checkParamsChanged(this.oldExtVars, this.extVars);
             end
-                    
-            
+
             this.measVars.AO = this.extVars.AO;
         end
         
@@ -431,24 +483,31 @@ classdef acoustoOptics < handle
             aoVars.extVars   = this.extVars;
             aoVars.uVars     = this.uVars; 
             
-            % We put an empty graphic request in order to decrease the size
+            % We put an empty graphic request in order to shrink the size
             % of the vars mat file.
             aoVars.measVars.figs = AOGraphics.createGraphicsVars();
             aoVars.extVars.figs  = AOGraphics.createOwnerVars();
-            aoVars.uVars.figs    = AOGraphics.createUserVars();
-            
+%             aoVars.uVars.figs    = AOGraphics.createUserVars();
+            aoVars.uVars.figs.extH = [];
+
             aoVars.measVars.algo.timing.tSigVec  = [];
             aoVars.measVars.algo.timing.tMeasVec = [];
             aoVars.measVars.algo.timing.tAcqVec  = [];
         end
         
-        function [splitTime, splitNum] = calcSplitTimeToSample(this, time)
-            splitTime = this.limits.measLimit+1;
-            splitNum = 0;
-            while splitTime > this.limits.measLimit
-                splitNum = splitNum+1;
-                splitTime = round(time/splitNum, 3);
-            end
+        function setMeasLimit(this, time)
+            this.algo.setMeasLimit(time)            
+        end
+        
+        function [res] = getResultStruct(this)
+            [~, resStruct, ~, resSplit] = this.algo.getResultsStruct();
+            
+            if this.measVars.AO.splitMeas
+                res = resSplit;
+            else
+                res = resStruct;
+            end  
+            
         end
         
         % Peripherals Configurations
@@ -492,7 +551,8 @@ classdef acoustoOptics < handle
         end
         
         function configfGen(this)
-            [sigData, clkData] = this.algo.createSignalsForfGen();
+            sigData = this.measVars.algo.usSignal.sigData;
+            clkData = this.measVars.algo.sClk.clkData;
             
             dataCh1 = this.fGen.getChDataStruct();
             dataCh2 = this.fGen.getChDataStruct();
@@ -503,6 +563,8 @@ classdef acoustoOptics < handle
             dataCh2.dataLen = length(dataCh2.data);
 
             this.measVars.fGen = this.extVars.fGen; 
+            this.measVars.fGen.sigData = sigData;
+            this.measVars.fGen.clkData = clkData;
             
             this.fGen.reset();
             this.fGen.setProperties(this.extVars.fGen.ch{1}, this.extVars.fGen.ch{2});
@@ -522,7 +584,7 @@ classdef acoustoOptics < handle
         end
     
         function configDigitizer(this)
-            this.digitizer.setDigitizerVars(this.extVars.digitizer);
+            this.digitizer.setVars(this.extVars.digitizer);
             this.digitizer.configure();
             this.measVars.digitizer = this.digitizer.getVars;
         end
@@ -535,31 +597,26 @@ classdef acoustoOptics < handle
         function resetDigitizerMem(this)
          	this.digitizer.releaseBuffers();  
         end
-
-        % Measurements algorithms types     
+        
+        % Measurements algorithms types
         function res = runAcoustoOptics(this)
+            [~, ~, dataInSplit, ~] = this.algo.getResultsStruct();
             % Save AO variables (if needed, decided by fileSystem)
             this.fileSystem.saveVarsToDisk();            
             % Measure data and analyse it with AO Algorithm
             if this.measVars.AO.splitMeas
-                resArr(this.measVars.AO.splitNum) = struct('qAvgChFFT', [], 'unFittedFFT', [], 'unFittedFFTShift', [], 'fitModel', [], 'fittedFFT', [], 'phi', []);
-%                 resArr(this.measVars.AO.splitNum) = struct('qAvgChFFT', []);
                 for i = 1:this.measVars.AO.splitNum
-                    fprintf("AOI: Split %d/%d: \n", i, this.measVars.AO.splitNum);
-                    this.fileSystem.updateSplitInd(i);
-                    resArr(i) = this.measureAndAnalyse();
-                    this.graphics.setData(resArr(i));
-                    this.plotAll();
+                    fprintf("AOI: Split %d/%d: ", i, this.measVars.AO.splitNum);
+                    dataInSplit(:,i) = this.measureAndAnalyse();
                 end
-                this.result = this.algo.analyseSplittedData( resArr, this.measVars.AO.splitNum);
-                this.result.splitedRes = resArr;
+                this.result = this.algo.analyseSplittedData(dataInSplit);
             else 
                 this.result = this.measureAndAnalyse();
             end
             
             % Set data to graphics object
             this.timeTable.setResultsToGraphics = tic;
-            this.graphics.setData(this.result);
+            this.graphics.setData(gather(this.result));
             this.timeTable.setResultsToGraphics = toc(this.timeTable.setResultsToGraphics);
             
             % Plot Results (if needed, decided by AO)
@@ -568,7 +625,6 @@ classdef acoustoOptics < handle
             this.timeTable.plotAll = toc(this.timeTable.plotAll);
             
             % Save results (if needed, decided by fileSystem)
-            % fprintf("AOI: Saving Results To Disk\n");
             this.timeTable.saveData = tic;
             this.fileSystem.saveResultsToDisk(this.result)
             this.fileSystem.closeFileSystem();
@@ -579,22 +635,22 @@ classdef acoustoOptics < handle
                 this.updateTimeTable();
             end
             res = this.result;
-            fprintf ("AOI: Done AO\n") 
         end
         
         function res = liveAcoustoOptics(this) 
             if this.measVars.AO.limitByN
                 this.fileSystem.initLiveAOFS(this.getVars());
                 this.runLive = true;
-                if this.measVars.AO.splitMeas
-                    res(this.measVars.AO.N) = struct('splitedRes', [], 'qAvgChFFT', [], 'unFittedFFT', [], 'unFittedFFTShift', [], 'fitModel', [], 'fittedFFT', [], 'phi', []);
-                else
-                    res(this.measVars.AO.N) = struct('qAvgChFFT', [], 'unFittedFFT', [], 'unFittedFFTShift', [], 'fitModel', [], 'fittedFFT', [], 'phi', []);
-                end
+ 
                 for i=1:this.measVars.AO.N
+                    fprintf("AOI: Live AO: %d/%d.\n", i, this.measVars.AO.N);
                     this.fileSystem.setLiveAOInd(i);
-                    res(i) = this.runAcoustoOptics();
-                    pause(0.1)
+                    if this.measVars.algo.general.useFrame
+                        res(i) = this.runAcoustoOptics();
+                    else
+                        res = this.runAcoustoOptics();
+                    end
+                    pause(1)
                     if ~this.runLive
                         fprintf("AOI: Live AO was STOPPED.\n");
                         break;
@@ -602,12 +658,13 @@ classdef acoustoOptics < handle
                 end
                 
                 this.fileSystem.closeLiveAoFileSystem();
+                this.result = res;
             else %infinite number of measurements
                 %saving is not allowed in unlimited live AO
                 this.runLive = true;
                 while(this.runLive)
                    this.runAcoustoOptics();
-                   pause(0.1);
+                   pause(1);
                 end
                 fprintf("AOI: Live AO was STOPPED.\n");
                 res = this.result;
@@ -617,25 +674,17 @@ classdef acoustoOptics < handle
         function res = measureAndAnalyse(this)
            if this.measVars.AO.useVirtualData
                % Generate virtual data (DEBUG)
+                fprintf ("AOI: Generating synthetic data...")
                 bufferDataOut = this.createVirtualData();
-            elseif this.periAvail.completeHardwareAvail
+           elseif this.periAvail.completeHardwareAvail
                 % Get data from digitizer (Measure)
-                fprintf ("AOI: Acquiring...\n")
+                fprintf ("AOI: Acquiring...")
                 this.timeTable.acq = tic;
                 this.IO.open();
-                bufferDataOut      = this.digitizer.acquireDataTS();
+                bufferDataOut      = this.digitizer.acquire();
                 this.IO.close();
                 this.timeTable.acq = toc(this.timeTable.acq);
-
-                this.timeTable.moveData = tic;
-                this.algo.setRawData(bufferDataOut);
-                bufferDataOut           = gather(bufferDataOut);
-                this.timeTable.moveData = toc(this.timeTable.moveData);
-                
-                if this.measVars.AO.splitMeas
-                    this.fileSystem.saveRawDataToDisk(bufferDataOut)
-                    bufferDataOut = [];
-                end
+                this.displayCroppedData();
             else
                  % No source of data (Error)
                  fprintf("AOI: No source of data found.\n");  
@@ -643,13 +692,21 @@ classdef acoustoOptics < handle
                  return;
             end
             
-            fprintf ("AOI: Analyzing!\n")
+            this.timeTable.moveData = tic;
+            this.algo.setRawData(bufferDataOut);
+            bufferDataOut           = gather(bufferDataOut);
+            this.timeTable.moveData = toc(this.timeTable.moveData);
+
+            if this.measVars.AO.splitMeas
+                this.fileSystem.saveMeasToDisk(bufferDataOut)
+                bufferDataOut = [];
+            end
+            
+            fprintf ("Analyzing...")
             this.timeTable.analyse = tic;
             res                    = this.algo.analyse();
-            this.result            = res;
-            if ~this.measVars.AO.splitMeas
-                this.result.rawData    = bufferDataOut;
-            end
+
+            fprintf ("Done!\n")
             this.timeTable.analyse = toc(this.timeTable.analyse);
         end
         
@@ -658,21 +715,16 @@ classdef acoustoOptics < handle
             this.timeTable.acq = tic;
             fus              = this.measVars.algo.usSignal.fSin;
             samplesPerPulse  = this.measVars.algo.samples.samplesPerPulse;
-            samplesPerTrain  = this.measVars.algo.samples.samplesPerTrain;
-            numOfTrains      = this.measVars.algo.samples.numOfTrains;
+            samplesPerSqnc   = this.measVars.algo.samples.samplesPerSqnc;
+            sqncPerSignal    = this.measVars.algo.samples.sqncPerSignal;
             samplesPerSignal = this.measVars.algo.samples.samplesPerSignal;
             samplesPerAcq    = this.measVars.algo.digitizer.samplesPerAcq;
             
-            tPulse   = this.measVars.algo.timing.tUS(1:samplesPerPulse);
+            tPulse   = this.measVars.algo.timing.tSigVec(1:samplesPerPulse);
             sig      = sin(2*pi*fus*tPulse);
-            sigTrain = zeros(1, samplesPerTrain);
+            sigSqnc = zeros(1, samplesPerSqnc);
             
-            sigTrain(1:samplesPerPulse) = sig;
-            
-            sig1 = repmat(sigTrain, 1, numOfTrains);
-            sig2 = repmat(circshift(sigTrain,   samplesPerPulse), 1, numOfTrains);
-            sig3 = repmat(circshift(sigTrain, 2*samplesPerPulse), 1, numOfTrains);
-            sig4 = repmat(circshift(sigTrain, 3*samplesPerPulse), 1, numOfTrains);
+            sigSqnc(1:samplesPerPulse) = sig;
             
             prePhantom  = this.measVars.algo.samples.prePhantomSamples;
             preTrigger  = this.measVars.algo.digitizer.preTriggerSamples;
@@ -681,16 +733,13 @@ classdef acoustoOptics < handle
             preSig  = zeros(1, prePhantom+preTrigger);
             postSig = zeros(1, postSamples);
             
-            totSig1 = [preSig, sig1, postSig];
-            totSig2 = [preSig, sig2, postSig];
-            totSig3 = [preSig, sig3, postSig];
-            totSig4 = [preSig, sig4, postSig];
-
-            bufferDataOut = [totSig1; totSig2; totSig3; totSig4];
-            noise         = 2*rand(4, samplesPerAcq);
+            bufferDataOut = zeros(this.measVars.digitizer.vars.channels, samplesPerAcq);
             
-            bufferDataOut = bufferDataOut + noise;
-            this.algo.setRawData(bufferDataOut);
+            for i=1:this.measVars.digitizer.vars.channels
+                tmpSig = repmat(circshift(sigSqnc,   (i-1)*samplesPerPulse), 1, sqncPerSignal);
+                bufferDataOut(i,:) = [preSig, tmpSig, postSig]; %+  2*rand(1, samplesPerAcq);
+            end
+
             this.timeTable.acq = toc(this.timeTable.acq);
             this.timeTable.moveData = tic;
         end
@@ -726,77 +775,19 @@ classdef acoustoOptics < handle
         
         %Graphics
         function plotAll(this)
-            if this.measVars.figs.validStruct.fullSignal
-                if ~isfield(this.result, 'rawData')
-                    fprintf("AOI: You asked to display Raw Data, but rawData isn't available in reults.\n");
-                else
-                    this.graphics.plotSignal('fullSignal');
-                end
-            end
-            
-            if this.measVars.figs.validStruct.measSamples
-                if ~isfield(this.result, 'rawData')
-                    fprintf("AOI: You asked to display Measured Samples, but rawData isn't available in reults.\n");
-                else
-                    this.graphics.plotSignal('measSamples');
-                end
-            end
-
-            if this.measVars.figs.validStruct.netSignal
-                if ~isfield(this.result, 'netSignal')
-                    fprintf("AOI: You asked to display Net Signal, but netSignal isn't available in reults.\n");
-                else
-                    this.graphics.plotSignal('netSignal');
-                end
-            end
-            
-            if this.measVars.figs.validStruct.deMul
-                if ~isfield(this.result, 'deMultiplexed')
-                    fprintf("AOI: You asked to display Demultiplexed Signal, but deMul isn't available in reults.\n");
-                else
-                    this.graphics.plotSignal('deMul');
-                end
-            end
-            
-            if this.measVars.figs.validStruct.reshapedSignal
-                if ~isfield(this.result, 'reshapedSignal')
-                    fprintf("AOI: You asked to display Reshaped Singal, but reshapedSignal isn't available in reults.\n");
-                else
-                    this.graphics.plotReshapedSignal();
-                end
-            end  
-      
-            if this.measVars.figs.validStruct.qAvgChFFT
-                 if ~isfield(this.result, 'qAvgChFFT')
-                    fprintf("AOI: You asked to display quant-averaged FFT, but qAvgFFT isn't available in reults.\n");
-                 else
-                    this.graphics.plotFFT('qAvgChFFT');
-                 end
-            end
-
-            if this.measVars.figs.validStruct.unFittedFFT
-                 if ~isfield(this.result, 'unFittedFFTShift')
-                    fprintf("AOI: You asked to display unfitted FFT, but unFittedFFTShift isn't available in reults.\n");
-                 else
-                    this.graphics.plotFFT('unFittedFFT');
-                 end
-            end
-            
-            if this.measVars.figs.validStruct.fittedFFT
-                 if ~isfield(this.result, 'fittedFFT')
-                    fprintf("AOI: You asked to display fitted FFT, but fittedData isn't available in reults.\n");
-                 else
-                    this.graphics.plotFFT('fittedFFT');
-                 end
-            end
-            
-            if this.measVars.figs.validStruct.phi
-                if ~isfield(this.result, 'phi')
-                    fprintf("AOI: You asked to display Phi, but phi isn't available in reults.\n");
-                else
-                    this.graphics.plotPhi();
-                end
-            end  
+            this.graphics.plotSignal('meas');
+            this.graphics.plotSignal('signal');
+            this.graphics.plotSignal('deMul');
+            this.graphics.plotReshapedSignal();
+            this.graphics.plotFFT('unFittedFFTAllCh');
+            this.graphics.plotFFT('unFittedFFTSingleCh')
+            this.graphics.plotFFT('fittedFFTSingleCh');
+            this.graphics.plotFFT('fittedFFTAllCh');
+            this.graphics.plotFFT('avgFFT');
+            this.graphics.plotFFT('normFFT');
+            this.graphics.plotPhi('phi');
+            this.graphics.plotPhi('rawPhi');
+            this.graphics.plotPhi('phiLog');
         end
         
         function gH = getGraphicsHandle(this)
@@ -806,7 +797,13 @@ classdef acoustoOptics < handle
         function setFigsVars(this, figs)
             this.graphics.setUserVars(figs);
             this.graphics.setGraphicsDynamicVars()
+            this.graphics.setSingleChIdx(figs.singleChIdx)
             this.plotAll();
+        end
+        
+        function displayCroppedData(this)
+            this.graphics.setCroppedData(this.digitizer.getCroppedData)
+            this.graphics.plotSignal('cropped');
         end
         
         % Saved data Operation

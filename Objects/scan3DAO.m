@@ -1,5 +1,5 @@
 classdef scan3DAO < handle
-    % SCAN3D This object perform 2D scan and extract 3D acousto optics data. 
+    % SCAN3D This object performs 2D scan and extract 3D acousto optics data. 
     % This object contain 2 main subobject: scan2D, which contains the AO #
     % and stages. 
     
@@ -22,35 +22,40 @@ classdef scan3DAO < handle
         fileSystemVars
         generalVars
         
-        curPos      %[second]              [mm]
-        curPosIdx   %[secondIdx][#]
+        curPos      %[third]              [mm]
+        curPosIdx   %[thirdIdx][#]
         owned
         extStages
     end
     
     methods (Static)
         function uVars = uVarsCreate()
-            uVars.ao         = acoustoOptics.uVarsCreate();
-            uVars.s2D        = scan2DAO.uVarsCreate();
+            uVars.ao         = acoustoOptics.createUserVars();
+            uVars.s2D        = scan2DAO.createUserVars();
             uVars.figs       = scan3DGraphics.createUserVars();
             uVars.fileSystem = fileSystemS3D.uVarsCreate();
            
-            uVars.grid.repeats   = 1;
+            uVars.grid.repeats = 1;
             
-            uVars.grid.firstStart   = 0;
-            uVars.grid.firstStride  = 0;
-            uVars.grid.firstEnd     = 0;
+            uVars.grid.scan1Start  = 0;
+            uVars.grid.scan1Stride = 0;
+            uVars.grid.scan1End    = 0;
 
-            uVars.grid.secondStart  = 0;
-            uVars.grid.secondStride = 0;
-            uVars.grid.secondEnd    = 0;
+            uVars.grid.scan2Start  = 0;
+            uVars.grid.scan2Stride = 0;
+            uVars.grid.scan2End    = 0;
             
-            uVars.grid.firstAxis  = 'Y';
-            uVars.grid.secondAxis = 'X';
+            uVars.grid.thirdPos = 0;
             
-            uVars.stages.firstAxStageId  = 1;
-            uVars.stages.secondAxStageId = 2;
+            uVars.grid.scan1Axis  = 'Y';
+            uVars.grid.scan2Axis  = 'Z';
+            uVars.grid.thirdAxis  = 'X';
+            uVars.grid.depthAxis  = 'X';
+            
+%             uVars.stages.scan1AxStageId = 1;
+%             uVars.stages.scan2AxStageId = 2;
             uVars.stages.stagesOwnedByParent = false;
+            uVars.stages.dontMoveNonScaning  = true;
         end
     end
     
@@ -96,21 +101,24 @@ classdef scan3DAO < handle
             fprintf("S3D: Setting Variables to 2D-Scan.\n");
             this.uVars = uVars();
             
-            fprintf("S3D: 4. Set Stages variables and Axes.\n");
+            %--------------------------------------------------------------
+            fprintf("S3D: 1. Set Stages variables and Axes.\n");
             % Only in case of internal stages (e.g. running from script and
             % not from GUI).
             % This describes in general which stage belongs to what axis.
+            this.generalVars.dontMoveNonScaning = uVars.stages.dontMoveNonScaning;
             this.generalVars.stagesOwnedByParent = uVars.stages.stagesOwnedByParent;
             if ~this.generalVars.stagesOwnedByParent
-                this.stages.assignStagesAxes([uVars.grid.firstAxis,        uVars.grid.secondAxis],...
-                                             [uVars.stages.firstAxStageId, uVars.stages.secondAxStageId]);
+                this.stages.assignStagesAxes([uVars.grid.scan1Axis, uVars.grid.scan2Axis]);
             end
-            
+           
+            %--------------------------------------------------------------
             fprintf("S3D: 2. Setting FileSystem variables.\n");
             this.fileSystem.setUserVars(uVars.fileSystem);
-
-            fprintf("S3D: 1. Forming scan 2D variables.\n");
-            s2DuVars = scan2DAO.uVarsCreate();
+            
+            %--------------------------------------------------------------
+            fprintf("S3D: 3. Forming scan 2D variables.\n");
+            s2DuVars = scan2DAO.createUserVars();
             
             s2DuVars.ao = uVars.ao;
             
@@ -119,17 +127,20 @@ classdef scan3DAO < handle
             s2DuVars.general.externalScan = true;
             
             %Grid
-            s2DuVars.grid.firstStart  = uVars.grid.firstStart;
-            s2DuVars.grid.firstStride = uVars.grid.firstStride;
-            s2DuVars.grid.firstEnd    = uVars.grid.firstEnd;
-
-            s2DuVars.grid.secondPos  = uVars.grid.secondStart;
+            s2DuVars.grid.scanStart  = uVars.grid.scan1Start;
+            s2DuVars.grid.scanStride = uVars.grid.scan1Stride;
+            s2DuVars.grid.scanEnd    = uVars.grid.scan1End;
             
-            s2DuVars.grid.firstAxis  = uVars.grid.firstAxis;
-            s2DuVars.grid.secondAxis = uVars.grid.secondAxis;
+            s2DuVars.grid.secondPos = uVars.grid.scan2Start;
+            s2DuVars.grid.thirdPos  = uVars.grid.thirdPos;
             
+            s2DuVars.grid.scanAxis   = uVars.grid.scan1Axis;
+            s2DuVars.grid.secondAxis = uVars.grid.scan2Axis;
+            s2DuVars.grid.thirdAxis  = uVars.grid.thirdAxis;
+            s2DuVars.grid.depthAxis  = uVars.grid.depthAxis;
+           
             %Stages
-            s2DuVars.stages.moveSecondStage = false;
+            s2DuVars.stages.moveNonScanStages   = false;
             s2DuVars.stages.stagesOwnedByParent = true;
             
             %Graphics
@@ -142,11 +153,11 @@ classdef scan3DAO < handle
             s2DuVars.figs.validOwnerGraphics = true;
             s2DuVars.figs.useExtClims        = uVars.figs.normColorsToPlane;
             
-            s2DuVars.figs.firstAxType = uVars.figs.firstAxType;
-            s2DuVars.figs.depthAxType = uVars.figs.depthAxType;
+            s2DuVars.figs.scanAxType    = uVars.figs.scan1AxType;
+            s2DuVars.figs.depthAxType   = uVars.figs.depthAxType;
             s2DuVars.figs.reopenFigures = uVars.figs.reopenFigures;
             
-            s2DuVars.figs.fonts              = uVars.figs.fonts;
+            s2DuVars.figs.fonts         = uVars.figs.fonts;
             
             %Filesystem
             s2DuVars.fileSystem.extProject   = true;
@@ -155,51 +166,58 @@ classdef scan3DAO < handle
             
             this.s2D.setUserVars(s2DuVars)
             this.s2DVars = this.s2D.getVars();
+                        
+            %--------------------------------------------------------------
+            fprintf("S3D: 4. Setting Grid variables.\n");
+            this.grid.repeats     = uVars.grid.repeats;
             
-            fprintf("S3D: 3. Setting Grid variables.\n");
-            this.grid.repeats      = uVars.grid.repeats;
+            this.grid.scan1Start   = uVars.grid.scan1Start;
+            this.grid.scan1Stride  = uVars.grid.scan1Stride;
+            this.grid.scan1End     = uVars.grid.scan1End;
             
-            this.grid.firstStart   = this.s2DVars.grid.firstStart;
-            this.grid.firstStride  = this.s2DVars.grid.firstStride;
-            this.grid.firstEnd     = this.s2DVars.grid.firstEnd;
+            this.grid.scan2Start  = uVars.grid.scan2Start;
+            this.grid.scan2Stride = uVars.grid.scan2Stride;
+            this.grid.scan2End    = uVars.grid.scan2End;
             
-            this.grid.secondStart  = uVars.grid.secondStart;
-            this.grid.secondStride = uVars.grid.secondStride;
-            this.grid.secondEnd    = uVars.grid.secondEnd;
+            this.grid.thirdPos    = uVars.grid.thirdPos;
             
-            this.grid.firstAxis  = uVars.grid.firstAxis;
-            this.grid.secondAxis = uVars.grid.secondAxis;
-
+            this.grid.scan1Axis   = uVars.grid.scan1Axis;
+            this.grid.scan2Axis   = uVars.grid.scan2Axis;
+            this.grid.thirdAxis   = uVars.grid.thirdAxis;
+            this.grid.depthAxis   = uVars.grid.depthAxis;
+            
             this.calc3DGrid();
-
+            
+            %--------------------------------------------------------------
             fprintf("S3D: 5. Setting strings models and variables\n");
             strings{1} = "start3DScan";
-            models{1}  = sprintf("Start Scan for (%s) = (%s)", this.grid.secondAxis, "%.2f");
+            models{1}  = sprintf("Start Scan for (%s) = (%s)", this.grid.scan2Axis, "%.2f");
             strings{2} = "timeTable3D";
-            models{2}  = sprintf("%s%s", this.grid.secondAxis, "%.2f");
+            models{2}  = sprintf("%s%s", this.grid.scan2Axis, "%.2f");
 
             this.sf.setStringModels(strings, models);
             
+            %--------------------------------------------------------------
             fprintf("S3D: 6. Setting figures variables.\n");
             figs = this.graphics.createOwnerVars();
             
             % Misc
             figs.normColorsToPlane = uVars.figs.normColorsToPlane;
-            figs.reopenFigures = uVars.figs.reopenFigures;
+            figs.reopenFigures     = uVars.figs.reopenFigures;
             
             % Vectors
             figs.repeats    = uVars.grid.repeats;
             
-            figs.firstAxType     = uVars.figs.firstAxType;
-            figs.firstAxisNorm   = this.grid.firstVec;
-            figs.secondAxType    = uVars.figs.firstAxType;
-            figs.secondAxisNorm  = this.grid.secondVec;
-            figs.depthAxType     = uVars.figs.depthAxType;
-            figs.depthAxisNorm   = this.s2DVars.ao.measVars.algo.len.zVecUSRes;
+            figs.scan1AxType    = uVars.figs.scan1AxType;
+            figs.scan1AxisNorm  = this.grid.scan1Vec;
+            figs.scan2AxType    = uVars.figs.scan2AxType;
+            figs.scan2AxisNorm  = this.grid.scan2Vec;
+            figs.depthAxType    = uVars.figs.depthAxType;
+            figs.depthAxisNorm  = this.s2DVars.ao.measVars.algo.len.depthVec;
 
             % Labels
-            figs.firstAxLabel = uVars.grid.firstAxis;
-            figs.secondAxLabe = uVars.grid.secondAxis;
+            figs.scan1AxLabel = uVars.grid.scan1Axis;
+            figs.scan2AxLabel = uVars.grid.scan2Axis;
             figs.depthAxLabel = this.grid.depthAxis;
             figs.mainPlane    = this.grid.mainPlane;
             
@@ -213,28 +231,28 @@ classdef scan3DAO < handle
         end
         
         function vars = getVars(this)
-            vars.s2D           = this.s2DVars;
-            vars.grid          = this.grid;
-            vars.general       = this.generalVars;
-            vars.fileSystem    = this.fileSystemVars;
-            vars.uVars         = this.uVars;
-            vars.uVars.figs    = scan3DGraphics.createUserVars();
+            vars.s2D            = this.s2DVars;
+            vars.grid           = this.grid;
+            vars.general        = this.generalVars;
+            vars.fileSystem     = this.fileSystemVars;
+            vars.uVars          = this.uVars;
+            vars.uVars.figs     = scan3DGraphics.createUserVars();
             vars.uVars.s2D.figs = scan2DGraphics.createOwnerVars();
-            vars.uVars.ao.figs = AOGraphics.createOwnerVars();
+            vars.uVars.ao.figs  = AOGraphics.createOwnerVars();
         end
         
         % Results Functions
         
         function initResultsArrays3D(this)      
-            firstAxLen     = this.grid.firstIdxLen;
-            secondAxLen    = this.grid.secondIdxLen;
-            depthLen       = this.grid.depthIdxLen;
+            scan1AxLen    = this.grid.scan1IdxLen;
+            scan2AxLen    = this.grid.scan2IdxLen;
+            depthLen      = this.grid.depthIdxLen;
             
             repeats    = this.grid.repeats;
             
-            this.res.phi        = zeros(firstAxLen, secondAxLen, depthLen, repeats);
-            this.res.phiAvg     = zeros(firstAxLen, secondAxLen, depthLen);
-            this.res.phiAvgStd  = zeros(firstAxLen, secondAxLen, depthLen);
+            this.res.phi        = zeros(scan1AxLen, scan2AxLen, depthLen, repeats);
+            this.res.phiAvg     = zeros(scan1AxLen, scan2AxLen, depthLen);
+            this.res.phiAvgStd  = zeros(scan1AxLen, scan2AxLen, depthLen);
             
             this.curPosIdx = zeros(1,3);
         end
@@ -253,27 +271,30 @@ classdef scan3DAO < handle
             this.graphics.setGraphicsScanVars();
             this.graphics.updateGraphicsConstruction();
             
-            this.curPos    = this.grid.secondStart;
+            this.curPos    = this.grid.scan2Start;
             this.curPosIdx = 1;
             
-            this.fileSystem.configFileSystem(this.grid.secondAxis);
+            this.fileSystem.configFileSystem(this.grid.scan2Axis);
             this.fileSystem.saveVarsToDisk();
             this.s2D.configureScan();
         end
         
         % Scan Functions
         function res = scan3D(this)
-            for i=1:this.grid.secondIdxLen
+            if ~this.generalVars.dontMoveNonScaning
+                this.stages.moveAbsAx(this.grid.thirdAxis, this.grid.thirdPos)
+            end
+            for i=1:this.grid.scan2IdxLen
                 this.updateCurPosAndIdx(i);
                 this.sf.startScanTime("timeTable3D", 'singlePlane', this.curPos);
                 this.sf.printStrModel("start3DScan", this.curPos, true);
                 
                 this.sf.startScanTime("timeTable3D", 'prepare', this.curPosIdx);
                 this.fileSystem.updateFileSystem(this.curPos);
-                this.s2D.updateSecondAxPos(this.curPos);
+                this.s2D.updateThirdAxPos(this.curPos);
                 this.sf.stopScanTime("timeTable3D", 'prepare', this.curPosIdx);
 
-                this.stages.moveStageAxisAbs(this.grid.secondAxis, this.curPos)
+                this.stages.moveAbsAx(this.grid.scan2Axis, this.curPos)
                 res2D = this.s2D.scan2D();
 
                 this.sf.startScanTime("timeTable3D", 'copyPlane', this.curPos);
@@ -289,11 +310,11 @@ classdef scan3DAO < handle
         end
 
         % Position Functions
-        function updateCurPosAndIdx(this, second)
+        function updateCurPosAndIdx(this, scan2)
             % curScanIdx - always aligned to (R, 1st, 2nd)[#]
             % curScan    - always aligned to ( 1st, 2nd)[mm]
-            this.curPosIdx = second;
-            this.curPos    = this.grid.secondVec(second);
+            this.curPosIdx = scan2;
+            this.curPos    = this.grid.scan2Vec(scan2);
             
             this.graphics.updateS3DCurPosAndIdx(this.curPosIdx, this.curPos);
         end
@@ -308,12 +329,12 @@ classdef scan3DAO < handle
         end
         
         function calc3DGrid(this)          
-            this.grid.firstVec     = this.s2DVars.grid.firstVec;
-            this.grid.firstLen     = this.s2DVars.grid.firstLen;
-            this.grid.firstIdxLen  = this.s2DVars.grid.firstIdxLen;
-            this.grid.firstIdx     = this.s2DVars.grid.firstIdx;
-            this.grid.firstCntr    = this.s2DVars.grid.firstCntr;
-            this.grid.firstZero    = this.s2DVars.grid.firstZero;
+            this.grid.scan1Vec     = this.s2DVars.grid.scanVec;
+            this.grid.scan1Len     = this.s2DVars.grid.scanLen;
+            this.grid.scan1IdxLen  = this.s2DVars.grid.scanIdxLen;
+            this.grid.scan1Idx     = this.s2DVars.grid.scanIdx;
+            this.grid.scan1Cntr    = this.s2DVars.grid.scanCntr;
+            this.grid.scan1Zero    = this.s2DVars.grid.scanZero;
             
             this.grid.depthVec     = this.s2DVars.grid.depthVec;
             this.grid.depthLen     = this.s2DVars.grid.depthLen;
@@ -322,52 +343,52 @@ classdef scan3DAO < handle
             this.grid.depthCntr    = this.s2DVars.grid.depthCntr;
             this.grid.depthZero    = this.s2DVars.grid.depthZero;
             
-            this.grid.secondVec    = this.grid.secondStart : this.grid.secondStride : this.grid.secondEnd;
-            this.grid.secondLen    = abs(this.grid.secondStart - this.grid.secondEnd);
-            this.grid.secondIdxLen = length(this.grid.secondVec);
-            this.grid.secondIdx    = 1:1:this.grid.secondIdxLen;
-            this.grid.secondCntr   = this.grid.secondVec - min(this.grid.secondVec);
-            this.grid.secondZero   = abs(this.grid.secondVec - this.grid.secondVec(1));
+            this.grid.scan2Vec    = this.grid.scan2Start : this.grid.scan2Stride : this.grid.scan2End;
+            this.grid.scan2Len    = abs(this.grid.scan2Start - this.grid.scan2End);
+            this.grid.scan2IdxLen = length(this.grid.scan2Vec);
+            this.grid.scan2Idx    = 1:1:this.grid.scan2IdxLen;
+            this.grid.scan2Cntr   = this.grid.scan2Vec - min(this.grid.scan2Vec);
+            this.grid.scan2Zero   = abs(this.grid.scan2Vec - this.grid.scan2Vec(1));
 
-            switch this.grid.firstAxis
+            switch this.grid.scan1Axis
                 case 'X'
-                    this.grid.xVec = this.grid.firstVec;
-                    switch this.grid.secondAxis
+                    this.grid.xVec = this.grid.scan1Vec;
+                    switch this.grid.scan2Axis
                         case 'Y'
-                            this.grid.yVec = this.grid.secondVec;
+                            this.grid.yVec = this.grid.scan2Vec;
                             this.grid.zVec = this.grid.depthVec;
                             this.grid.depthAxis = 'Z';
                             this.grid.mainPlane = 'XZ';
                         case 'Z'
-                            this.grid.zVec = this.grid.secondVec;
+                            this.grid.zVec = this.grid.scan2Vec;
                             this.grid.yVec = this.grid.depthVec;
                             this.grid.depthAxis = 'Y';
                             this.grid.mainPlane = 'XY';
                     end
                 case 'Y'
-                    this.grid.yVec = this.grid.firstVec;
-                    switch this.grid.secondAxis
+                    this.grid.yVec = this.grid.scan1Vec;
+                    switch this.grid.scan2Axis
                         case 'X'
-                            this.grid.xVec = this.grid.secondVec;
+                            this.grid.xVec = this.grid.scan2Vec;
                             this.grid.zVec = this.grid.depthVec;
                             this.grid.depthAxis = 'Z';
                             this.grid.mainPlane = 'YZ';
                         case 'Z'
-                            this.grid.zVec = this.grid.secondVec;
+                            this.grid.zVec = this.grid.scan2Vec;
                             this.grid.xVec = this.grid.depthVec;
                             this.grid.depthAxis = 'X';
                             this.grid.mainPlane = 'XY';
                     end   
                 case 'Z'
-                    this.grid.zVec = this.grid.firstVec;
-                    switch this.grid.secondAxis
+                    this.grid.zVec = this.grid.scan1Vec;
+                    switch this.grid.scan2Axis
                         case 'X'
-                            this.grid.xVec = this.grid.secondVec;
+                            this.grid.xVec = this.grid.scan2Vec;
                             this.grid.yVec = this.grid.depthVec;
                             this.grid.depthAxis = 'Y';
                             this.grid.mainPlane = 'YZ';
                         case 'Y'
-                            this.grid.yVec = this.grid.secondVec;
+                            this.grid.yVec = this.grid.scan2Vec;
                             this.grid.xVec = this.grid.depthVec;
                             this.grid.depthAxis = 'X';
                             this.grid.mainPlane = 'XZ';

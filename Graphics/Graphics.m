@@ -22,6 +22,7 @@ classdef Graphics < handle
             hS.plotMarker = NaN;
             hS.title      = NaN;
             hS.leg        = NaN;
+            hS.text       = NaN;
         end
     end
     
@@ -47,8 +48,8 @@ classdef Graphics < handle
             this.figs.(gName).strings.updateLegend = true;
         end        
         
-        function setChAndPos(this, ch, zIdx, quant)
-            this.figs.zIdx  = zIdx;
+        function setChAndPos(this, ch, depthIdx, quant)
+            this.figs.depthIdx  = depthIdx;
             this.figs.ch    = ch;
             this.figs.quant = quant;
         end
@@ -120,6 +121,7 @@ classdef Graphics < handle
             end
 
             % 2. Manage construction
+            %if requested is internal
             if (strcmp(this.uVars.intExt, 'int')) 
                 for i = 1:this.numOfFigs
                     if this.uVars.validStruct.(this.figsNames{i})
@@ -136,14 +138,14 @@ classdef Graphics < handle
                         this.figs.(this.figsNames{i}).handles.cur.plot = NaN;
                     end
                 end
-            else %if current is external
+            else %if requested is external
                 for i = 1:this.numOfFigs
-                    if this.extUpdate % if its the first external copy the handles.
+                    if this.extUpdate % if it's the first external, copy the handles.
                         this.figs.(this.figsNames{i}).handles.ext.fig = this.uVars.extH.(this.figsNames{i}).fig;
                         this.figs.(this.figsNames{i}).handles.ext.ax  = this.uVars.extH.(this.figsNames{i}).ax;
 %                         this.figs.(this.figsNames{i}).handles.cur     = this.figs.(this.figsNames{i}).handles.ext;
                     end
-                    if ~strcmp(this.figs.intExt, 'ext') %('int' or empty)
+                    if ~strcmp(this.figs.intExt, 'ext') %if current is not external
                         this.figs.(this.figsNames{i}).handles.cur = this.figs.(this.figsNames{i}).handles.ext;
                     end
                 end
@@ -153,6 +155,14 @@ classdef Graphics < handle
             end
             %3. update control variable
             this.figs.intExt = this.uVars.intExt;
+            
+            %4. turn on update for valid graphics
+            for i = 1:this.numOfFigs
+                if this.uVars.validStruct.(this.figsNames{i})
+                    this.figs.(this.figsNames{i}).update = true;
+                end
+            end
+            
         end   
 
         function setStringsToPlot(this, gName)

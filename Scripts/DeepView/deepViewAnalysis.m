@@ -69,12 +69,14 @@ xlabel("X [mm");
 ylabel("\phi [db]")
 
 %% Load saved Data
+varsDV = load("D:\ResultsToKeep\DeepView/DeepView-Vars.mat");
+timeVec = varsDV.time.timeVec;
 resAO  = cell(1,10);
 varsAO = cell(1,10);
-xVec = dv.s2DVars.grid.firstVec;
+xVec = varsDV.s2D.grid.firstVec;
 for i=1:9:10
-    rawDataPath = sprintf("D:/Results/13-May-2020 16-17-01-1Rep DV/TimeResults/T=%d/AOResults/AO-R-1-X-%.2f-Results.mat", timeVec(i), xVec(maxIdx(i)));
-    varsPath    = sprintf("D:/Results/13-May-2020 16-17-01-1Rep DV/TimeResults/T=%d/AO-Vars.mat", timeVec(i));
+    rawDataPath = sprintf("D:\ResultsToKeep\DeepView/TimeResults/T=%d/AOResults/AO-R-1-X-%.2f-Results.mat", timeVec(i), xVec(maxIdx(i)));
+    varsPath    = sprintf("D:\ResultsToKeep\DeepView/TimeResults/T=%d/AO-Vars.mat", timeVec(i));
     resAO{i}  = load(rawDataPath);
     tmpVars   = load(varsPath);
     
@@ -112,7 +114,6 @@ for j=1:4
 end
 legend("ch1", "ch2", "ch3", "ch4")
 title(sprintf("T = %d, Quant = %d, Z = %d", timeVec(i), quant, zIdx))
-
 
 
 figure()
@@ -239,3 +240,86 @@ sig2 = ifft(Sig);
 
 figure; 
 plot(ao.graphics.fBarShift, abs(sig2))
+
+
+%% Load saved Data
+varsDV = load("D:\ResultsToKeep\DeepView\DV 2-200/DeepView-Vars.mat");
+timeVec = varsDV.time.timeVec;
+xVec = varsDV.s2D.grid.firstVec;
+yVec = varsDV.s2D.grid.depthVec*1e3;
+res = load("D:\ResultsToKeep\DeepView\DV 2-200/DeepView-Results.mat");
+
+phi2   = squeeze(res.phi(:,1,:));
+phi200 = squeeze(res.phi(:,10,:));
+
+phi2Norm = (phi2 - min(min(phi2)) )./ (max(max(phi2)) - min(min(phi2)));
+phi200Norm = (phi200 - min(min(phi200)) )./ (max(max(phi200)) - min(min(phi200)));
+
+phi2Log = log(phi2Norm);
+phi200Log = log(phi200Norm);
+
+figure()
+subplot(1,2,1)
+imagesc(yVec, xVec, phi2Log)
+axis equal tight
+subplot(1,2,2)
+imagesc(yVec, xVec,phi200Log)
+axis equal tight
+
+phi2Lin = phi2Norm(:,28);
+phi200Lin = phi200Norm(:,28);
+
+xVecNorm = abs(xVec - max(xVec));
+figure()
+plot(xVecNorm, log(phi2Lin)); hold on 
+plot(xVecNorm, log(phi200Lin))
+legend("1x", "10x")
+%%
+varsDV = load("D:\ResultsToKeep\DeepView\DV 2-200-final/DeepView-Vars.mat");
+timeVec = varsDV.time.timeVec;
+xVec = varsDV.s2D.grid.firstVec;
+yVec = varsDV.s2D.grid.depthVec*1e3;
+res = load("D:\ResultsToKeep\DeepView\DV 2-200-final/DeepView-Results.mat");
+
+xVecNorm = abs(xVec - max(xVec));
+yVec = yVec(1:50);
+
+phi2   = squeeze(res.phi(:,1,1:50));
+phi200 = squeeze(res.phi(:,2,1:50));
+
+phi2Norm = (phi2 - min(min(phi2)) )./ (max(max(phi2)) - min(min(phi2)));
+phi200Norm = (phi200 - min(min(phi200)) )./ (max(max(phi200)) - min(min(phi200)));
+
+phi2Log = log(phi2Norm);
+phi200Log = log(phi200Norm);
+
+axFontsize = 14;
+ 
+figure()
+ax = axes();
+imagesc(ax, yVec, xVecNorm, phi2Log)
+xlabel("X[mm]")
+ylabel("Depth[mm]")
+axis equal tight
+set(ax, 'FontSize', axFontsize);
+
+figure()
+ax = axes();
+imagesc(ax, yVec, xVecNorm,phi200Log)
+xlabel("X[mm]")
+ylabel("Depth[mm]")
+axis equal tight
+set(ax, 'FontSize', axFontsize);
+
+phi2Lin = phi2Norm(:,28);
+phi200Lin = phi200Norm(:,28);
+
+figure()
+ax = axes();
+plot(ax, xVecNorm, db(phi2Lin)); hold on 
+plot(ax, xVecNorm, db(phi200Lin))
+legend("1x", "10x")
+xlabel("Depth[mm]")
+ylabel("Phi(db)")
+axis equal tight
+set(ax, 'FontSize', axFontsize);

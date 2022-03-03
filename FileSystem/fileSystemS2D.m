@@ -17,7 +17,7 @@ classdef fileSystemS2D < fileSystem
             this@fileSystem(hOwner, subObjHandle)
             this.uVars = fileSystemS2D.uVarsCreate();
             this.objName = "2DScan";
-            this.fsName = "S2D";
+            this.fsName  = "S2D";
             this.resDirName = "AOResults";
         end
         

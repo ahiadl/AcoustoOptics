@@ -7,6 +7,7 @@ classdef IO < handle
         deviceString
         s
         hardwareAvailable
+        ch
     end
     
     methods (Static)
@@ -38,18 +39,20 @@ classdef IO < handle
         end
         
         function allocPorts(this, uVars)
+            this.vars.uVars = uVars;
             for i =1:length(uVars.port)
                 portAndLine = ['Port', num2str(uVars.port(i)), '/Line', num2str(uVars.line(i))];
                 if ~this.vars.allocPorts(uVars.port(i), uVars.line(i))
                     if uVars.mode(i)
-                        this.s.addDigitalChannel(this.deviceString.ID, portAndLine, 'InputOnly');
+                        [~, this.vars.idx(i)] = this.this.s.addDigitalChannel(this.deviceString.ID, portAndLine, 'InputOnly');
                     else
-                        this.s.addDigitalChannel(this.deviceString.ID, portAndLine, 'OutputOnly');
+                        [~, this.vars.idx(i)] = this.s.addDigitalChannel(this.deviceString.ID, portAndLine, 'OutputOnly');
                     end
                     this.vars.allocPorts(uVars.port(i), uVars.line(i)) = 1;
                     this.vars.portsMode(uVars.port(i), uVars.line(i))  = uVars.mode(i);
                 end
             end
+            this.vars.numOfActiveChannels = sum(this.vars.allocPorts(:));
         end
         
         function open(this)
@@ -60,6 +63,17 @@ classdef IO < handle
         function close(this)
             outputSingleScan(this.s,0);
             this.vars.openPorts = zeros(this.vars.numOfPorts, this.vars.numOfLines);
+        end
+        
+        function disconnect(this)
+            for i = 1:length(this.vars.idx)
+                this.s.removechannel(this.vars.idx(i))
+            end
+        end
+        
+        function delete(this)
+            fprintf("Disconnecting from IO...\n");
+            this.disconnect();    
         end
                    
     end

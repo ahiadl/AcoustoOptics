@@ -13,7 +13,8 @@ classdef Digitizer < handle
         bufferDataOut
         uData
         Data;
-
+        croppedData;
+        
         timeTable
         alazarDefs
         hardwareAvailable
@@ -24,30 +25,47 @@ classdef Digitizer < handle
         function uVars = uVarsCreate() 
             uVars.mode                  = [];
             uVars.channels              = [];
-            uVars.preTriggerSamples     = 14;
-            uVars.voltsRange            = 2;
+            uVars.inputRange            = '1V';
             uVars.useGPU                = false;
             uVars.fs                    = [];
-            uVars.numOfBuffers          = [];
             uVars.bufferSizeBytes       = [];
-            uVars.samplesPerAcq         = [];
-            uVars.samplesPerBuffer      = [];
-            uVars.samplesPerAcqAllCh    = [];
-            uVars.samplesPerBufferAllCh = [];
-        end     
+            uVars.samplesPerMeas        = [];
+            uVars.exportCropped         = [];
+            uVars.croppedSamples        = [];
+        end   
         
+        function uVars = uVarsMonitorCreate()
+            uVars.fs        = [];
+            uVars.channels  = []; 
+            uVars.timeToSample = [];
+            uVars.triggerDelay = 0;
+            uVars.avgNum       = [];
+            
+            uVars.extClk  = true;
+            uVars.extTrig = true;
+        end
     end
     
     methods
         
+        %Init Functions
         function this = Digitizer()
-            this.system.boardHandle  = [];
-            this.system.systemId     = int32(1);
-            this.system.boardId      = int32(1);
-            this.system.channelsMask = 0;
-            this.system.bufferCount  = 4;
-            
+            this.system.boardHandle       = [];
+            this.system.systemId          = int32(1);
+            this.system.boardId           = int32(1);
+            this.system.channelsMask      = 0;
+            this.system.bufferCount       = 4;
+            this.system.inputRange        = '1V';
+            this.system.voltsRange        = 1;
+            this.system.bytesPerSample    = 2;
+            this.system.preTriggerSamples = 14;
             this.buffers = cell(1, this.system.bufferCount);
+            this.vars.figs.hFig  = 1;
+            this.vars.figs.hAx   = 1;
+            this.vars.figs.hPlot = 1;
+            this.vars.prevChannels = 0;
+            this.vars.channels = 0;
+            
         end
         
         function initDefs(this)
@@ -57,95 +75,6 @@ classdef Digitizer < handle
                 if strcmp(names{i}, 'this'); continue; end
                 this.alazarDefs.(names{i}) = eval(names{i});
             end
-        end
-        
-        function setDigitizerVars(this, vars)
-            this.vars.fs               = vars.fs;
-            this.vars.channels         = vars.channels;
-            this.vars.numOfBuffers     = vars.numOfBuffers;
-            this.vars.bufferSizeBytes  = vars.bufferSizeBytes;
-            this.vars.samplesPerAcq    = vars.samplesPerAcq;
-            this.vars.samplesPerBuffer = vars.samplesPerBuffer;
-            
-            this.vars.samplesPerAcqAllCh    = vars.samplesPerAcqAllCh;
-            this.vars.samplesPerBufferAllCh = vars.samplesPerBufferAllCh;
-            
-            this.vars.useGPU = vars.useGPU;
-            
-            this.system.triggerLevel_volts = 3; % external trigger level
-            this.system.triggerRange_volts = 5; % external trigger input range 
-            this.system.triggerLevel_code =(128 + 127 * this.system.triggerLevel_volts / this.system.triggerRange_volts);
-            this.system.mode             = vars.mode;
-            this.system.triggerDelay_sec = 0;
-            this.system.triggerDelay_samples = uint32(floor(this.system.triggerDelay_sec * this.vars.fs + 0.5));
-            this.system.triggerTimeout_sec = 0;
-            this.system.triggerTimeout_clocks = uint32(floor(this.system.triggerDelay_sec / 10.e-6 + 0.5));
-            this.system.voltsRange = vars.voltsRange;
-
-            switch vars.mode
-                case 'TS'
-                    this.TS.samplesPerBuffer = vars.samplesPerBuffer;
-                    this.TS.samplesPerBufferAllCh = vars.samplesPerBufferAllCh;
-                    this.TS.numOfBuffers = vars.numOfBuffers;
-                    this.CS = [];
-                    this.NPT = [];
-                case 'NPT'
-                    this.TS = [];
-                    this.CS = [];
-                case 'CS'
-                    this.TS = [];
-                    this.NPT = [];
-            end
-            
-            retVars = this.vars;
-        end
-        
-        function vars = getVars(this)
-           vars.system = this.system;
-           vars.system.boardHandle = [];
-           vars.vars = this.vars;
-        end
-        
-        function initTimeTable(this)
-            this.timeTable = struct();
-        end
-        
-        function timeTable = getTimeTable(this)
-            timeTable = this.timeTable;
-        end
-        
-        function status = configure(this)
-%             this.setDigitizerVars(vars);
-            
-            %--- Configure Clk & Trig ---
-            status = this.confExtClk();  if(~status); return; end
-            status = this.confChnls();   if(~status); return; end
-            status = this.confExtTrig(); if(~status); return; end
-
-            %--- Configure Dimensions ---
-            status = setRecordSize(this); if(~status); return; end
-            status = setADMA(this); if(~status); return; end
-
-            % --- Create pointers to CPU memory Buffers ---
-            status = allocateBuffers(this);
-            this.allocateBufferOutMemory();
-            
-        end
-        
-        function allocateBufferOutMemory(this)
-            this.timeTable.allocMemoryBuffers = tic;
-            this.bufferDataOut = [];
-            this.Data = [];
-            this.uData = [];
-            if this.vars.useGPU
-                this.bufferDataOut = gpuArray(single(zeros(1, this.TS.samplesPerBufferAllCh)));
-                this.Data          = gpuArray(single(zeros(this.vars.channels,  this.vars.samplesPerAcq)));
-            else
-                this.bufferDataOut = uint16(zeros(this.TS.numOfBuffers, this.TS.samplesPerBufferAllCh));
-                this.uData         = single(zeros(this.vars.channels,  this.vars.samplesPerAcq));
-                this.Data          = single(zeros(this.vars.channels,  this.vars.samplesPerAcq));
-            end
-            this.timeTable.allocMemoryBuffers = toc(this.timeTable.allocMemoryBuffers);  
         end
         
         function status = connect(this)
@@ -174,29 +103,311 @@ classdef Digitizer < handle
             
             this.timeTable.Connect = toc(this.timeTable.Connect);
         end
+        
+        % Variables Functions
+        function setVars(this, vars)
+            this.vars.prevChannles = this.vars.channels;
+            
+            % General Vars
+            this.system.bufferCount = vars.channels;
+            this.vars.useGPU        = vars.useGPU;
+
+            this.vars.fs       = vars.fs;
+            this.vars.channels =  vars.channels;
+            
+            % Utility vars
+            channels          = this.vars.channels;
+            bytesPerSample    = this.system.bytesPerSample;
+            drawData = vars.draw;
+            
+            switch vars.mode
+                case 'TS'
+                    % Calculate How many samples to acquire according to
+                    % user request and HW limitations.
+                    
+                    % Pre Trigger samples are bug.
+%                     preTriggerSamples = this.calcPreTriggerSamplesTS();
+                    preTriggerSamples = 0;
+                    % User vars
+                    bufferSizeBytes  = vars.bufferSizeBytes;          
+                    samplesPerMeas   = vars.samplesPerMeas;
+                    
+                    acqSize = samplesPerMeas * bytesPerSample * channels;
+                    
+                    if acqSize < bufferSizeBytes
+                        bufferSizeBytes = acqSize;
+                    end
+
+                    % Calculate TS vars
+                    samplesPerMeas2       = samplesPerMeas        + preTriggerSamples;
+                    samplesPerBufferAllCh = bufferSizeBytes       / bytesPerSample;
+                    samplesPerBuffer      = samplesPerBufferAllCh / channels;
+                    numOfBuffers          = ceil(samplesPerMeas2  / samplesPerBuffer);
+                    samplesPerAcq         = samplesPerBuffer      * numOfBuffers;
+                    samplesPerAcqAllCh    = samplesPerAcq         * channels;
+                    
+                    % Excessive samples
+                    excSamplesPre   = preTriggerSamples;
+                    excSamplesPost  = samplesPerAcq - samplesPerMeas - excSamplesPre;
+                    excSamplesIdx   = samplesPerMeas2;
+                    
+                    exportData = true;
+                    
+                    % Collect TS Vars
+                    this.TS.samplesPerMeas     = samplesPerMeas;
+                    this.TS.samplesPerMeas2    = samplesPerMeas2;
+                    this.TS.samplesPerAcq      = samplesPerAcq;
+                    this.TS.samplesPerAcqAllCh = samplesPerAcqAllCh;
+                    
+                    this.TS.excSamplesPre  = excSamplesPre;
+                    this.TS.excSamplesPost = excSamplesPost;
+                    this.TS.excSamplesIdx  = excSamplesIdx;
+
+                    this.TS.exportCropped  = vars.exportCropped;
+                    this.TS.croppedSamples = vars.croppedSamples;
+                    
+                    drawData = false;
+                case 'NPT'
+                    preTriggerSamples = 0;
+                    
+                    %User vars
+                    postTriggerSamplesUser    = round(vars.timeToSample*vars.fs);
+                    postTriggerSamples        = max(256, ceil(postTriggerSamplesUser/128)*128);
+                    recordsPerBuffer          = vars.avgNum;
+
+                    % Calculate NPT vars
+                    samplesPerRecord      = preTriggerSamples + postTriggerSamples;
+                    samplesPerBuffer      = samplesPerRecord * recordsPerBuffer;
+                    samplesPerBufferAllCh = samplesPerBuffer * channels;
+                    bufferSizeBytes       = bytesPerSample   *  samplesPerBufferAllCh;
+
+                    if vars.numMeas == inf
+                        numOfBuffers = hex2dec('7FFFFFFF');
+                        recordsPerAcuisition = hex2dec('7FFFFFFF');
+                        exportData = false;
+                    else
+                        numOfBuffers = vars.numMeas; %non stop acuisition = hex2dec('7FFFFFFF')
+                        recordsPerAcuisition = recordsPerBuffer *  numOfBuffers;
+                        exportData = true;
+                    end
+
+                    % Collect NPT Vars
+                    this.NPT.postTriggerSamplesUser = postTriggerSamplesUser;
+                    this.NPT.preTriggerSamples      = preTriggerSamples;
+                    this.NPT.postTriggerSamples     = postTriggerSamples;
+                    this.NPT.samplesPerRecord       = samplesPerRecord;
+                    this.NPT.recordsPerBuffer       = recordsPerBuffer;
+                    this.NPT.recordsPerAcuisition   = recordsPerAcuisition;
+                    
+                    if drawData
+                        this.vars.figs.tVec = (0:1:(samplesPerRecord-1))/this.vars.fs *1e6;
+                        this.vars.figs.fVec = (this.vars.fs/samplesPerRecord) *  ( (-samplesPerRecord/2) : 1 : (samplesPerRecord/2)-1 ) /1e6;
+                    end
+            end
+            
+            this.calcTriggerDelayAlignment()
+
+            this.vars.bufferSizeBytes       = bufferSizeBytes;
+            this.vars.numOfBuffers          = numOfBuffers;
+            this.vars.samplesPerBuffer      = samplesPerBuffer;
+            this.vars.samplesPerBufferAllCh = samplesPerBufferAllCh;
+            
+            this.vars.exportData = exportData;
+            this.vars.drawData   = drawData;
+            
+            % Set System Vars
+            this.system.extClk                = vars.extClk;
+            this.system.extTrig               = vars.extTrig;
+            this.system.triggerLevel_volts    = 3; % external trigger level
+            this.system.triggerRange_volts    = 5; % external trigger input range 
+            this.system.triggerLevel_code     =(128 + 127 * this.system.triggerLevel_volts / this.system.triggerRange_volts);
+            this.system.mode                  = vars.mode;
+            
+            this.system.triggerDelay_sec_user      = vars.triggerDelay;
+            this.system.triggerDelay_samples_user  = floor(this.system.triggerDelay_sec_user * this.vars.fs + 0.5);
+            this.system.triggerDelay_samples       = uint32(max(this.system.triggerDelayAlignment, 2^(floor(log2(this.system.triggerDelay_samples_user)))));
+            this.system.triggerDelay_samples       = this.system.triggerDelay_samples_user;
+            
+            this.vars.triggerDelayManualSamples    = this.system.triggerDelay_samples_user - this.system.triggerDelay_samples +1;
+            
+            
+            this.system.triggerTimeout_sec    = 0;
+            this.system.triggerTimeout_clocks = uint32(floor(this.system.triggerTimeout_sec / 10.e-6 + 0.5));
+            this.system.inputRange            = vars.inputRange;
+            
+            this.setInputRange();
+
+            switch vars.mode
+                case 'TS'
+                    this.TS.samplesPerBuffer      = samplesPerBuffer;
+                    this.TS.samplesPerBufferAllCh = samplesPerBufferAllCh;
+                    this.TS.numOfBuffers          = numOfBuffers;
+                    this.CS                       = [];
+                    this.NPT                      = [];
+                case 'NPT'
+                    this.TS = [];
+                    this.CS = [];
+                case 'CS'
+                    this.TS = [];
+                    this.NPT = [];
+            end
+            
+            retVars = this.vars;
+        end
+        
+        function preTriggerSamples = calcPreTriggerSamplesTS(this)
+            if this.vars.fs == 5e6
+                if this.vars.channels == 1
+                   preTriggerSamples = 419;
+                elseif this.vars.channels == 2
+                    preTriggerSamples = 410;
+                elseif this.vars.channels == 4
+                    preTriggerSamples = 40;
+                elseif this.vars.channels == 8
+                    preTriggerSamples = 408;
+                elseif this.vars.channels == 16
+                    preTriggerSamples = 396;
+                end        
+            elseif this.vars.fs == 20e6
+                if this.vars.channels == 1
+                   preTriggerSamples = 919;
+                elseif this.vars.channels == 2
+                   preTriggerSamples = 910;
+                elseif this.vars.channels == 4
+                    preTriggerSamples = 910;
+                elseif this.vars.channels == 8
+                    preTriggerSamples = 908;
+                elseif this.vars.channels == 16
+                    preTriggerSamples = 396;
+                end
+            end
+            this.system.preTriggerSamples = preTriggerSamples;
+        end
+        
+        function calcTriggerDelayAlignment(this)
+            channels = this.vars.channels;
+            if channels ==1
+                this.system.triggerDelayAlignment = 16;
+            elseif channels == 2
+                this.system.triggerDelayAlignment = 8;
+            elseif channels == 4
+                this.system.triggerDelayAlignment = 4;
+            elseif channels == 8
+                this.system.triggerDelayAlignment = 2;
+            elseif channels == 16
+                this.system.triggerDelayAlignment = 1;
+            end
+        end
+        
+        function setInputRange(this)
+            switch this.system.inputRange
+                case '20mV'
+                    this.system.rangeDef = this.alazarDefs.INPUT_RANGE_PM_20_MV;
+                    this.system.voltsRange = 40e-3;
+                case '50mV'
+                    this.system.rangeDef  = this.alazarDefs.INPUT_RANGE_PM_50_MV;
+                    this.system.voltsRange = 100e-3;
+                case '100mV'
+                    this.system.rangeDef  = this.alazarDefs.INPUT_RANGE_PM_100_MV;
+                    this.system.voltsRange = 200e-3;
+                case '200mV'
+                    this.system.rangeDef  = this.alazarDefs.INPUT_RANGE_PM_200_MV;
+                    this.system.voltsRange = 400e-3;
+                case '500mV'
+                    this.system.rangeDef  = this.alazarDefs.INPUT_RANGE_PM_500_MV;
+                    this.system.voltsRange = 1000e-3;
+                case '1V'
+                    this.system.rangeDef  = this.alazarDefs.INPUT_RANGE_PM_1_V;
+                    this.system.voltsRange = 2;
+                case '2V'
+                    this.system.rangeDef  = this.alazarDefs.INPUT_RANGE_PM_2_V;
+                    this.system.voltsRange = 4;
+                case '5V'
+                    this.system.rangeDef  = this.alazarDefs.INPUT_RANGE_PM_5_V;
+                    this.system.voltsRange = 10;
+                otherwise
+                    this.system.rangeDef  = this.alazarDefs.INPUT_RANGE_PM_1_V;
+                    this.system.voltsRange = 2;
+                    fprintf("'DIGITIZER: Does not support in requested input range. Default input range: 1V\n");
+            end
+        end
+        
+        function vars = getVars(this)
+           vars.system = this.system;
+           vars.system.boardHandle = [];
+           vars.vars = this.vars;
+        end
+        
+        %Time Table Functions
+        function initTimeTable(this)
+            this.timeTable = struct();
+        end
+        
+        function timeTable = getTimeTable(this)
+            timeTable = this.timeTable;
+        end
+        
+        %Config Functions
+        function status = configure(this)
+            %--- Configure Clk & Trig ---
+            status = this.confExtClk();  if(~status); return; end
+            status = this.confChnls();   if(~status); return; end
+            status = this.confTrig();    if(~status); return; end
+
+            %--- Configure Dimensions ---
+            status = this.setRecordSize(); if(~status); return; end
+            status = this.setADMA(); if(~status); return; end
+
+            % --- Create pointers to CPU memory Buffers ---
+            this.allocateDataMat();
+            status = this.allocateBuffers();
+
+        end
             
         function status = confExtClk(this)
             this.timeTable.confExtClk = tic;
             
-%             AlazarDefs;
+            if this.system.extClk
+                clkSource = this.alazarDefs.FAST_EXTERNAL_CLOCK;
+                clkRate   = this.alazarDefs.SAMPLE_RATE_USER_DEF;
+            else
+                clkSource = this.alazarDefs.INTERNAL_CLOCK;
+                if this.vars.fs == 1e6
+                    clkRate = this.alazarDefs.SAMPLE_RATE_1MSPS;
+                elseif this.vars.fs == 2e6
+                    clkRate = this.alazarDefs.SAMPLE_RATE_2MSPS;
+                elseif this.vars.fs == 5e6
+                    clkRate = this.alazarDefs.SAMPLE_RATE_5MSPS;
+                elseif this.vars.fs == 10e6
+                    clkRate = this.alazarDefs.SAMPLE_RATE_10MSPS;
+                elseif this.vars.fs == 20e6
+                    clkRate = this.alazarDefs.SAMPLE_RATE_20MSPS;
+                elseif this.vars.fs == 50e6
+                    clkRate = this.alazarDefs.SAMPLE_RATE_50MSPS;
+                elseif this.vars.fs == 100e6
+                    clkRate = this.alazarDefs.SAMPLE_RATE_100MSPS;
+                end
+            end
+            
             status = true;
             retCode = AlazarSetCaptureClock(this.system.boardHandle,  ... % HANDLE -- board handle
-                                            this.alazarDefs.EXTERNAL_CLOCK,           ... % U32 -- clock source id
-                                            this.alazarDefs.SAMPLE_RATE_USER_DEF,     ... % U32 -- sample rate id
+                                            clkSource,   ... % U32 -- clock source id
+                                            clkRate,     ... % U32 -- sample rate id
                                             this.alazarDefs.CLOCK_EDGE_RISING,        ... % U32 -- clock edge id
                                             0);                          % U32 -- clock decimation                                
             if retCode ~= this.alazarDefs.ApiSuccess; fprintf('DIGITIZER: Error: AlazarSetCaptureClock failed -- %s\n', errorToText(retCode)); status = false; return; end
             
             this.timeTable.confExtClk = toc(this.timeTable.confExtClk);
+            fprintf('DIGITIZER: Done configurations.\n')
         end
         
         function status = confChnls(this)
             this.timeTable.confChnls = tic;
-%             AlazarDefs; 
             status = true;
-            inputRange = this.alazarDefs.INPUT_RANGE_PM_1_V;
-            coupling = this.alazarDefs.DC_COUPLING;
-            impedance = this.alazarDefs.IMPEDANCE_50_OHM;
+
+            inputRange  = this.system.rangeDef;
+            coupling    = this.alazarDefs.AC_COUPLING;
+            impedance   = this.alazarDefs.IMPEDANCE_50_OHM;
             successCode = this.alazarDefs.ApiSuccess;
             
             retCode = AlazarInputControlEx( this.system.boardHandle, this.alazarDefs.CHANNEL_A, coupling, inputRange, impedance);
@@ -240,22 +451,28 @@ classdef Digitizer < handle
             this.timeTable.confChnls = toc(this.timeTable.confChnls);
         end
         
-        function status = confExtTrig(this)
+        function status = confTrig(this)
             this.timeTable.confExtTrig = tic;
             
-%             AlazarDefs; 
+            if this.system.extTrig
+                trigSource = this.alazarDefs.TRIG_EXTERNAL;
+            else
+                trigSource = this.alazarDefs.TRIG_CHAN_A;
+            end
+            
             status = true;
             % Disable internal Triggers and set External Trigger
             retCode = AlazarSetTriggerOperation(this.system.boardHandle, this.alazarDefs.TRIG_ENGINE_OP_J,...
-                                                this.alazarDefs.TRIG_ENGINE_J, this.alazarDefs.TRIG_EXTERNAL,...
-                                                this.alazarDefs.TRIGGER_SLOPE_POSITIVE, this.system.triggerLevel_code,... %
+                                                this.alazarDefs.TRIG_ENGINE_J, trigSource, this.alazarDefs.TRIGGER_SLOPE_POSITIVE, 150,... % TODO: Test level code
                                                 this.alazarDefs.TRIG_ENGINE_K, this.alazarDefs.TRIG_DISABLE, this.alazarDefs.TRIGGER_SLOPE_POSITIVE, 128 );                                                    
             if retCode ~= this.alazarDefs.ApiSuccess ; fprintf('DIGITIZER: Error: AlazarSetTriggerOperation failed -- %s\n', errorToText(retCode)); status = false; return; end
-
-            % Set External trigger Configurations
-            retCode = AlazarSetExternalTrigger( this.system.boardHandle, this.alazarDefs.DC_COUPLING, this.alazarDefs.ETR_TTL );
-            if retCode ~= this.alazarDefs.ApiSuccess; fprintf('DIGITIZER: Error: AlazarSetExternalTrigger failed -- %s\n', errorToText(retCode)); status = false; return; end
-
+            
+            if this.system.extTrig
+                % Set External trigger Configurations
+                retCode = AlazarSetExternalTrigger( this.system.boardHandle, this.alazarDefs.DC_COUPLING, this.alazarDefs.ETR_TTL );
+                if retCode ~= this.alazarDefs.ApiSuccess; fprintf('DIGITIZER: Error: AlazarSetExternalTrigger failed -- %s\n', errorToText(retCode)); status = false; return; end
+            end
+            
             % Trigger Delay set to 0
             retCode = AlazarSetTriggerDelay(this.system.boardHandle, this.system.triggerDelay_samples);
             if retCode ~= this.alazarDefs.ApiSuccess; fprintf('DIGITIZER: Error: AlazarSetTriggerDelay failed -- %s\n', errorToText(retCode)); status = false; return; end
@@ -270,37 +487,28 @@ classdef Digitizer < handle
         function status = setADMA(this)
             this.timeTable.setADMA = tic;
             
-%             AlazarDefs; 
-            status = true;
-            if (strcmp(this.system.mode, 'TS')) 
-                admaFlags = this.alazarDefs.ADMA_EXTERNAL_STARTCAPTURE + this.alazarDefs.ADMA_TRIGGERED_STREAMING;
-                retCode = AlazarBeforeAsyncRead(this.system.boardHandle, this.system.channelMask, 0, this.TS.samplesPerBuffer, 1, hex2dec('7FFFFFFF'), admaFlags);
-
-            elseif (strcmp(this.system.mode, 'NPT'))
-                 admaFlags = this.alazarDefs.ADMA_EXTERNAL_STARTCAPTURE + this.alazarDefs.ADMA_NPT; % Select AutoDMA flags as required
-                 retCode = AlazarBeforeAsyncRead(this.system.boardHandle, this.system.channelMask, -int32(this.NPT.preTriggerSamples), this.NPT.samplesPerRecord, this.NPT.recordsPerBuffer, hex2dec('7FFFFFFF'), admaFlags);
+            switch this.system.mode
+                case 'TS'
+                    admaFlags = this.alazarDefs.ADMA_EXTERNAL_STARTCAPTURE + this.alazarDefs.ADMA_TRIGGERED_STREAMING;% + this.alazarDefs.ADMA_FIFO_ONLY_STREAMING;
+                    preTriggerSamples     = 0;
+                    samplesPerRecord      = this.TS.samplesPerBuffer;
+                    recordsPerBuffer      = 1;
+                    recordsPerAcquisition =  hex2dec('7FFFFFFF');
+                case 'NPT'
+                    admaFlags = this.alazarDefs.ADMA_EXTERNAL_STARTCAPTURE + this.alazarDefs.ADMA_NPT; % Select AutoDMA flags as required
+                    preTriggerSamples     = -int32(this.NPT.preTriggerSamples);
+                    samplesPerRecord      = this.NPT.samplesPerRecord;
+                    recordsPerBuffer      = this.NPT.recordsPerBuffer;
+                    recordsPerAcquisition = this.NPT.recordsPerAcuisition;
             end
-            if retCode ~= this.alazarDefs.ApiSuccess; fprintf('DIGITIZER: Error: AlazarBeforeAsyncRead failed -- %s\n', errorToText(retCode)); status = false; return; end
             
+            status = true;
+            retCode = AlazarBeforeAsyncRead(this.system.boardHandle, this.system.channelMask, preTriggerSamples, samplesPerRecord, recordsPerBuffer, recordsPerAcquisition, admaFlags);
+            if retCode ~= this.alazarDefs.ApiSuccess; fprintf('DIGITIZER: Error: AlazarBeforeAsyncRead failed -- %s\n', errorToText(retCode)); status = false; return; end
             this.timeTable.setADMA = toc(this.timeTable.setADMA);
         end
-        
-        function status = allocateBuffers(this)
-            this.timeTable.allocateBuffers = tic;
-            
-%             AlazarDefs; 
-            status = true;
-            for j = 1 : this.system.bufferCount
-                pbuffer = AlazarAllocBuffer(this.system.boardHandle, this.vars.bufferSizeBytes);
-                if pbuffer == 0; fprintf('DIGITIZER: Error: AlazarAllocBuffer %u samples failed\n', SamplingCard.samplesPerBuffer); status = false; return; end
-                this.buffers(1, j) = { pbuffer };
-            end
-            
-            this.timeTable.allocateBuffers = toc(this.timeTable.allocateBuffers);
-        end
-        
-        function status = setRecordSize(this)
-%             AlazarDefs; 
+
+        function status = setRecordSize(this) 
             status = true;
             if strcmp(this.system.mode, 'NPT')
                 retCode = AlazarSetRecordSize(this.system.boardHandle, this.NPT.preTriggerSamples, this.NPT.postTriggerSamples);
@@ -308,23 +516,37 @@ classdef Digitizer < handle
             end
         end
         
-        function [bufferDataOut, status] = acquire(this)
+        % Memory Manage Functions       
+        function status = allocateBuffers(this)
+            this.timeTable.allocateBuffers = tic;
+            
+            status = true;
+            for j = 1 : this.system.bufferCount
+                pbuffer = AlazarAllocBuffer(this.system.boardHandle, this.vars.bufferSizeBytes);
+%                 pbuffer1 = libpointer('uint8Ptr', this.bufferDataOut(j,:));
+                if pbuffer == 0; fprintf('DIGITIZER: Error: AlazarAllocBuffer %u samples failed\n', SamplingCard.samplesPerBuffer); status = false; return; end
+                this.buffers(1, j) = { pbuffer };
+            end
+            
+            this.timeTable.allocateBuffers = toc(this.timeTable.allocateBuffers);
+        end
+        
+        function allocateDataMat(this)
+            this.timeTable.allocMemoryBuffers = tic;
+            this.bufferDataOut = [];
             switch this.system.mode
                 case 'TS'
-                    [bufferDataOut, status] = acquireDataTSdig();
-                case 'NPT' 
-                    [bufferDataOut, status] = acquireDataNPTdig();
-                case 'CS'
-                    bufferDataOut = [];
-                    status = false;
+                    this.bufferDataOut = zeros(this.TS.numOfBuffers, this.TS.samplesPerBufferAllCh, 'uint16');
+                case 'NPT'
+                    if this.vars.exportData
+                        this.bufferDataOut = zeros(this.NPT.samplesPerRecord, this.vars.channels, this.vars.numOfBuffers, 'single');
+                    end
             end
+            this.timeTable.allocMemoryBuffers = toc(this.timeTable.allocMemoryBuffers);  
         end
         
         function status = postBuffersToBoard(this)
             this.timeTable.postBuffersToBoard = tic;
-            
-%             AlazarDefs; 
-            
             status = true;
             for bufferIndex = 1 : this.system.bufferCount
                 pbuffer = this.buffers{1, bufferIndex};
@@ -336,30 +558,25 @@ classdef Digitizer < handle
         end
         
         function status = postSingleBufferToBoards(this, pbuffer)
-%             AlazarDefs; 
-            
             status = true;
             retCode = AlazarPostAsyncBuffer(this.system.boardHandle, pbuffer, this.vars.bufferSizeBytes);
             if retCode ~= this.alazarDefs.ApiSuccess; fprintf('DIGITIZER: Error: AlazarPostAsyncBuffer failed -- %s\n', errorToText(retCode)); status = false; end 
         end
         
         function status = armBoard(this)
-            this.timeTable.armBoard = tic;
-%             AlazarDefs; 
+            this.timeTable.armBoard = tic; 
             status = true;
-            % startTime = tic;
             retCode = AlazarStartCapture(this.system.boardHandle);
             if retCode ~= this.alazarDefs.ApiSuccess; fprintf('DIGITIZER: Error: AlazarStartCapture failed -- %s\n', errorToText(retCode)); status = false; return; end
-            % startTime = toc(startTime);
             
             this.timeTable.armBoard = toc(this.timeTable.armBoard);
         end
         
-        function data = getData(this)
+        function data   = getData(this)
            data = this.bufferDataOut;
         end
         
-        function [dataOut, status] = acquireDataTS(this)
+        function [dataOut, status] = acquire(this)
             this.timeTable.fullAcquisition = tic;
            
             %----- Configure AutoDMA -----
@@ -373,17 +590,25 @@ classdef Digitizer < handle
             status = this.armBoard(); if(~status); return; end
             
             % Init control variables
+            this.vars.continueLooping = true;
             buffersCompleted = 0;
             captureDone = false;
             buf = 1;
             
             this.timeTable.netAcquisition = tic;
-            while ~captureDone
+            
+            this.initPlots();
+            
+            while ~captureDone && this.vars.continueLooping
+                this.timeTable.loop(buf) = tic;
                 bufferIndex = mod(buffersCompleted, this.system.bufferCount) + 1;
                 pbuffer = this.buffers{1, bufferIndex};
 
                 % Wait for the first available buffer to be filled by the board
+                a = tic;
                 [retCode, this.system.boardHandle, bufferOut] = AlazarWaitAsyncBufferComplete(this.system.boardHandle, pbuffer, 5000);
+                this.timeTable.waitAsyncBufferComplete(buf) = toc(a);
+                
                 if retCode == this.alazarDefs.ApiSuccess
                     % This buffer is full
                     bufferFull = true;
@@ -403,20 +628,28 @@ classdef Digitizer < handle
                 
                 if bufferFull
                     %cast Data and save it to RAM
-                    setdatatype(bufferOut, 'uint16Ptr', 1, this.TS.samplesPerBufferAllCh);
-                    if this.vars.useGPU
-                        this.bufferDataOut(:) = cast(bufferOut.Value, 'single'); %TODO: check that curData is still gpuArray 
-                        this.convertUnsignedSampleToVoltsGPU();
-                        this.rawDataDeMultiplexingGPU(buf);
-                    else
-                        this.bufferDataOut(buf,:) = bufferOut.Value;
+                    a = tic;
+                    setdatatype(bufferOut, 'uint16Ptr', 1, this.vars.samplesPerBufferAllCh);
+                    this.timeTable.setDataType(buf) = toc(a);
+                    
+                    % Real-Time Post Processing (Only for NPT)
+                    ppData = this.rtPostProcessing(bufferOut);
+                    
+                    if this.vars.drawData
+                        this.drawData(ppData);
                     end
+                    
+                    a = tic;
+                    if this.vars.exportData
+                        this.exportData(buf, ppData);
+                    end
+                    this.timeTable.copyBufferData(buf) = toc(a);
+                    
                     buf = buf +1;
 
-                    a = tic;
                     % Make the buffer available to be filled again by the board
+                    a = tic;
                     status = postSingleBufferToBoards(this, pbuffer); if(~status); captureDone = true; end
-                    
                     this.timeTable.postSingleBufferToBoards(buf) = toc(a);
                     
                     % Update progress
@@ -424,26 +657,73 @@ classdef Digitizer < handle
                     if buffersCompleted >= this.vars.numOfBuffers
                         captureDone = true;
                     end
+                    
                 end
+                this.timeTable.loop(buf-1) = toc(this.timeTable.loop(buf-1));
             end
-            this.timeTable.netAcquisition = toc(this.timeTable.netAcquisition); 
-            if ~this.vars.useGPU
+            this.timeTable.netAcquisition = toc(this.timeTable.netAcquisition);
+            
+            AlazarAbortAsyncRead(this.system.boardHandle);
+            
+            % Offline Post Processing (Only for TS)
+            if strcmp(this.system.mode, 'TS')
+                if this.vars.useGPU
+                    this.uData = gpuArray(this.bufferDataOut);
+                else
+                    this.uData = this.bufferDataOut;
+                end
                 this.convertUnsignedSampleToVolts();
                 this.rawDataDeMultiplexing();
+                this.cropData();
+                dataOut = this.Data;
+
+                this.Data = [];
+            elseif strcmp(this.system.mode, 'NPT')
+                if this.vars.exportData
+                    dataOut = this.bufferDataOut(this.vars.triggerDelayManualSamples:this.NPT.postTriggerSamplesUser, :, :);
+                else
+                    dataOut = [];
+                end
             end
-            dataOut = this.Data;
-            this.Data = [];
+                
             this.timeTable.fullAcquisition = toc(this.timeTable.fullAcquisition); 
         end
 
+        function monitor(this, vars)
+            this.vars.monitor = true;
+            
+            if nargin < 2
+                vars.fs        = 100e6;
+                vars.channels  = 1; 
+
+                vars.triggerDelay = 0;
+                vars.extClk  = false;
+                vars.extTrig = true;
+
+                vars.timeToSample = 2^14/vars.fs;
+                vars.avgNum       = 100;
+            end
+            
+            vars.mode      = 'NPT';
+            vars.useGPU    = false;
+            vars.numMeas   = inf;
+            vars.draw      = true;
+            vars.inputRange = '1V';
+            
+            this.setVars(vars);
+            this.configure();
+
+            this.acquire();
+        end
+        
+        %Data Post Processing Functions
         function convertUnsignedSampleToVolts(this)
             this.timeTable.convertUnsignedSampleToVolts = tic;
             
             shiftFact = 2;
             bitsRange = 2^16/2;
-
-            this.uData = (cast(this.bufferDataOut, 'single') - bitsRange) * this.system.voltsRange / (bitsRange * shiftFact);
-            this.bufferDataOut = [];
+            this.uData = (cast(this.uData, 'single') - bitsRange) * this.system.voltsRange / (bitsRange * shiftFact);
+            
             this.timeTable.convertUnsignedSampleToVolts = toc(this.timeTable.convertUnsignedSampleToVolts);
         end
         
@@ -451,10 +731,13 @@ classdef Digitizer < handle
             % bufferDataOut(input)  - [numOfBuffers x samplesPerBufferAllCh]
             % bufferDataOut(output) - [ch x samplesPerAcq]
             this.timeTable.rawDataDeMultiplexing = tic;
-
-            this.Data = reshape(reshape(this.uData', this.vars.samplesPerAcqAllCh, 1),...
-                                      this.vars.channels,  this.vars.samplesPerAcq);
-            this.uData = [];
+            switch this.system.mode
+                case 'TS'
+                    this.Data = reshape(reshape(this.uData', this.TS.samplesPerAcqAllCh, 1),...
+                                      this.vars.channels,  this.TS.samplesPerAcq);
+                    this.uData = [];
+                case 'NPT'
+            end
             this.timeTable.rawDataDeMultiplexing = toc(this.timeTable.rawDataDeMultiplexing);             
         end
 
@@ -478,6 +761,17 @@ classdef Digitizer < handle
             this.timeTable.rawDataDeMultiplexing = toc(this.timeTable.rawDataDeMultiplexing);             
         end
         
+        function cropData(this)
+            switch this.system.mode
+                case 'TS'
+                    if this.TS.exportCropped
+                        this.croppedData = this.Data(:, 1:this.TS.croppedSamples);
+                    end
+                    this.Data    = this.Data(:,(this.TS.excSamplesPre+1):this.TS.excSamplesIdx); 
+                case'NPT'
+            end
+        end
+        
         function releaseBuffers(this)
             for bufferIndex = 1:this.system.bufferCount
                 pbuffer =  this.buffers{1, bufferIndex};
@@ -488,6 +782,93 @@ classdef Digitizer < handle
                 clear pbuffer;
             end
         end
+        
+        function data = getCroppedData(this)
+            switch this.system.mode
+                case 'TS'
+                    data = this.croppedData; 
+                case 'NPT'
+                    data = [];
+            end
+        end
+        
+        function ppData = rtPostProcessing(this, buffer)
+            switch this.system.mode
+                case 'TS'
+                    ppData = buffer.Value;
+                case 'NPT'
+                    ppData = buffer.Value;
+                    
+                    % Convert to milivolts
+                    shiftFact = 2;
+                    bitsRange = 2^16/2;
+                    ppData    = ((cast(ppData, 'single') - bitsRange) * this.system.voltsRange / (bitsRange * shiftFact)) * 1e3;
+                    
+                    % Demultiplex
+                    ppData = reshape(ppData, this.vars.channels, this.NPT.samplesPerRecord,  this.NPT.recordsPerBuffer);
+                    
+                    %average
+                    ppData = mean(ppData, 3);
+                    
+                    %Organize dimensions
+                    ppData = permute(ppData, [2,1]);
+            end
+        end
+        
+        function exportData(this, idx, buffer)
+            switch this.system.mode
+                case 'TS'
+                    this.bufferDataOut(idx,:)   = buffer; 
+                case 'NPT'
+                    this.bufferDataOut(:,:,idx) = buffer;
+            end
+        end
+        
+        %Figures Plots
+        function initPlots(this)
+            if this.vars.drawData
+                channelChanged = this.vars.prevChannels ~= this.vars.channels;
+                this.vars.prevChannles = this.vars.channels;
+                if channelChanged || ~isgraphics(this.vars.figs.hFig) || sum(~isgraphics(this.vars.figs.hAx)) || sum(~isgraphics(this.vars.figs.hPlotSig)) || sum(~isgraphics(this.vars.figs.hPlotFFT))
+                    if isgraphics(this.vars.figs.hFig)
+                        close(this.vars.figs.hFig);
+                    end
+                    this.vars.figs.hFig  = figure();
+                    this.vars.figs.hAx(1)   = subplot(1,2,1);
+                    for i = 1:this.vars.channels
+                        this.vars.figs.hPlotSig(i) = plot(this.vars.figs.hAx(1), this.vars.figs.tVec,zeros(1, this.NPT.samplesPerRecord)); hold on
+                        legStr{i} = sprintf("ch-%d", i);
+                    end
+                    xlabel("Time [\mus]");
+                    ylabel ("Voltage [mV]");
+                    title("Signal")
+                    
+                    this.vars.figs.hAx(2)   = subplot(1,2,2);
+                    for i = 1:this.vars.channels
+                        this.vars.figs.hPlotFFT(i) = plot(this.vars.figs.hAx(2), this.vars.figs.fVec, zeros(1, this.NPT.samplesPerRecord)); hold on
+                        legStr{i} = sprintf("ch-%d", i);
+                    end
+                    xlabel("Freq [MHz]");
+                    ylabel ("Spectrum [AU]");
+                    title("FFT")
+                    
+                end
+            end
+        end
+        
+        function drawData(this, ppData)
+            try
+                freqMat = abs(fftshift(fft(ppData, [], 1),1)).^2;
+                for i=1:this.vars.channels
+                    set(this.vars.figs.hPlotSig(i), 'YData', ppData(:,i));
+                    set(this.vars.figs.hPlotFFT(i), 'YData', freqMat(:,i));
+                end
+                drawnow();
+            catch
+                this.vars.monitor = false;
+                this.vars.continueLooping = false;
+            end
+        end
+        
     end
 end
-

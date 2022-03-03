@@ -3,15 +3,17 @@ classdef fileSystemAO < fileSystem
     %   Detailed explanation goes here
     
     properties
-        saveRawData
-        saveNetSignal
-        saveDemultiplexed
-        saveReshapedSignal
+        saveMeas
+        saveSignal
+        saveDeMul
+        saveReshaped
         saveFFT
         
         splitMeas
         splitNum
         splitInd
+        useFrame
+        chToAnalyze
         
         liveAO
         liveAOResDir
@@ -20,20 +22,20 @@ classdef fileSystemAO < fileSystem
     
     methods (Static)
         function vars = aoFSVarsCreate()
-            vars.saveRawData        = false;
-            vars.saveNetSignal      = false;
-            vars.saveDemultiplexed  = false;
-            vars.saveReshapedSignal = false;
-            vars.saveFFT            = false;
+            vars.saveMeas     = false;
+            vars.saveSignal   = false;
+            vars.saveDeMul    = false;
+            vars.saveReshaped = false;
+            vars.saveFFT      = false;
         end
         
         function vars = uVarsCreate()
             vars = fileSystem.uVarsCreate();
             
-            vars.saveRawData        = false;
-            vars.saveNetSignal      = false;
-            vars.saveDemultiplexed  = false;
-            vars.saveReshapedSignal = false;
+            vars.saveMeas        = false;
+            vars.saveSignal      = false;
+            vars.saveDeMul  = false;
+            vars.saveReshaped = false;
             vars.saveFFT            = false;            
         end
     end
@@ -50,18 +52,20 @@ classdef fileSystemAO < fileSystem
             uVars.stackAllSubObjRes = false;
             setUserVars@fileSystem(this, uVars)
             
-            this.saveRawData        = uVars.saveRawData;
-            this.saveNetSignal      = uVars.saveNetSignal;
-            this.saveDemultiplexed  = uVars.saveDemultiplexed;
-            this.saveReshapedSignal = uVars.saveReshapedSignal;
+            this.saveMeas        = uVars.saveMeas;
+            this.saveSignal      = uVars.saveSignal;
+            this.saveDeMul  = uVars.saveDeMul;
+            this.saveReshaped = uVars.saveReshaped;
             this.saveFFT            = uVars.saveFFT;
             
             this.splitMeas          = uVars.splitMeas;
             this.splitNum           = uVars.splitNum;
             this.splitInd           = 1;
+            this.useFrame           = uVars.useFrame;
+            this.chToAnalyze        = uVars.chToAnalyze;
             
-            saveAlgoData = this.saveRawData        || this.saveNetSignal || this.saveDemultiplexed || ...
-                           this.saveReshapedSignal || this.saveFFT;
+            saveAlgoData = this.saveMeas        || this.saveSignal || this.saveDeMul || ...
+                           this.saveReshaped || this.saveFFT;
             this.saveResults = this.saveResults    || saveAlgoData;
             this.saveAny     = this.saveAny        || saveAlgoData;
             this.saveVars    = this.saveAny && ~this.dontSaveVars;
@@ -82,34 +86,43 @@ classdef fileSystemAO < fileSystem
         
         function saveLiveAOVarsToDisk(this, vars)
            this.enableSaveVars(); 
-           this.saveVarsToDisk(vars);
+           this.saveVarsToDisk();
            this.disableSaveVars();
         end
         
         function saveResultsToDisk(this, res)
             if this.saveAnyTot
-                if this.saveRawData && ~this.splitMeas
-                    data.rawData = res.rawData;    
+                data = res;
+%                 data.export = [];
+                for i= 1:this.chToAnalyze
+                    if ~(this.saveMeas && ~this.splitMeas)
+                        data(i).export.meas = [];    
+                    end
+                    if ~(this.saveSignal && ~this.splitMeas)
+                         data(i).export.signal = [];
+                    end
+                    if ~(this.saveDeMul && ~this.splitMeas)
+                        data(i).export.deMul = [];
+                    end
+                    if ~(this.saveReshaped && ~this.splitMeas)
+                        data(i).export.reshaped = [];
+                    end
+                    if ~(this.saveFFT && ~this.splitMeas)
+                        data(i).export.fft = [];
+                    end
                 end
-                if this.saveNetSignal
-                     data.netSignal = res.netSignal;
-                end
-                if this.saveDemultiplexed
-                    data.deMultiplexed = res.deMultiplexed;
-                end
-                if this.saveReshapedSignal
-                    data.reshapedSignal = res.reshapedSignal;
-                end
-                if this.saveFFT 
-                    data.FFT = res.fftRes;
-                end
-                
-                data.qAvgChFFT        = res.qAvgChFFT;
-                data.unFittedFFT      = res.unFittedFFT;
-                data.unFittedFFTShift = res.unFittedFFTShift;
-                data.fitModel         = res.fitModel;
-                data.fittedFFT        = res.fittedFFT;
-                data.phi              = res.phi;
+%                 if this.useFrame
+%                     data.qAvgChFFT        = res.qAvgChFFT;
+%                     data.qSt              = res.
+%                     data.unFittedFFT      = res.unFittedFFT;
+%                     data.unFittedFFTShift = res.unFittedFFTShift;
+%                     data.fitModel         = res.fitModel;
+%                     data.fittedFFT        = res.fittedFFT;
+%                 end
+%                 
+%                 data.phi              = res.phi;
+%                 data.rawPhi           = res.rawPhi;
+%                 data.SNR              = res.SNR;
 
                 if this.liveAO
                    if this.saveResults
@@ -127,11 +140,11 @@ classdef fileSystemAO < fileSystem
             end
         end
         
-        function saveRawDataToDisk(this, rawData)
-            if this.saveResults && this.saveRawData
-                fieldName = sprintf("rawData%d", this.splitInd);
-                data.(fieldName) = rawData;
-                fprintf("%s: Saving rawData.\n", this.fsName);
+        function saveMeasToDisk(this, meas)
+            if this.saveResults && this.saveMeas
+                fieldName = sprintf("meas%d", this.splitInd);
+                data.(fieldName) = meas;
+                fprintf("%s: Saving meas.\n", this.fsName);
                 if strcmp(this.scanIdentifierPrefix, "")
                     dataFileName = sprintf("%s/%s-Results.mat", this.projPath, this.objName);
                 else

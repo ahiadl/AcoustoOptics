@@ -6,7 +6,7 @@ classdef fileSystem < handle
         hSubFS      % handles to sub filesystems
         hOwner
         
-        fsName      % for logging prints
+        fsName   % for logging prints
         objName  % for saving results 
         
         dirPath     % Directory in the disk in which this project directory is created
@@ -91,8 +91,11 @@ classdef fileSystem < handle
             this.projName = uVars.projName;
             this.dirPath  = uVars.dirPath;
             
-            this.extProject            = uVars.extProject; 
-            
+            this.extProject            = uVars.extProject;
+            if ~uVars.extProject
+                this.useExtVarsPath = false;
+%                 this.projName = uVars.scanName;
+            end
             this.stackAllSubObjRes     = uVars.stackAllSubObjRes; %not relevant for ao
         end
         
@@ -163,7 +166,11 @@ classdef fileSystem < handle
                 if exist(dataFileName, 'file')
                     save(dataFileName, '-struct', 'res', '-append', '-v7.3');
                 else
-                    save(dataFileName, '-struct', 'res', '-v7.3');
+                    if length(res) > 1
+                        save(dataFileName, 'res', '-v7.3');
+                    else
+                        save(dataFileName, '-struct', 'res', '-v7.3');
+                    end
                 end
             end
         end

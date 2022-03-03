@@ -1,196 +1,467 @@
 classdef stages < handle
-    %STAGES Summary of this class goes here
-    %   Detailed explanation goes here
+    %STAGES supports up to 3 stages labeled ['X' 'Y' 'Z']
     
     properties
-
-        devices
+        hw
+        type
+        
         connected
         hardwareAvailable
         
-        vars        
-        curPos % by device ID
-                
-        xStage
-        yStage
-        zStage
-        curPosX
-        curPosY
-        curPosZ
+        vars  
+        curPos % according to log Idx
+        
+        axOrder            % arrange according to user request with relation to log ID
+        logId    %1   2   3 % logical id arranged according to logical Order (fixed)
+        hwId     %4   5   6 % hw id arranged according to hw order.
+        
+        % Logical id is always 1:numOfStages.
+        % hw id is the order in which the hw loaded the stages. it is set
+        % when connecting to hw.
+        % The only thing the user can affect is how each axes is called
+        % (one letter) so later operation can be safe by either logical id
+        % or ax name. hw id is transparent to user as it may be different
+        % from one hw to other.
+        
     end
     
     methods
-        function this = stages(port)
-            this.vars.port = port;
+        function this = stages(type, port)
+            this.type = type;
+            
+            switch type
+                case 'Zaber'
+                    this.hw = zaberStages(port);
+                case 'PI'
+                    this.hw = PIStages();
+                otherwise
+                    this.hw = [];
+                    fprintf("STAGES: Can't find the requested hw.\n")
+                    return;
+            end
+            
+            this.vars.axOrderName = ['X', 'Y', 'Z', 'T'];
             this.connected = false;
             this.hardwareAvailable = false;
         end
-        
+
         function connect(this)
-            try
-                [this.vars.ZaberPort, this.devices, this.vars.stepSize] = Zaber_Start(this.vars.port);
-                this.vars.numOfStages = length(this.devices);
-                this.curPos = zeros(1, this.vars.numOfStages); %this is becuse Zaber_start takes all stages home.
-                this.connected = true;
+            this.connected = this.hw.connect();
+
+            if this.connected 
                 this.hardwareAvailable = true;
-                for i = 1:this.vars.numOfStages
-                    this.vars.fullRange(i) = 150; %TODO: create zaber stages object
-                end
-            catch
-                this.connected = false;
+                this.vars.numOfStages = this.hw.getNumOfStages();
+                this.vars.validAxes   = zeros(1, this.vars.numOfStages);
+                this.curPos = zeros(1,this.vars.numOfStages);
+                
+                % Fill logic stage number with hw stage number:
+                % e.g. logId(1) = 1 -> hwId(1) = 2; 
+                this.logId = 1:this.vars.numOfStages;
+                [axDef, hwIdxDef] = this.hw.getDefaultAssign();
+                this.hwId = hwIdxDef;
+                
+                this.assignStagesAxes(axDef);
+                                
+%                 this.connected = true;
+                
+            else
+%                 this.connected = false;
                 this.hardwareAvailable = false;
                 fprintf("STAGES: Can't connect to stages\n")
             end
         end
         
-        function moveStageRel(this, Range)
-            Zaber_MoveRel(this.devices(1), Range(1));
-            Zaber_MoveRel(this.devices(2), Range(2));
-            this.curPos(1) = Zaber_ReadPosition(this.devices(1));
-            this.curPos(2) = Zaber_ReadPosition(this.devices(2)); 
-        end
-        
-        function moveStageRelId(this, id, rel)
-            Zaber_MoveRel(this.devices(id), rel);
-            this.curPos(id) = Zaber_ReadPosition(this.devices(id));
-        end
-        
-        function moveStageAbsId(this, id, pos)
-            Zaber_MoveAbs(this.devices(id), pos);
-            this.curPos(id) = Zaber_ReadPosition(this.devices(id));
-        end
-        
-        function moveStageAbs(this, pos)
-            Zaber_MoveAbs(this.devices(1), pos(1));
-            Zaber_MoveAbs(this.devices(2), pos(2));
-            this.curPos(1) = Zaber_ReadPosition(this.devices(1));
-            this.curPos(2) = Zaber_ReadPosition(this.devices(2)); 
-        end
-        
-        function assignStagesAxes(this,ax, stageId)
-            axIn = length(ax);
-            ax = unique(ax);
-            stageId = unique(stageId);
+        % Set Functions
+        function assignStagesAxes(this, axOrder) 
+            % Function aligns the axName vector and the id Vector
+            % so user may refer to axes as 'X' or 'Y' instead of 1, 2.
+            if ~(this.hardwareAvailable && this.connected)
+               fprintf("STAGES: Stages not available, can't assign\n");
+               return;
+            end
             
-            if axIn > length(ax)
-                fprintf("Stages: Can't assign 2 stages to the same Axis.\n")
+            axIn = length(axOrder);
+            ax = unique(axOrder);
+            
+            if axIn > length(ax) || axIn ~= this.vars.numOfStages
+                fprintf("Stages: Can't assign stages. Please check the requested assignment.\n")
                 return
             end
-            if axIn > length(stageId)
-                fprintf("Stages: Can't assign 1 stage to 2 different Axes.\n")
-                    return
-            end
-            
-            this.vars.validAxes(1:3) = false;
+
+            this.axOrder = '';
             for i = 1:axIn
-                switch ax(i)
-                    case 'X'
-                        this.xStage = this.devices(stageId(i));
-                        this.vars.validAxes(1) = true;
-                    case 'Y'
-                        this.yStage = this.devices(stageId(i));
-                        this.vars.validAxes(2) = true;
-                    case 'Z'
-                        this.zStage = this.devices(stageId(i));
-                        this.vars.validAxes(2) = true;
-                end
+                this.axOrder(i) = axOrder(i);
             end
             
-            if ~this.vars.validAxes(1)
-                this.xStage = [];
-            elseif ~this.vars.validAxes(2)
-                this.yStage = [];
-            elseif ~this.vars.validAxes(3)
-                this.zStage = [];
+            this.updatePosition();
+            this.vars.fullRange = this.getFullRange(); 
+            [ax, up, low] = this.hw.getDefaultLimits();
+            this.setLimits(ax, up, low);
+        end
+
+        function setLimits(this, ax, upper, lower)
+            for i=1:length(ax)
+                idx = this.getLogIdFromAxName(ax(i));
+                this.vars.limits.upper(idx) = upper(i);
+                this.vars.limits.lower(idx) = lower(i);
+            end
+        end
+         
+        % Get Functions
+        function range = getFullRange(this)
+            % This function returns each stage full possible range.
+            % sorted by axOrder
+            if ~(this.hardwareAvailable && this.connected)
+               fprintf("STAGES: Stages not available, can't get range\n");
+               return;
+            end
+            
+            range = zeros(1,this.vars.numOfStages);
+            for ax = 1:this.vars.numOfStages
+                curId = this.hwId(ax);
+                range(ax) = this.hw.readPosition(curId);
+            end
+        end
+
+        function updatePosition(this)
+            % This function updates the curPos field by directly reading
+            % each stage position. result is ordered by axOrder
+            if ~(this.hardwareAvailable && this.connected)
+               fprintf("STAGES: Stages not available, can't update position\n");
+               return;
+            end
+            
+            this.vars.curPos = [];
+            for i = 1:this.vars.numOfStages
+                curId = this.hwId(i);
+                this.curPos(i) = this.hw.readPosition(curId);
             end
         end
         
-        function moveStagesForIdentification(this, stageID)
-            range = 10;
-            for i=1:this.vars.numOfStages
-                if (this.devices(i).DeviceNo == stageID)
-                    if this.curPos(i) > this.vars.fullRange(i)-range
-                        Zaber_MoveRel(this.devices(i), -range);
-                        Zaber_MoveRel(this.devices(i), range);
-                    else
-                        Zaber_MoveRel(this.devices(i), range);
-                        Zaber_MoveRel(this.devices(i), -range);
+        function curLogId = getLogIdFromAxName(this, ax)
+            % this function translate ax name (e.g. 'X') to its idx 
+            % in axOrder (e.g. 1)
+            curLogId = zeros(1,length(ax));
+            for j = 1:length(ax)
+                for i =1:length(this.axOrder)
+                    if strcmp(this.axOrder(i), ax(j))
+                        curLogId(j) = i; 
                     end
                 end
             end
         end
-        
-        function moveStageAxisAbs(this, ax, pos)
-            switch ax
-                case 'X'
-                    Zaber_MoveAbs(this.xStage, pos);
-                    this.curPosX = Zaber_ReadPosition(this.xStage);
-                case 'Y'
-                    Zaber_MoveAbs(this.yStage, pos);
-                    this.curPosY = Zaber_ReadPosition(this.yStage);
-                case 'Z'
-                    Zaber_MoveAbs(this.zStage, pos);
-                    this.curPosZ = Zaber_ReadPosition(this.zStage);
+
+        function hwId = getHwIdFromLogId(this, id)
+            % this function translate stage id (e.g. 2) to its hwId 
+            hwId = zeros(1,length(id));
+            for i = 1:length(id)
+                hwId(i) = this.hwId(id(i));
             end
         end
         
-        function moveHome(this)
-            Zaber_HomeAll(this.devices)
+        function assign = getAssignment(this)
+            assign = this.axOrder;
         end
         
-        function moveStageAbsNonBlocking(this)
-            this.devices(1).Protocol.emptybuffer;
-            Zaber_Steps = Zaber_Convert_mm2steps(this.devices(1), Range);
-            Zaber_Err = this.devices(1).moveabsolute(Zaber_Steps);
-            
-            if (Zaber_Err) % Error handling
-                fprintf('\nSTAGES: %s received error %d while running the Zaber_MoveAbs function!\n\n',Zaber_Device.Name(1:9), Zaber_Err);
-            end
-            
-            this.devices(2).Protocol.emptybuffer;
-            Zaber_Steps = Zaber_Convert_mm2steps(this.devices(2), Range);
-            Zaber_Err = this.devices(1).moveabsolute(Zaber_Steps);
-            
-            if (Zaber_Err) % Error handling
-                fprintf('\nSTAGES: %s received error %d while running the Zaber_MoveAbs function!\n\n',Zaber_Device.Name(1:9), Zaber_Err);
-            end
-            
+        function id = getLogicIDs(this)
+            % Sorted by axes
+            id = this.logId;
         end
         
-        function moveStageRelNonBlocking(this)
-            this.devices(1).Protocol.emptybuffer;
-            Zaber_Steps = Zaber_Convert_mm2steps(this.devices(1), Range);
-            Zaber_Err = this.devices(1).moverelative(Zaber_Steps);
-            
-            if (Zaber_Err) % Error handling
-                fprintf('\nSTAGES: %s received error %d while running the Zaber_MoveAbs function!\n\n',this.devices(1).Name(1:9), Zaber_Err);
-            end
-            
-            this.devices(2).Protocol.emptybuffer;
-            Zaber_Steps = Zaber_Convert_mm2steps(this.devices(2), Range);
-            Zaber_Err = this.devices(2).moverelative(Zaber_Steps);
-            
-            if (Zaber_Err) % Error handling
-                fprintf('\nSTAGES: %s received error %d while running the Zaber_MoveAbs function!\n\n',this.devices(2).Name(1:9), Zaber_Err);
-            end
-            
-        end
-        
-        function pos = getPosition(this)
-            this.curPos(1) = Zaber_ReadPosition(this.devices(1));
-            this.curPos(2) = Zaber_ReadPosition(this.devices(2));
+        function pos = getPosVar(this)
             pos = this.curPos;
         end
         
-        function isMoving(this)
-            
+        function pos = getPosition(this)
+            this.updatePosition();
+            pos = this.getPosVar;
         end
         
-        function ids = getDevicesIDs(this)   
-          ids = zeros(1,this.vars.numOfStages);
-          for i = 1:this.vars.numOfStages
-              ids(i) = this.devices(i).DeviceNo;
-          end
+        % Move Functions
+        function moveRelId(this, id, rel)
+            if ~(this.hardwareAvailable && this.connected)
+               fprintf("STAGES: Stages not available, can't move\n");
+               return;
+            end
+            
+            idPos = this.curPos(id);
+            if idPos + rel > this.vars.limits.upper(id)
+                fprintf("STAGES: can't move stage %s - upper Limit Exception\n", this.axOrder(id))
+                return;
+            end
+            
+            if idPos + rel < this.vars.limits.lower(id)
+                fprintf("STAGES: can't move stage %s - lower Limit Exception\n", this.axOrder(id))
+                return;
+            end
+            
+            curHwId = this.getHwIdFromLogId(id);
+            this.hw.moveRel(curHwId, rel);
+            this.updatePosition();
+        end
+        
+        function moveAbsId(this, id, pos)
+            if ~(this.hardwareAvailable && this.connected)
+               fprintf("STAGES: Stages not available, can't move\n");
+               return;
+            end
+            
+            if pos > this.vars.limits.upper(id)
+                fprintf("STAGES: can't move stage %s - upper Limit Exception\n", this.axOrder(id))
+                return;
+            end
+            if pos < this.vars.limits.lower(id)
+                fprintf("STAGES: can't move stage %s - lower Limit Exception\n", this.axOrder(id))
+                return;
+            end
+            
+            curHwId = this.getHwIdFromLogId(id);
+            this.hw.moveAbs(curHwId, pos);
+            this.updatePosition();
+        end
+
+        function moveRelAx(this, ax, rel)
+            if ~(this.hardwareAvailable && this.connected)
+               fprintf("STAGES: Stages not available, can't move\n");
+               return;
+            end
+            
+            curLogId = this.getLogIdFromAxName(ax);
+            this.moveRelId(curLogId, rel)
+        end
+        
+        function moveAbsAx(this, ax, pos)
+            if ~(this.hardwareAvailable && this.connected)
+               fprintf("STAGES: Stages not available, can't move\n");
+               return;
+            end
+            
+            curLogId = this.getLogIdFromAxName(ax);
+            this.moveAbsId(curLogId, pos);
+        end
+        
+        %non blocking
+        function moveNBRelId(this, id, rel)
+            if ~(this.hardwareAvailable && this.connected)
+               fprintf("STAGES: Stages not available, can't move\n");
+               return;
+            end
+            
+            idPos = this.curPos(id);
+            if idPos + rel > this.vars.limits.upper(id)
+                fprintf("STAGES: can't move stage %s - upper Limit Exception\n", this.axOrder(id))
+                return;
+            end
+            
+            if idPos + rel < this.vars.limits.lower(id)
+                fprintf("STAGES: can't move stage %s - lower Limit Exception\n", this.axOrder(id))
+                return;
+            end
+            
+            curHwId = this.getHwIdFromLogId(id);
+            this.hw.moveRelNB(curHwId, rel);
+            this.updatePosition();
+        end
+        
+        function moveNBAbsId(this, id, pos)
+            if ~(this.hardwareAvailable && this.connected)
+               fprintf("STAGES: Stages not available, can't move\n");
+               return;
+            end
+            
+            if pos > this.vars.limits.upper(id)
+                fprintf("STAGES: can't move stage %s - upper Limit Exception\n", this.axOrder(id))
+                return;
+            end
+            if pos < this.vars.limits.lower(id)
+                fprintf("STAGES: can't move stage %s - lower Limit Exception\n", this.axOrder(id))
+                return;
+            end
+            
+            curHwId = this.getHwIdFromLogId(id);
+            this.hw.moveAbsNB(curHwId, pos);
+            this.updatePosition();
+        end
+        
+        function moveNBRelAx(this, ax, rel)
+            if ~(this.hardwareAvailable && this.connected)
+               fprintf("STAGES: Stages not available, can't move\n");
+               return;
+            end
+            
+            curLogId = this.getLogIdFromAxName(ax);
+            this.moveNBRelId(curLogId, rel)
+        end
+        
+        function moveNBAbsAx(this, ax, pos)
+            if ~(this.hardwareAvailable && this.connected)
+               fprintf("STAGES: Stages not available, can't move\n");
+               return;
+            end
+            
+            curLogId = this.getLogIdFromAxName(ax);
+            this.moveAbsNB(curLogId, pos);
+        end
+        
+        %Perform Recorded Routines
+        function startRoutine(this, ax)
+            if ~(this.hardwareAvailable && this.connected)
+               fprintf("STAGES: Stages not available, can't move\n");
+               return;
+            end
+            
+            curLogId = this.getLogIdFromAxName(ax);
+            curHwId = this.getHwIdFromLogId(curLogId);
+            this.hw.startRoutine(curHwId)
+        end
+        
+        %References and Resets
+        function home(this, idax)
+            if ~(this.hardwareAvailable && this.connected)
+               fprintf("STAGES: Stages not available, can't go home\n");
+               return;
+            end
+            
+            if sum(this.vars.limits.lower > 0) % TODO: implement lower bound that is not zero
+                fprintf("STAGES: Home is out of limits\n");
+                return;
+            end
+            if ischar(idax)
+                curLogId = this.getLogIdFromAxName(idax);
+                curHwId = this.getHwIdFromLogId(curLogId);
+                this.hw.home(curHwId)
+            else
+                curHwId = this.getHwIdFromLogId(idax);
+                this.hw.home(curHwId);
+            end
+        end
+
+        function allHome(this)
+            if ~(this.hardwareAvailable && this.connected)
+               fprintf("STAGES: Stages not available, can't move home\n");
+               return;
+            end
+            
+            if sum(this.vars.limits.lower > 0) % TODO: implement lower bound that is not zero
+                printf("STAGES: Home is out of limits\n");
+                return;
+            end
+            this.hw.homeAll();
+        end
+
+        function moveStagesForIdentification(this, id)
+            if ~(this.hardwareAvailable && this.connected)
+               fprintf("STAGES: Stages not available, can't identify by moving\n");
+               return;
+            end
+            
+            span = 10;
+            
+            curHwId = this.getHwIdFromLogId(id);
+            
+            if (this.curPos(curHwId) + span) < this.vars.limits.upper(curHwId)
+                this.hw.moveRel(id, span);
+                this.hw.moveRel(id, -span);
+            elseif this.curPos(curHwId) - span > this.vars.limits.lower(curHwId)
+                this.hw.moveRel(id,   span);
+                this.hw.moveRel(id, - span);
+            else
+                fprintf("STAGES: span is too big for assignment test\n");
+            end
+        end
+        
+        function delete(this)
+           this.hw.delete(); 
+        end
+        
+        function referenceAll(this)
+            if ~(this.hardwareAvailable && this.connected)
+               fprintf("STAGES: Stages not available, can't reference\n");
+               return;
+            end
+            this.hw.referenceAll();
+        end
+        
+        %Configure Features
+        function setTrigger(this, ax, ch, mode, params, pol)
+            if ~(this.hardwareAvailable && this.connected)
+               fprintf("STAGES: Stages not available, can't setTrigger\n");
+               return;
+            end
+            
+            if ~ismethod( this.hw , 'setTrigger' )             
+                fprintf("STAGES: Stages doesn't support Trigger\n");
+               return;
+            end
+            
+            curLogId = this.getLogIdFromAxName(ax);
+            curhwId = this.getHwIdFromLogId(curLogId);
+            this.hw.setTrigger(curhwId, ch, mode, params);
+            this.hw.setTriggerPolarity(curhwId, pol);
+        end
+        
+        function vel = getVelocity(this, ax)
+            curLogId = this.getLogIdFromAxName(ax);
+            curHwId = this.getHwIdFromLogId(curLogId);
+            vel = this.hw.getVelocity(curHwId); 
+        end
+        
+        function setVelocity(this, ax, vel)
+            if ~(this.hardwareAvailable && this.connected)
+               fprintf("STAGES: Stages not available, can't set velocity\n");
+               return;
+            end
+            
+            curLogId = this.getLogIdFromAxName(ax);
+            curHwId = this.getHwIdFromLogId(curLogId);
+            this.hw.setVelocity(curHwId, vel)
+        end
+      
+        function maxVel = getMaxVelocityAx(this,ax)
+            if ~(this.hardwareAvailable && this.connected)
+               fprintf("STAGES: Stages not available, can't set velocity\n");
+               return;
+            end
+           
+            curLogId = this.getLogIdFromAxName(ax);
+            curHwId = this.getHwIdFromLogId(curLogId);
+            maxVel= this.hw.getMaxVelocity(curHwId);
+
+        end
+        
+        function maxVel = getMaxVelocityAll(this)
+            if ~(this.hardwareAvailable && this.connected)
+               fprintf("STAGES: Stages not available, can't set velocity\n");
+               return;
+            end
+            maxVel = zeros(1, this.vars.numOfStages);
+            for curLogId = 1: this.vars.numOfStages
+                curHwId = this.getHwIdFromLogId(curLogId);
+                maxVel(curLogId) = this.hw.getMaxVelocity(curHwId);
+            end
+        end
+        
+        function blockWhileMoving (this, ax)
+            if ~(this.hardwareAvailable && this.connected)
+               fprintf("STAGES: Stages not available, can't set velocity\n");
+               return;
+            end
+            
+            curLogId = this.getLogIdFromAxName(ax);
+            curHwId = this.getHwIdFromLogId(curLogId);
+            this.hw.blockWhileMoving(curHwId);
+        end
+        
+        function turnOnIOAll(this, ch)
+            if ~(this.hardwareAvailable && this.connected)
+               fprintf("STAGES: Stages not available, can't set velocity\n");
+               return;
+            end
+            
+            for curLogId = 1: this.vars.numOfStages
+                curHwId = this.getHwIdFromLogId(curLogId);
+                this.hw.turnOnIO(curHwId, ch);
+            end
         end
     end
 end
