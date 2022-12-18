@@ -69,6 +69,28 @@ pmtSigScanLog    = db(pmtSigScan);
 pmtSigScanAvg    = analysis.norm(PMTMeasAvg(:, sigUsIdx));
 pmtSigScanLogAvg = db(pmtSigScanAvg);
 
+% figure();
+% imagesc(PDMeas(:,:,1))
+% figure();
+% plot(PDMeas(20,:,1))
+
+idxChopVec = [103:113, 141:155, 192:202, ];
+PMTMeasClean = PMTMeas;
+PMTMeasClean(:,idxChopVec,:) = [];
+
+figure();
+subplot(1,2,1)
+plot(PMTMeasClean(:,:,1)')
+subplot(1,2,2)
+imagesc(PMTMeasClean(:,:,1))
+
+tailIdx = 50;
+pmtScanSNRMat = squeeze(max(PMTMeasClean(:,:,5),[], 2) ./ std(PMTMeasClean(:, tailIdx:end, 5), 0, 2));
+pmtScanSNRMatAvg = mean(pmtScanSNRMat, 2);
+
+figure();
+plot(pmtScanSNRMatAvg)
+
 pmtSigUs       = analysis.norm(PMTMeas(sigScanIdx, :,pmtMeasIdx));
 pmtSigUsLog    = db(pmtSigUs);
 pmtSigUsAvg    = analysis.norm(PMTMeasAvg(sigScanIdx, :));
@@ -76,15 +98,20 @@ pmtSigUsLogAvg = db(pmtSigUsAvg);
 
 pmtSigUsFin                = pmtSigUs;
 pmtSigUsFin(cutIdxs)       = [];
-pmtSigUsLogFin             = pmtSigUsLog;
-pmtSigUsLogFin(cutIdxs)    = [];
+% pmtSigUsLogFin             = pmtSigUsLog;
+% pmtSigUsLogFin(cutIdxs)    = [];
+pmtSigUsLogFin             = circshift(pmtSigUsLog,8);
+pmtSigUsLogFin(91:end)     = [];
 pmtSigUsAvgFin             = pmtSigUsAvg;
 pmtSigUsAvgFin(cutIdxs)    = [];
-pmtSigUsLogAvgFin          = pmtSigUsLogAvg;
-pmtSigUsLogAvgFin(cutIdxs) = [];
+% pmtSigUsLogAvgFin          = pmtSigUsLogAvg;
+% pmtSigUsLogAvgFin(cutIdxs) = [];
+pmtSigUsLogAvgFin          = circshift(pmtSigUsLogAvg,8);
+pmtSigUsLogAvgFin(91:end)  = [];
 
 keppIdxsLen = length(pmtSigUs) - cutIdxLen;
 depthAxZeroFin = depthAxZero (1:keppIdxsLen);
+depthAxZeroFin = depthAxZero (1:90) - 50;
 
 PMTim    = analysis.norm2D(PMTMeas(scanIdxLow:scanIdxHigh,usIdxLow:usIdxHigh, pmtMeasIdx));
 PMTimLog = PMTMeasLog(scanIdxLow:scanIdxHigh,usIdxLow:usIdxHigh, pmtMeasIdx);
@@ -122,6 +149,28 @@ pdSigScanLog    = db(pdSigScan);
 pdSigScanAvg    = analysis.norm(PDMeasAvg(:, sigUsIdx));
 pdSigScanLogAvg = db(pdSigScanAvg);
 
+% figure();
+% imagesc(PDMeas(:,:,1))
+% figure();
+% plot(PDMeas(20,:,1))
+
+idxChopVec = [103:113, 141:155, 192:202, ];
+PDMeasClean = PDMeas;
+PDMeasClean(:,idxChopVec,:) = [];
+
+figure();
+subplot(1,2,1)
+plot(PDMeasClean(:,:,1)')
+subplot(1,2,2)
+imagesc(PDMeasClean(:,:,1))
+
+tailIdx = 50;
+pdScanSNRMat = squeeze(max(PDMeasClean(:,:,2),[], 2) ./ std(PDMeasClean(:, tailIdx:end, 2), 0, 2));
+pdScanSNRMatAvg = mean(pdScanSNRMat, 2);
+
+figure();
+plot(pdScanSNRMatAvg)
+
 pdSigUs       = analysis.norm(PDMeas(sigScanIdx, :,pdMeasIdx));
 pdSigUsLog    = db(pdSigUs);
 pdSigUsAvg    = analysis.norm(PDMeasAvg(sigScanIdx, :));
@@ -129,12 +178,16 @@ pdSigUsLogAvg = db(pdSigUsAvg);
 
 pdSigUsFin                = pdSigUs;
 pdSigUsFin(cutIdxs)          = [];
-pdSigUsLogFin             = pdSigUsLog;
-pdSigUsLogFin(cutIdxs)    = [];
+% pdSigUsLogFin             = pdSigUsLog;
+% pdSigUsLogFin(cutIdxs)    = [];
+pdSigUsLogFin             = circshift(pdSigUsLog, 8);
+pdSigUsLogFin(91:end)     = [];
 pdSigUsAvgFin             = pdSigUsAvg;
 pdSigUsAvgFin(cutIdxs)    = [];
 pdSigUsLogAvgFin          = pdSigUsLogAvg;
 pdSigUsLogAvgFin(cutIdxs) = [];
+pdSigUsLogAvgFin          = circshift(pdSigUsLogAvg, 8);
+pdSigUsLogAvgFin(91:end)  = [];
 
 PDim    = analysis.norm2D(PDMeas(scanIdxLow:scanIdxHigh,usIdxLow:usIdxHigh, pdMeasIdx));
 PDimLog = PDMeasLog(scanIdxLow:scanIdxHigh,usIdxLow:usIdxHigh, pdMeasIdx);
@@ -176,6 +229,50 @@ subplot(2,2,3)
 imagesc(PMTMeas(:,:,pmtMeasIdx))
 subplot(2,2,4)
 imagesc(PMTMeasLog(:,:,pmtMeasIdx))
+
+%% SNR gain vs. depth comparison
+snrGainScan = pdScanSNRMatAvg./pmtScanSNRMatAvg;
+
+figure(); 
+plot(snrGainScan);
+
+avgSNRGain = mean(snrGainScan(1:42));
+snrGainScanNorm = snrGainScan/avgSNRGain;
+
+figure();
+ax1 = subplot(1,2,1);
+plot(scanAx, pdScanSNRMatAvg)
+hYL1 = ylabel("SNR PD");
+hXL1 = xlabel("Scan[mm]");
+yyaxis right
+plot(scanAx, pmtScanSNRMatAvg)
+hYL2 = ylabel("SNR PMT");
+ax2 = subplot(1,2,2);
+plot(scanAx, snrGainScanNorm)
+hXL2 = xlabel("Scan[mm]");
+hYL3 = ylabel("Normalized SNR Gain");
+
+set(ax1, 'FontSize', 18, 'TickLabelInterpreter', 'latex')
+set(ax2, 'FontSize', 18, 'TickLabelInterpreter', 'latex')
+
+set(hXL1, 'FontSize', 18, 'Interpreter', 'latex')
+set(hXL2, 'FontSize', 18, 'Interpreter', 'latex')
+
+set(hYL1, 'FontSize', 18, 'Interpreter', 'latex')
+set(hYL2, 'FontSize', 18, 'Interpreter', 'latex')
+set(hYL3, 'FontSize', 18, 'Interpreter', 'latex')
+
+
+%% fit Scan
+% figure(); 
+% plot(pdSigScanAvg)
+
+axPhi = scanAx(17:70) - scanAx(17)+6;
+phiPD = pdSigScanAvg(17:70);
+
+musp = 1.5; % mm^-1;
+b = 0.1806;
+mua = b^2/(3*musp) * 10;
 
 
 %% Figures Parameters
@@ -840,7 +937,7 @@ ylim(ax, [minY, maxY])
 set(ax, 'FontSize', axesFontSize, 'TickLabelInterpreter', 'latex')
 hXL = xlabel(ax, "US (Z) [mm]");
 set(hXL, 'FontSize', labelFontSize, 'Interpreter', 'latex')
-hYL = ylabel(ax, "Fluence [dB]");
+hYL = ylabel(ax, "Fluence Rate [dB]");
 set(hYL, 'FontSize', labelFontSize, 'Interpreter', 'latex')
 hTxt = text(depthAxZeroFin(1), -60  ,'(a)');
 set(hTxt, 'FontSize', textFontSize, 'Interpreter', 'latex', 'color', 'k')
@@ -1056,8 +1153,8 @@ hXL = xlabel(ax, "$\gamma$");
 set(hXL, 'FontSize', labelFontSize, 'Interpreter', 'latex')
 hYL = ylabel(ax, "SNR Gain [AU]");
 set(hYL, 'FontSize', labelFontSize, 'Interpreter', 'latex')
-hTxt = text(depthAxZeroFin(1), -10  ,'(a)');
-set(hTxt, 'FontSize', textFontSize, 'Interpreter', 'latex', 'color', 'k')
+% hTxt = text(depthAxZeroFin(1), -10  ,'(a)');
+% set(hTxt, 'FontSize', textFontSize, 'Interpreter', 'latex', 'color', 'k')
 xlim(ax, [20,32000])
 set(ax, 'xScale', 'log')
 % set(ax, 'yScale', 'log')
@@ -1082,11 +1179,17 @@ if saveFlag
     print(hFig, filename, '-dpdf', '-r0')
 end
 
+%% Figures Parameters
+textFontSize  = 18;
+labelFontSize = 20;
+axesFontSize  = 20;
+textFactor = 1.7;
+
 %% SNR Vs. Ref - ylog
 hFig = figure();
 ax = axes(hFig);
 errorbar(ax, refAx, avgSNRGain, stdSNRGain); hold on
-% plot(exp(refAxLog), exp(fitCurve))
+plot(exp(refAxLog), exp(fitCurve))
 
 set(ax, 'FontSize', axesFontSize, 'TickLabelInterpreter', 'latex')
 hXL = xlabel(ax, "$\gamma$");
@@ -1097,16 +1200,16 @@ set(hYL, 'FontSize', labelFontSize, 'Interpreter', 'latex')
 xlim(ax, [20,32000])
 set(ax, 'xScale', 'log')
 set(ax, 'yScale', 'log')
-% ylim(ax, [-0.1, 4.9])
+ylim(ax, [-0.1, 4.9])
 xlim (ax, [3e1, 3.5e4])
 set(ax, 'YTick', [0.03,0.1,0.3,1,3])
-% str = sprintf("y=%.2fx%.2f", fitModel.p1, fitModel.p2);
-% hTxt = text(10^3, 0.2  ,str);
-% set(hTxt, 'FontSize', 18, 'Interpreter', 'latex', 'color', 'k')
+str = sprintf("y=%.2fx%.2f", fitModel.p1, fitModel.p2);
+hTxt = text(10^3, 0.2  ,str);
+set(hTxt, 'FontSize', 18, 'Interpreter', 'latex', 'color', 'k')
 
-% hLeg = legend("Measured", "Fit");
-% set(hLeg, 'Location', 'northwest', 'FontSize', 14)
-%%
+hLeg = legend("Measured", "Fit");
+set(hLeg, 'Location', 'northwest', 'FontSize', 14)
+
 if saveFlag
     filename = '..\..\Publications\Homodyne AO\Figures\SNR-vs.Ref-ylog.pdf';
     set(hFig, 'Units', 'centimeters');
@@ -1114,7 +1217,7 @@ if saveFlag
     hFig.PaperUnits = 'centimeters';
     hFig.PaperType = '<custom>';
     hFig.PaperSize = [figPosCM(3), figPosCM(4)];
-    hFig.PaperPosition = [0, 0, figPosCM(3), figPosCM(4)];
+    hFig.PaperPosition = [0, 0, figPosCM(3)+1.5, figPosCM(4)+0.75];
     print(hFig, filename, '-dpdf', '-r0')
 end
 

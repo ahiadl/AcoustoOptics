@@ -2,7 +2,7 @@ close all
 clear all
 clc
 
-load('..\Transducer Pressure Field\AO_Transducer.mat');
+load('C:\Users\sahiadl.EED\OneDrive - Technion\Graduate\AcoustoOpticSystem\Measurements\Transducer Pressure Field\AO_Transducer.mat');
 %%
 lenY = csVars.scanSizeBin(1);
 lenZ = csVars.scanSizeBin(2);
@@ -154,3 +154,71 @@ ylabel( 'Z [mm]')
 axis tight equal
 h = colorbar;
 ylabel(h, 'MPa')
+
+XY = squeeze(p2pField(:,maxZ,:));
+XZ = squeeze(p2pField(maxY,:,:));
+YZ = squeeze(p2pField(:,:,maxX));
+
+minXY = min(XY(:));
+maxXY = max(XY(:));
+spanXY = maxXY-minXY;
+XYNorm = (XY - minXY)/spanXY;
+
+minXZ = min(XZ(:));
+maxXZ = max(XZ(:));
+spanXZ = maxXZ-minXZ;
+XZNorm = (XZ - minXZ)/spanXZ;
+
+minYZ = min(YZ(:));
+maxYZ = max(YZ(:));
+spanYZ = maxYZ-minYZ;
+YZNorm = (YZ - minYZ)/spanYZ;
+
+figure(); 
+subplot(3,1,1)
+imagesc(xVec, yVec, db(XYNorm));
+xlabel( 'X [mm]')
+ylabel( 'Y [mm]')
+axis tight equal
+h = colorbar;
+ylabel(h, 'dB')
+subplot(3,1,2)
+imagesc(xVec, zVec, db(XZNorm));
+xlabel( 'X [mm]')
+ylabel( 'Z [mm]')
+axis tight equal
+h = colorbar;
+ylabel(h, 'dB')
+subplot(3,1,3)
+imagesc(yVec, zVec, db(YZNorm));
+xlabel( 'y [mm]')
+ylabel( 'Z [mm]')
+axis tight equal
+h = colorbar;
+ylabel(h, 'dB')
+
+% plot(xVec,db(XZNorm (20,:)));
+% xlabel( 'X [mm]')
+% ylabel(h, 'dB')
+
+figure(); 
+subplot(3,1,1)
+plot(xVec, db(XYNorm(41,:))); hold on
+plot(xVec, -6*ones(1,length(xVec)))
+xlabel( 'X [mm]')
+ylabel('dB')
+title("Pressure profile - Axial axis Z")
+subplot(3,1,2)
+plot(zVec, db(YZNorm(41,:))); hold on
+plot(zVec, -6*ones(1,length(zVec)))
+xlabel( 'Z [mm]')
+ylabel('dB')
+xlim([-10, 10])
+title("Pressure profile - Transversal axis Z")
+subplot(3,1,3)
+plot(yVec, db(YZNorm(:,20))); hold on
+plot(yVec, -6*ones(1,length(yVec)))
+xlabel( 'Y [mm]')
+ylabel('dB')
+xlim([-10, 10])
+title("Pressure profile - Transversal axis Y")

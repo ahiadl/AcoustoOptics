@@ -157,8 +157,10 @@ classdef scan2DAO < handle
             models{2}  = sprintf("Start Scan for (R,%s,%s) = (%s, %s, %s)", this.grid.scanAxis, this.grid.thirdAxis, "%d", "%.2f", "%.2f");
             strings{3} = "timeTable2D";
             models{3}  = sprintf("%s%s%s%s", this.grid.scanAxis, "%.2f", this.grid.thirdAxis, "%.2f");
+%             models{3}  = sprintf("%s%s%s%s", this.grid.scanAxis, "%.2f");
             strings{4} = "timeTable1D";
             models{4}  = sprintf("R%s%s%s%s%s", "%d", this.grid.scanAxis, "%.2f", this.grid.thirdAxis, "%.2f");
+%             models{4}  = sprintf("R%s%s%s", "%d", this.grid.scanAxis, "%.2f");
             this.sf.setStringModels(strings, models);
             
             %---------------
@@ -337,30 +339,30 @@ classdef scan2DAO < handle
 
                 for i=1:this.grid.scanIdxLen
                     this.updateCurPosAndIdx( r, i);
-                    this.sf.startScanTime("timeTable1D", 'singlePos', [this.curPosIdx(1), this.curPos]);
+                    this.sf.startScanTime("timeTable1D", 'singlePos', [this.curPosIdx(1), this.curPos(1:2)]);
                     this.sf.printStrModel("start1DScan", [this.curPosIdx(1), this.curPos], true);
                     
-                    this.sf.startScanTime("timeTable1D", 'prepare', [this.curPosIdx(1), this.curPos]);
+                    this.sf.startScanTime("timeTable1D", 'prepare', [this.curPosIdx(1), this.curPos(1:2)]);
                     this.fileSystem.updateFileSystem([r, this.curPos(1)]);
-                    this.sf.stopScanTime("timeTable1D", 'prepare', [this.curPosIdx(1), this.curPos]);
+                    this.sf.stopScanTime("timeTable1D", 'prepare', [this.curPosIdx(1), this.curPos(1:2)]);
                     
                     this.stages.moveAbsAx(this.grid.scanAxis, this.curPos(1))
 
-                    this.sf.startScanTime("timeTable1D", 'netAcoustoOptics', [this.curPosIdx(1), this.curPos]);
+                    this.sf.startScanTime("timeTable1D", 'netAcoustoOptics', [this.curPosIdx(1), this.curPos(1:2)]);
                     res = this.ao.runAcoustoOptics();
-                    this.sf.stopScanTime("timeTable1D", 'netAcoustoOptics', [this.curPosIdx(1), this.curPos]);
+                    this.sf.stopScanTime("timeTable1D", 'netAcoustoOptics', [this.curPosIdx(1), this.curPos(1:2)]);
 
-                    this.sf.startScanTime("timeTable1D", 'scan1DProcessingTime', [this.curPosIdx(1), this.curPos]);
+                    this.sf.startScanTime("timeTable1D", 'scan1DProcessingTime', [this.curPosIdx(1), this.curPos(1:2)]);
                     this.putAOResTo1DResultsArray(res);
                     this.putAOResTo2DResultsArray();
                     this.averageRepeats1D();
-                    this.sf.stopScanTime("timeTable1D", 'scan1DProcessingTime', [this.curPosIdx(1), this.curPos]);
+                    this.sf.stopScanTime("timeTable1D", 'scan1DProcessingTime', [this.curPosIdx(1), this.curPos(1:2)]);
                     
-                    this.sf.startScanTime("timeTable1D", 'scanPlotting', [this.curPosIdx(1), this.curPos]);
+                    this.sf.startScanTime("timeTable1D", 'scanPlotting', [this.curPosIdx(1), this.curPos(1:2)]);
                     this.plotResults();
-                    this.sf.stopScanTime("timeTable1D", 'scanPlotting', [this.curPosIdx(1), this.curPos]);
+                    this.sf.stopScanTime("timeTable1D", 'scanPlotting', [this.curPosIdx(1), this.curPos(1:2)]);
                     
-                    this.sf.stopScanTime("timeTable1D", 'singlePos', [this.curPosIdx(1), this.curPos]);
+                    this.sf.stopScanTime("timeTable1D", 'singlePos', [this.curPosIdx(1), this.curPos(1:2)]);
                 end
                 this.sf.stopScanTime("timeTable2D", 'singleRep', [this.curPosIdx(1), this.curPos(2)]);
             end

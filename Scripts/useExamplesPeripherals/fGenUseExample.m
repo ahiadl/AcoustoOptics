@@ -32,7 +32,7 @@ dataCh2 = fg.getChDataStruct();
 % NOTE: number of samples in the data for each channel should be a
 % multiplication of 16.
 
-N = 65536;
+N = 65536/4;
 
 % AO Signal
 fsin = 1.25e6;

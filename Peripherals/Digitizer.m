@@ -32,6 +32,7 @@ classdef Digitizer < handle
             uVars.samplesPerMeas        = [];
             uVars.exportCropped         = [];
             uVars.croppedSamples        = [];
+            uVars.coupling              = 1; %0=DC1=AC
         end   
         
         function uVars = uVarsMonitorCreate()
@@ -39,6 +40,7 @@ classdef Digitizer < handle
             uVars.channels  = []; 
             uVars.timeToSample = [];
             uVars.triggerDelay = 0;
+            uVars.coupling     = 1; %0=DC1=AC
             uVars.avgNum       = [];
             
             uVars.extClk  = true;
@@ -113,7 +115,7 @@ classdef Digitizer < handle
             this.vars.useGPU        = vars.useGPU;
 
             this.vars.fs       = vars.fs;
-            this.vars.channels =  vars.channels;
+            this.vars.channels = vars.channels;
             
             % Utility vars
             channels          = this.vars.channels;
@@ -235,6 +237,8 @@ classdef Digitizer < handle
             this.system.triggerTimeout_clocks = uint32(floor(this.system.triggerTimeout_sec / 10.e-6 + 0.5));
             this.system.inputRange            = vars.inputRange;
             
+            this.system.coupling = vars.coupling;
+            
             this.setInputRange();
 
             switch vars.mode
@@ -336,6 +340,9 @@ classdef Digitizer < handle
            vars.system = this.system;
            vars.system.boardHandle = [];
            vars.vars = this.vars;
+           vars.TS = this.TS;
+           vars.NPT = this.NPT;
+           vars.CS = this.CS;
         end
         
         %Time Table Functions
@@ -406,9 +413,14 @@ classdef Digitizer < handle
             status = true;
 
             inputRange  = this.system.rangeDef;
-            coupling    = this.alazarDefs.AC_COUPLING;
             impedance   = this.alazarDefs.IMPEDANCE_50_OHM;
             successCode = this.alazarDefs.ApiSuccess;
+            
+            if this.system.coupling
+                coupling    = this.alazarDefs.AC_COUPLING;
+            else
+                coupling    = this.alazarDefs.DC_COUPLING;
+            end
             
             retCode = AlazarInputControlEx( this.system.boardHandle, this.alazarDefs.CHANNEL_A, coupling, inputRange, impedance);
             if (retCode ~= successCode); fprintf('DIGITIZER: Error: AlazarInputControlEx failed -- %s\n', errorToText(retCode)); status = false; return; end
@@ -463,7 +475,7 @@ classdef Digitizer < handle
             status = true;
             % Disable internal Triggers and set External Trigger
             retCode = AlazarSetTriggerOperation(this.system.boardHandle, this.alazarDefs.TRIG_ENGINE_OP_J,...
-                                                this.alazarDefs.TRIG_ENGINE_J, trigSource, this.alazarDefs.TRIGGER_SLOPE_POSITIVE, 150,... % TODO: Test level code
+                                                this.alazarDefs.TRIG_ENGINE_J, trigSource, this.alazarDefs.TRIGGER_SLOPE_POSITIVE, 128,... % TODO: Test level code
                                                 this.alazarDefs.TRIG_ENGINE_K, this.alazarDefs.TRIG_DISABLE, this.alazarDefs.TRIGGER_SLOPE_POSITIVE, 128 );                                                    
             if retCode ~= this.alazarDefs.ApiSuccess ; fprintf('DIGITIZER: Error: AlazarSetTriggerOperation failed -- %s\n', errorToText(retCode)); status = false; return; end
             
@@ -688,7 +700,7 @@ classdef Digitizer < handle
                 
             this.timeTable.fullAcquisition = toc(this.timeTable.fullAcquisition); 
         end
-
+        
         function monitor(this, vars)
             this.vars.monitor = true;
             
@@ -702,6 +714,8 @@ classdef Digitizer < handle
 
                 vars.timeToSample = 2^14/vars.fs;
                 vars.avgNum       = 100;
+                
+                vars.coupling = 1;
             end
             
             vars.mode      = 'NPT';

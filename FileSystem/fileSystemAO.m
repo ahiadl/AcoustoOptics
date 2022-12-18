@@ -93,36 +93,23 @@ classdef fileSystemAO < fileSystem
         function saveResultsToDisk(this, res)
             if this.saveAnyTot
                 data = res;
-%                 data.export = [];
                 for i= 1:this.chToAnalyze
-                    if ~(this.saveMeas && ~this.splitMeas)
+                    if (this.saveMeas && ~this.splitMeas)
                         data(i).export.meas = [];    
                     end
-                    if ~(this.saveSignal && ~this.splitMeas)
+                    if (this.saveSignal && ~this.splitMeas)
                          data(i).export.signal = [];
                     end
-                    if ~(this.saveDeMul && ~this.splitMeas)
+                    if (this.saveDeMul && ~this.splitMeas)
                         data(i).export.deMul = [];
                     end
-                    if ~(this.saveReshaped && ~this.splitMeas)
+                    if (this.saveReshaped && ~this.splitMeas)
                         data(i).export.reshaped = [];
                     end
-                    if ~(this.saveFFT && ~this.splitMeas)
+                    if (this.saveFFT && ~this.splitMeas)
                         data(i).export.fft = [];
                     end
                 end
-%                 if this.useFrame
-%                     data.qAvgChFFT        = res.qAvgChFFT;
-%                     data.qSt              = res.
-%                     data.unFittedFFT      = res.unFittedFFT;
-%                     data.unFittedFFTShift = res.unFittedFFTShift;
-%                     data.fitModel         = res.fitModel;
-%                     data.fittedFFT        = res.fittedFFT;
-%                 end
-%                 
-%                 data.phi              = res.phi;
-%                 data.rawPhi           = res.rawPhi;
-%                 data.SNR              = res.SNR;
 
                 if this.liveAO
                    if this.saveResults

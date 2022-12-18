@@ -27,8 +27,8 @@ classdef AOGraphics < Graphics
         function gNames = getGraphicsNames()
             gNames = {'extClk';'usSignal';...
                 'cropped';'meas';'signal'; 'deMul'; 'reshaped';...
-                'unFittedFFTAllCh'; 'unFittedFFTSingleCh'; 'fittedFFTSingleCh';'fittedFFTAllCh'; 'avgFFT'; 'normFFT';...
-                'phi'; 'rawPhi'; 'phiLog'};
+                'rawFFT'; 'calibration'; 'fittingModel'; 'fittedPowerFFT';'finalFFT';...
+                'phi'; 'rawPhi'; 'phiLog'; };
         end
         
         function figs  = createGraphicsVars()
@@ -54,6 +54,7 @@ classdef AOGraphics < Graphics
             
             figs.analyzeSingleCh = false;
             figs.singlChIdx = 1;
+            figs.dispMuEff  = false;
             
             for i=1:length(figsNames)
                 figs.validStruct.(figsNames{i}) = false;
@@ -186,9 +187,13 @@ classdef AOGraphics < Graphics
             this.depthIdx    = uVars.depthVecIdx;
             
             this.depthNormRaw = uVars.depthVecNormRaw;
+%             this.depthCntrRaw = uVars.depthVecNormRaw;
+%             this.depthZeroRaw = uVars.depthVecNormRaw;
+%             this.depthIdxRaw  = uVars.depthVecNormRaw;
             
             this.uVars.analyzeSingleCh = uVars.analyzeSingleCh;
             this.uVars.singleChIdx     = uVars.singleChIdx;
+            this.uVars.dispMuEff       = uVars.dispMuEff;
         end
         
         function setGraphicsStaticVars(this)
@@ -231,37 +236,27 @@ classdef AOGraphics < Graphics
             %-------------------
             % Frequency Domain Signal
             %-------------------
-            % unFittedFFT All Ch 
-            this.setType('unFittedFFTAllCh', 'plot');
-            this.setStrings('unFittedFFTAllCh', "UnFitted Frame-Avg FFT (All Ch): Depth: %.2f[mm] (idx: %d)", "f[MHz]", "Power Spectrum", "Ch %d");
-            this.setMarkersEnable('unFittedFFTAllCh', false);
+            % rawFFT 
+            this.setType('rawFFT', 'plot');
+            this.setStrings('rawFFT', "Raw FFT (Frame-Avg.): Depth: %.2f[mm] (idx: %d)", "f[MHz]", "Power Spectrum", "Ch %d");
+            this.setMarkersEnable('rawFFT', true);
             
-            % unFittedFFT Single Ch 
-            this.setType('unFittedFFTSingleCh', 'plot');
-            this.setStrings('unFittedFFTSingleCh', "UnFitted Frame-Avg FFT: Ch: %d, Depth: %.2f[mm] (idx: %d)", "f[MHz]", "Power Spectrum", []);
-            this.figs.unFittedFFTSingleCh.strings.legend = {'Raw FFT'; 'Fit'};
-            this.figs.unFittedFFTSingleCh.strings.updateLegend = false;
-            this.setMarkersEnable('unFittedFFTSingleCh', true);
+            % Fitting Model 
+            this.setType('fittingModel', 'plot');
+            this.setStrings('fittingModel', "Fitting Model Per-Channel: Ch: %d, Depth: %.2f[mm] (idx: %d)", "f[MHz]", "Power Spectrum", []);
+            this.figs.fittingModel.strings.legend = {'Raw FFT'; 'Fit'};
+%             this.figs.fittingModel.strings.updateLegend = false;
+            this.setMarkersEnable('fittingModel', true);
             
-            % fittedFFT Single Ch
-            this.setType('fittedFFTSingleCh', 'plot');
-            this.setStrings('fittedFFTSingleCh', "Fitted FFT Frame-Avg: Ch: %d, Depth: %.2f[mm] (idx: %d)", "f[MHz]", "Power Spectrum", []);
-            this.setMarkersEnable('fittedFFTSingleCh', true);
+            % fittedPowerFFT
+            this.setType('fittedPowerFFT', 'plot');
+            this.setStrings('fittedPowerFFT', "Fitted FFT (Frame-Avg.): Depth: %.2f[mm] (idx: %d)", "f[MHz]", "Power Spectrum", "Ch %d");
+            this.setMarkersEnable('fittedPowerFFT', true);
             
-            % fittedFFT All Ch
-            this.setType('fittedFFTAllCh', 'plot');
-            this.setStrings('fittedFFTAllCh', "Fitted Frame-Avg FFT (All Ch): Depth: %.2f[mm] (idx: %d)", "f[MHz]", "Power Spectrum", "Ch %d");
-            this.setMarkersEnable('fittedFFTAllCh', false);
-            
-            % Avg FFT
-            this.setType('avgFFT', 'plot');
-            this.setStrings('avgFFT', "Average FFT: Depth: %.2f[mm] (idx: %d)", "f[MHz]", "Power Spectrum", []);
-            this.setMarkersEnable('avgFFT', true);
-            
-            % normalized FFT
-            this.setType('normFFT', 'plot');
-            this.setStrings('normFFT', "Normalized FFT: Depth: %.2f[mm] (idx: %d)", "f[MHz]", "Power Spectrum", []);
-            this.setMarkersEnable('normFFT', true);
+            % finalFFT
+            this.setType('finalFFT', 'plot');
+            this.setStrings('finalFFT', "Final FFT (Ch.-Avg.): Depth: %.2f[mm] (idx: %d)", "f[MHz]", "Power Spectrum", []);
+            this.setMarkersEnable('finalFFT', true);
             
             %-------------------
             % Spatial Recontstruction
@@ -269,15 +264,15 @@ classdef AOGraphics < Graphics
             
             % phi [numOfPos]
             this.setType('phi', 'stem');
-            this.setStrings('phi', "\\phi", "Depth (US)[mm]", "\\phi", []);
+            this.setStrings('phi', [], "Depth (US)[mm]", "\phi", []);
             
             % phiRaw [numOfPos]
             this.setType('rawPhi', 'stem');
-            this.setStrings('rawPhi', "\\phi (Raw)", "Depth (US)[mm]", "\\phi", []);
+            this.setStrings('rawPhi', [], "Depth (US)[mm]", "\phi", []);
             
             % phi [numOfPos]
             this.setType('phiLog', 'plot');
-            this.setStrings('phiLog', "log(\\phi)", "Depth (US)[mm]", "log(\\phi)", []);
+            this.setStrings('phiLog', [], "Depth (US)[mm]", "log(\phi)", ["AlgoPhi"; "RawPhi"]);
             
         end
         
@@ -291,24 +286,26 @@ classdef AOGraphics < Graphics
             envIdx                   = floor(this.uVars.FFTenv / this.uVars.df);
             this.figs.FFTIdxs        = this.uVars.fIdx + [-envIdx, envIdx];
             this.figs.depthAxType     = this.uVars.depthAxType;
-
+        
             numOfCh   = this.uVars.numOfChannels;
             if this.figs.numOfChannels ~= numOfCh
-                this.figs.qAvgChFFT.update = true;
+                this.figs.rawFFT.update = true;
+                this.figs.fittedPowerFFT.update = true;
             end
             this.figs.numOfChannels = numOfCh;
-            this.setLegendVariables('unFittedFFTAllCh',  1:numOfCh);
-            this.setLegendVariables('fittedFFTAllCh', 1:numOfCh);
+            this.setLegendVariables('rawFFT',  1:numOfCh);
+            this.setLegendVariables('fittedPowerFFT', 1:numOfCh);
             
             this.updateGraphicsConstruction()
-            if this.uVars.frame > 1
-                this.setType('phi', 'stem');
-            else
-                this.setType('phi', 'stem');
-            end
+%             if this.uVars.frame > 1
+%                 this.setType('phi', 'stem');
+%             else
+%                 this.setType('phi', 'stem');
+%             end
             
             this.figs.analyzeSingleCh = this.uVars.analyzeSingleCh;
             this.figs.singleChIdx     = this.uVars.singleChIdx;
+            this.figs.dispMuEff       = this.uVars.dispMuEff;
             
             if this.figs.analyzeSingleCh
                 this.figs.ch = 1;
@@ -390,25 +387,79 @@ classdef AOGraphics < Graphics
                     signal.frame     = this.figs.frame;
                     signal.xData     = this.tVecPos;
                     signal.yData     = permute( this.data.export.reshaped(signal.frame ,signal.ch, :, signal.depthIdx), [2,3,1,4]);
-                case 'phi'
-                    signal.xData    = this.getDepthAxByType();
-                    signal.yData    = this.data.phi;
-                    signal.SNR      = this.data.SNR.val;
-                    signal.noiseStd = this.data.SNR.noiseStd;
-                case 'rawPhi'
-                    signal.xData    = this.getDepthAxByType();
-                    signal.yData    = this.data.rawPhi;
-                    signal.SNR      = this.data.SNR.valRaw;
-                    signal.noiseStd = this.data.SNR.noiseStdRaw;
-                case 'phiLog'
-                    signal.xData    = this.getDepthAxByType();
-%                     signal.yData    = real(log(this.data.phi-min(this.data.phi)/(max(this.data.phi) - min(this.data.phi)))); %TDOD: calculate log phi in algo.
-                    signal.yData    = this.data.phiLog;
-                    signal.SNR      = this.data.SNR.val;
-                    signal.noiseStd = this.data.SNR.noiseStd;
             end
         end
         
+        function signal = extractPhi(this, figName)
+            switch figName
+                case 'phi'
+                    switch this.figs.depthAxType
+                       case 'Normal'
+                           signal.xData{1} = this.data.analysis.phi.depthVecBkg;
+                           signal.xData{2} = this.data.analysis.phi.depthVecSignal;
+                       case 'Index'
+                           signal.xData{1} = this.data.analysis.phi.bkgIdx;
+                           signal.xData{2} = this.data.analysis.phi.signalIdx;
+                    end
+                    signal.yData{1} = this.data.analysis.phi.bkg;
+                    signal.yData{2} = this.data.analysis.phi.signal;
+                    signal.SNR      = this.data.analysis.phi.SNR;
+                    signal.noiseStd = this.data.analysis.phi.stdNoise;
+                    if this.figs.dispMuEff
+                        signal.muEffVal    = this.data.analysis.muEff.muEffVal;
+                        signal.muEffRawVal = this.data.analysis.muEff.muEffRawVal;
+                    end
+                    minVal = min(min(signal.yData{1}(signal.yData{1}~=-inf)), min(signal.yData{2}(signal.yData{2}~=-inf)));
+                    maxVal = max(max(signal.yData{1}(signal.yData{1}~=inf)), max(signal.yData{2}(signal.yData{2}~=inf)));
+                case 'rawPhi'
+                    switch this.figs.depthAxType
+                       case 'Normal'
+                           signal.xData{1} = this.data.analysis.rawPhi.depthVecBkg;
+                           signal.xData{2} = this.data.analysis.rawPhi.depthVecSignal;
+                       case 'Index'
+                           signal.xData{1} = this.data.analysis.rawPhi.bkgIdx;
+                           signal.xData{2} = this.data.analysis.rawPhi.signalIdx;
+                    end
+                    signal.yData{1} = this.data.analysis.rawPhi.bkg;
+                    signal.yData{2} = this.data.analysis.rawPhi.signal;
+                    signal.SNR      = this.data.analysis.rawPhi.SNR;
+                    signal.noiseStd = this.data.analysis.rawPhi.stdNoise;
+                    if this.figs.dispMuEff
+                        signal.muEffVal    = this.data.analysis.muEff.muEffVal;
+                        signal.muEffRawVal = this.data.analysis.muEff.muEffRawVal;
+                    end
+                    minVal = min(min(signal.yData{1}(signal.yData{1}~=-inf)), min(signal.yData{2}(signal.yData{2}~=-inf)));
+                    maxVal = max(max(signal.yData{1}(signal.yData{1}~=inf)), max(signal.yData{2}(signal.yData{2}~=inf)));
+                case 'phiLog'
+                    signal.xData{1}    = this.getDepthAxByType();
+                    signal.xData{2}    = this.getDepthAxByType();
+                    signal.yData{1}    = this.data.phiLog;
+                    signal.yData{2}    = this.data.analysis.rawPhi.normTypes.phiLog2;
+                    if this.figs.dispMuEff
+                        switch this.figs.depthAxType
+                            case 'Normal'
+                                signal.xData{3}    = this.data.analysis.muEff.xVecInt;
+                                signal.xData{4}    = this.data.analysis.muEff.xVecInt;
+                            case 'Index'
+                                signal.xData{3}    = this.data.analysis.muEff.xVecIntIdx;
+                                signal.xData{4}    = this.data.analysis.muEff.xVecIntIdx;
+                        end
+                        signal.yData{3}    = this.data.analysis.muEff.phiCutInt;
+                        signal.yData{4}    = this.data.analysis.muEff.phiRawCutInt;
+                        signal.muEffVal    = this.data.analysis.muEff.muEffVal;
+                        signal.muEffRawVal = this.data.analysis.muEff.muEffRawVal;
+                    end
+                    signal.SNR      = this.data.analysis.phi.SNR;
+                    signal.noiseStd = this.data.analysis.phi.stdNoise;
+                    minVal = min(signal.yData{1}(signal.yData{1}~=-inf));
+                    maxVal = max(signal.yData{1});
+            end
+            span = maxVal - minVal;
+            signal.minLim = minVal - 0.1*span;
+            signal.maxLim = maxVal + 0.1*span;
+            signal.SNRYlim = double(signal.maxLim - 0.15*span);
+        end
+
         function signal = extractFFTSignal(this, figName)
             signal.ch = this.figs.ch;
             signal.depthIdx  = this.figs.depthIdx;
@@ -422,34 +473,26 @@ classdef AOGraphics < Graphics
             this.figs.(figName).lims.xlims = [this.fBar(signal.fidxs(1)), this.fBar(signal.fidxs(end))]; 
             signal.xData = this.fBar(signal.fidxs);
             switch figName               
-                case 'unFittedFFTAllCh'
-                    signal.yData     = this.data.qAvgChFFT(:, signal.fidxs, signal.depthIdx);
-                    signal.markerY   = squeeze(this.data.qAvgChFFT(:,this.figs.fIdx, signal.depthIdx));
+                case 'rawFFT'
+                    signal.yData     = this.data.frameAvgPowerFFT(:, signal.fidxs, signal.depthIdx);
                     signal.yData     = squeeze(signal.yData(:,signal.fidxs));
+                    signal.markerY   = squeeze(this.data.frameAvgPowerFFT(:,this.figs.fIdx, signal.depthIdx));
                     signal.titleVars = {{signal.depthVec(signal.depthIdx), signal.depthIdx}};
-                case 'unFittedFFTSingleCh'
-                    signal.yData(1,:,1) = permute(this.data.qAvgChFFT(signal.ch, signal.fidxs, signal.depthIdx), [3,1,2]);
-                    signal.yData(2,:,1) = permute(this.data.fitModelMat(signal.ch, signal.fidxs, signal.depthIdx), [3,1,2]);
+                case 'fittingModel'
+                    signal.yData(1,:,1) = permute(this.data.frameAvgPowerFFT(signal.ch, signal.fidxs, signal.depthIdx), [3,1,2]);
+                    signal.yData(2,:,1) = permute(this.data.fitModelMat(signal.ch, signal.fidxs), [3,1,2]);
                     signal.titleVars    = {{signal.ch, signal.depthVec(signal.depthIdx), signal.depthIdx}};
-                    signal.markerY(1)   = squeeze(this.data.qAvgChFFT(signal.ch, this.figs.fIdx, signal.depthIdx));
-                    signal.markerY(2)   = squeeze(this.data.fitModelMat(signal.ch, this.figs.fIdx, signal.depthIdx));
-                case 'fittedFFTSingleCh'
-                    signal.yData     = this.data.fittedQAvgFFT(signal.ch, signal.fidxs, signal.depthIdx);
-                    signal.titleVars = {{signal.ch, signal.depthVec(signal.depthIdx), signal.depthIdx}};
-                    signal.markerY   = squeeze(this.data.fittedQAvgFFT(signal.ch, this.figs.fIdx, signal.depthIdx));
-                case 'fittedFFTAllCh'
-                    signal.yData     = this.data.fittedQAvgFFT(:, signal.fidxs, signal.depthIdx);
-                    signal.markerY   = squeeze(this.data.fittedQAvgFFT(:,this.figs.fIdx, signal.depthIdx));
-                    signal.yData     = squeeze(signal.yData(:,signal.fidxs));
+                    signal.markerY(1)   = squeeze(this.data.frameAvgPowerFFT(signal.ch, this.figs.fIdx, signal.depthIdx));
+                    signal.markerY(2)   = squeeze(this.data.fitModelMat(signal.ch, this.figs.fIdx));
+                case 'fittedPowerFFT'
+                    signal.yData     = this.data.fittedPowerFFT(:, signal.fidxs, signal.depthIdx);
                     signal.titleVars = {{signal.depthVec(signal.depthIdx), signal.depthIdx}};
-                case 'avgFFT'
-                    signal.yData     = this.data.fittedChAvgFFT(signal.fidxs, signal.depthIdx)';
+                    signal.markerY   = squeeze(this.data.fittedPowerFFT(:, this.figs.fIdx, signal.depthIdx));
+                case 'finalFFT'
+                    signal.yData     = this.data.fittedFFT(signal.fidxs, signal.depthIdx)';
+%                     signal.yData     = squeeze(signal.yData(:,signal.fidxs));
+                    signal.markerY   = squeeze(this.data.fittedFFT(this.figs.fIdx, signal.depthIdx));
                     signal.titleVars = {{signal.depthVec(signal.depthIdx), signal.depthIdx}};
-                    signal.markerY   = squeeze(this.data.fittedChAvgFFT(this.figs.fIdx, signal.depthIdx));
-                case 'normFFT'
-                    signal.yData     = this.data.fittedFFTNorm(signal.fidxs, signal.depthIdx)';
-                    signal.titleVars = {{signal.depthVec(signal.depthIdx), signal.depthIdx}};
-                    signal.markerY   = squeeze(this.data.fittedFFTNorm(this.figs.fIdx, signal.depthIdx));
             end
             signal.markerX = this.fBar(this.figs.fIdx);
         end
@@ -463,11 +506,11 @@ classdef AOGraphics < Graphics
                 case 'stem'
                     set(this.figs.(gName).handles.cur.plot(hIdx),...
                         'XData', xData,...
-                        'YData', gather(yData));
+                        'YData', gather(yData'));
                 case 'plot'
-                    set(this.figs.(gName).handles.cur.plot(hIdx), 'XData',...
-                        xData,...
-                        'YData', gather(yData));
+                    set(this.figs.(gName).handles.cur.plot(hIdx),...
+                        'XData', xData, ...
+                        'YData', gather(yData'));
                 case 'errorbar'
                     set(this.figs.(gName).handles.cur.plot(hIdx),...
                         'XData', xData,...
@@ -517,40 +560,48 @@ classdef AOGraphics < Graphics
                return
             end
             
-            signal = this.extractSignal(figName);
-            SNRstr = sprintf("SNR: %.2f\nBkg STD: %.2E", signal.SNR, signal.noiseStd);
-            minVal = min(signal.yData); maxVal = max(signal.yData);
-            span = maxVal-minVal;
-            minLim = minVal - 0.1*span;
-            maxLim = maxVal + 0.1*span;
-            SNRYlim = double(maxLim - 0.05*span);
+            signal = this.extractPhi(figName);
+            if this.figs.dispMuEff
+               SNRstr = sprintf("SNR: %.2f\nBkg STD: %.2E\n\\mu_{Eff} = %.3f\n\\mu_{Eff}^{Raw} = %.3f", signal.SNR, signal.noiseStd, signal.muEffVal, signal.muEffRawVal);
+            else
+               SNRstr = sprintf("SNR: %.2f\nBkg STD: %.2E", signal.SNR, signal.noiseStd);
+            end
             
-            if ~isgraphics(this.figs.(figName).handles.cur.plot) ||...
-                ~strcmp(this.figs.(figName).type, this.figs.(figName).handles.cur.plot.Type)  
-                switch this.figs.(figName).type
-                    case 'stem'
-                       this.figs.(figName).handles.cur.plot = ...
-                           stem(this.figs.(figName).handles.cur.ax,...
-                           signal.xData, signal.yData);    
-                    case 'plot'
-                       this.figs.(figName).handles.cur.plot = ...
-                           plot(this.figs.(figName).handles.cur.ax,...
-                           signal.xData, signal.yData);
-                   case 'errorbar'
-                       this.figs.(figName).handles.cur.plot = ...
-                           errorbar(this.figs.(figName).handles.cur.ax,...
-                           signal.xData, signal.yData, signal.std);
+            if ~isgraphics(this.figs.(figName).handles.cur.plot(1)) ||...
+                ~strcmp(this.figs.(figName).type, this.figs.(figName).handles.cur.plot(1).Type)  
+                this.figs.(figName).handles.cur.plot = gobjects(1,size(signal.yData,1));
+                for i = 1:size(signal.yData, 2)
+                    if i == 2
+                        hold(this.figs.(figName).handles.cur.ax, 'on');
+                    end
+                    switch this.figs.(figName).type
+                        case 'stem'
+                               this.figs.(figName).handles.cur.plot(i) = ...
+                                   stem(this.figs.(figName).handles.cur.ax,...
+                                   signal.xData{i}, signal.yData{i});
+                        case 'plot'
+                           this.figs.(figName).handles.cur.plot(i) = ...
+                               plot(this.figs.(figName).handles.cur.ax,...
+                               signal.xData{i}, signal.yData{i});
+                       case 'errorbar'
+                           this.figs.(figName).handles.cur.plot(i) = ...
+                               errorbar(this.figs.(figName).handles.cur.ax,...
+                               signal.xData{i}, signal.yData{i}, signal.std);
+                    end
                 end
+                hold(this.figs.(figName).handles.cur.ax, 'off');
                 this.figs.(figName).handles.cur.text = ...
-                    text(this.figs.(figName).handles.cur.ax, 0, SNRYlim,...
+                    text(this.figs.(figName).handles.cur.ax, 0, signal.SNRYlim,...
                     SNRstr, 'FontSize', 14);
                 setStringsToPlot(this, figName) 
-                ylim(this.figs.(figName).handles.cur.ax, [minLim, maxLim]);
+                ylim(this.figs.(figName).handles.cur.ax, [signal.minLim, signal.maxLim]);
             else
-                quickPlot(this, figName, signal.xData, signal.yData, [], [], []);
-                set(this.figs.(figName).handles.cur.text, 'String', SNRstr, 'Position', [0, SNRYlim]);
+                for i = 1:size(signal.yData, 2)
+                    quickPlot(this, figName, signal.xData{i}, signal.yData{i}, [], [], [], i);
+                end
+                set(this.figs.(figName).handles.cur.text, 'String', SNRstr, 'Position', [0, signal.SNRYlim]);
                 pause(0.01);
-                ylim(this.figs.(figName).handles.cur.ax, [minLim, maxLim]);
+                ylim(this.figs.(figName).handles.cur.ax, [signal.minLim, signal.maxLim]);
                 drawnow();
             end
         end

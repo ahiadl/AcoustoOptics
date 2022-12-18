@@ -4,43 +4,53 @@ rawData = aoRes.resMeas.res(1).rawData;
 % Old Algo (for reference)
 algo = Algo();
 
-uVars = algo.uVarsCreate();
+uVars = algo.createUserVars();
+
 
 uVars.fSin       = 1.25e6;              
-uVars.fTrain     = 10e3;
-uVars.cycInPulse = 1;
+uVars.fSqnc      = 10e3;
+uVars.cycPerPulse = 1;
 uVars.channels   = 1;
-
 uVars.c                 = 1430;  
-uVars.phantomDepth      = 4.6e-2;
 uVars.distFromPhantom   = 11e-2;
-uVars.bufferSizeBytes   = 8*2^20;
-uVars.bytesPerSample    = 2;
-uVars.preTriggerSamples = 14;
-uVars.fExtClk           = 5e6; %fs
-uVars.fSclk             = 100e6;
+uVars.fs                = 5e6; %fs
+uVars.fgClk             = 100e6;
+uVars.sClkDcyc          = 50; % [%]
 uVars.timeToSample      = 0.25;
-uVars.extClkDcyc        = 50; % [%]
+uVars.frameTime         = 0.002;
 uVars.envDC             = 100e3;
 uVars.envUS             = 78e3;
-uVars.envHar            = 200e3;
-uVars.useQuant          = true;
-uVars.quantTime         = 0.002;
+
+uVars.useFrame          = true;
 uVars.useGPU            = true;
 uVars.useHadamard       = true;
-uVars.highResAO         = false;
-uVars.longMeas          = false;
+uVars.contHadamard      = false;
 
-uVars.export.rawData        = false;
-uVars.export.netSignal      = false;
-uVars.export.deMultiplexed  = false;
-uVars.export.reshapedSignal = false;
-uVars.export.fftRes         = false;
+uVars.highResAO         = false;
+uVars.analyzeSingleCh
+uVars.contSpeckleAnalysis
+uVars.cutArtfct = 0;
+uVars.artfctIdxVec = [];
+
+uVars.export.meas        = false;
+uVars.export.signal      = false;
+uVars.export.deMul  = false;
+uVars.export.reshaped = false;
+uVars.export.fft         = false;
 uVars.export.usCompCmplx    = false;
 
-algoVars = algo.updateAlgoUserVars(uVars);
+algoVars = algo.setVars(uVars);
+
+figure(); 
+plot(algoVars.timing.tVecUS*1e6, algoVars.usSignal.sigData)
+xlabel("t[\mus]")
+
 algo.setRawData(rawData);
 res = algo.analyse();
+
+
+uVars.envHar            = 200e3;
+uVars.phantomDepth      = 4.6e-2;
 
 figure();
 subplot(1,3,1)
