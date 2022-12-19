@@ -1,0 +1,3 @@
+[submodule "Peripherals/Stages"]
+	path = Peripherals/Stages
+	url = https://github.com/LIBS-EE/Stages.git
