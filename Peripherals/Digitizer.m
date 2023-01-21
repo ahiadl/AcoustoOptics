@@ -33,11 +33,12 @@ classdef Digitizer < handle
             uVars.exportCropped         = [];
             uVars.croppedSamples        = [];
             uVars.coupling              = 1; %0=DC1=AC
+            uVars.draw                  = false;
         end   
         
         function uVars = uVarsMonitorCreate()
-            uVars.fs        = [];
-            uVars.channels  = []; 
+            uVars.fs           = [];
+            uVars.channels     = []; 
             uVars.timeToSample = [];
             uVars.triggerDelay = 0;
             uVars.coupling     = 1; %0=DC1=AC
@@ -62,12 +63,11 @@ classdef Digitizer < handle
             this.system.bytesPerSample    = 2;
             this.system.preTriggerSamples = 14;
             this.buffers = cell(1, this.system.bufferCount);
-            this.vars.figs.hFig  = 1;
-            this.vars.figs.hAx   = 1;
-            this.vars.figs.hPlot = 1;
+            this.vars.figs.hFig    = 1;
+            this.vars.figs.hAx     = 1;
+            this.vars.figs.hPlot   = 1;
             this.vars.prevChannels = 0;
-            this.vars.channels = 0;
-            
+            this.vars.channels     = 0;
         end
         
         function initDefs(this)
@@ -105,9 +105,14 @@ classdef Digitizer < handle
             
             this.timeTable.Connect = toc(this.timeTable.Connect);
         end
+
+        function resetDigitizer(this)
+            unloadlibrary 'ATSApi';
+            this.connect();
+        end
         
         % Variables Functions
-        function setVars(this, vars)
+        function retVars = setVars(this, vars)
             this.vars.prevChannles = this.vars.channels;
             
             % General Vars
@@ -171,14 +176,17 @@ classdef Digitizer < handle
                     drawData = false;
                 case 'NPT'
                     preTriggerSamples = 0;
+                    preRecordSamples = this.calcPreRecordSampleNPT();
                     
                     %User vars
-                    postTriggerSamplesUser    = round(vars.timeToSample*vars.fs);
-                    postTriggerSamples        = max(256, ceil(postTriggerSamplesUser/128)*128);
-                    recordsPerBuffer          = vars.avgNum;
-
+                    postTriggerSamplesUser = round(vars.timeToSample*vars.fs);
+                    postTriggerSamplesArt  = preTriggerSamples + preRecordSamples + postTriggerSamplesUser;
+                    postTriggerSamples     = max(256, ceil(postTriggerSamplesArt/128)*128); % Align to 128;
+                    
+                    recordsPerBuffer = vars.avgNum;
+    
                     % Calculate NPT vars
-                    samplesPerRecord      = preTriggerSamples + postTriggerSamples;
+                    samplesPerRecord      = postTriggerSamples;
                     samplesPerBuffer      = samplesPerRecord * recordsPerBuffer;
                     samplesPerBufferAllCh = samplesPerBuffer * channels;
                     bufferSizeBytes       = bytesPerSample   *  samplesPerBufferAllCh;
@@ -187,11 +195,17 @@ classdef Digitizer < handle
                         numOfBuffers = hex2dec('7FFFFFFF');
                         recordsPerAcuisition = hex2dec('7FFFFFFF');
                         exportData = false;
+                        samplesPerAcq = 0;
+                        samplesPerAcqAllCh = 0;
                     else
                         numOfBuffers = vars.numMeas; %non stop acuisition = hex2dec('7FFFFFFF')
                         recordsPerAcuisition = recordsPerBuffer *  numOfBuffers;
                         exportData = true;
+                        samplesPerAcq = samplesPerBuffer * numOfBuffers;
+                        samplesPerAcqAllCh = samplesPerAcq * channels;
                     end
+                    
+                    postRecordSamples = samplesPerRecord - postTriggerSamplesArt;
 
                     % Collect NPT Vars
                     this.NPT.postTriggerSamplesUser = postTriggerSamplesUser;
@@ -201,10 +215,83 @@ classdef Digitizer < handle
                     this.NPT.recordsPerBuffer       = recordsPerBuffer;
                     this.NPT.recordsPerAcuisition   = recordsPerAcuisition;
                     
+                    this.NPT.preRecordSamples       = preRecordSamples;
+                    this.NPT.postRecordSamples      = postRecordSamples;
+
+                    this.NPT.cutIdxs = [1:preRecordSamples, (postTriggerSamplesArt+1):samplesPerRecord];
+                    
                     if drawData
                         this.vars.figs.tVec = (0:1:(samplesPerRecord-1))/this.vars.fs *1e6;
                         this.vars.figs.fVec = (this.vars.fs/samplesPerRecord) *  ( (-samplesPerRecord/2) : 1 : (samplesPerRecord/2)-1 ) /1e6;
                     end
+
+                case 'ContNPT'
+                    % Measure continuesly numerous triggers and perform no
+                    % averaging.
+                    
+                    % General predefined variables:
+%                     maxBufferSize = 2^23; % 8MB
+                    maxBufferSize = 2^25; % 64MB
+                    preRecordSamples = this.calcPreRecordSampleNPT();
+
+                    % User vars:
+                    postTriggerSamplesUser = round(vars.timeToSample*vars.fs);
+                    userRecordSizeBytes = postTriggerSamplesUser*bytesPerSample*channels;
+
+                    % Calculate how mant triggers acquisition are in a
+                    % buffer:
+                    recordsPerBufferRaw    = floor(maxBufferSize / userRecordSizeBytes);
+
+                    if recordsPerBufferRaw == 0 
+                        fprintf("DIGITIZER: NOTICE: measured time is longer than max suggested buffer size.\n")
+                        recordsPerBufferRaw = 1;
+                    end
+                    
+                    % How many buffer are required to capture total number 
+                    % of triggers:
+                    numOfBuffers = ceil(vars.numMeas/recordsPerBufferRaw);
+                    
+                    % How many redundant record will be captured:
+                    recordsPerAcqRaw = numOfBuffers*recordsPerBufferRaw;
+                    redundantRecord = recordsPerAcqRaw - vars.numMeas;
+
+                    % Make many short records into several long continues
+                    % with size equivalent to buffer size:
+                    % (to spare the missed triggers between NPTs)
+                    postTriggerSamplesCont = recordsPerBufferRaw*postTriggerSamplesUser;
+
+                    postTriggerSamplesArt = postTriggerSamplesCont + preRecordSamples;
+                    samplesPerRecord      = max(256, ceil(postTriggerSamplesArt/128)*128);
+                    samplesPerRecordAllCh = samplesPerRecord * channels;
+                    recordSizeBytes       = samplesPerRecordAllCh * bytesPerSample;
+                    postRecordSamples     = samplesPerRecord - postTriggerSamplesArt;
+
+                    % Common variables:
+                    recordsPerBuffer      = 1;
+                    bufferSizeBytes       = recordSizeBytes;
+                    samplesPerBuffer      = samplesPerRecord; 
+                    samplesPerBufferAllCh = samplesPerRecordAllCh;
+                    recordsPerAcuisition  = numOfBuffers;
+                    
+                    samplesPerAcq = samplesPerBuffer * numOfBuffers;
+                    samplesPerAcqAllCh = samplesPerAcq * channels;
+
+                    exportData = true;
+
+                    % Collect NPT Vars
+                    this.NPT.postTriggerSamplesUser = postTriggerSamplesUser;
+                    this.NPT.preTriggerSamples      = 0;
+                    this.NPT.postTriggerSamples     = samplesPerRecord;
+                    this.NPT.samplesPerRecord       = samplesPerRecord;
+                    this.NPT.recordsPerBuffer       = recordsPerBuffer;
+                    this.NPT.recordsPerAcuisition   = recordsPerAcuisition;
+                    this.NPT.preRecordSamples       = preRecordSamples;
+                    this.NPT.postRecordSamples      = postRecordSamples;
+                    this.NPT.redundantRecord        = redundantRecord;
+
+                    this.NPT.cutIdxs = [1:preRecordSamples, postTriggerSamplesArt+1:samplesPerRecord];
+                    this.NPT.samplesPerAcqAllRecords = postTriggerSamplesUser * recordsPerAcqRaw;
+                    this.NPT.extraRecordIdxs = (postTriggerSamplesUser*vars.numMeas+1) :  this.NPT.samplesPerAcqAllRecords;
             end
             
             this.calcTriggerDelayAlignment()
@@ -213,7 +300,9 @@ classdef Digitizer < handle
             this.vars.numOfBuffers          = numOfBuffers;
             this.vars.samplesPerBuffer      = samplesPerBuffer;
             this.vars.samplesPerBufferAllCh = samplesPerBufferAllCh;
-            
+            this.vars.samplesPerAcq         = samplesPerAcq;
+            this.vars.samplesPerAcqAllCh    = samplesPerAcqAllCh;
+
             this.vars.exportData = exportData;
             this.vars.drawData   = drawData;
             
@@ -231,7 +320,6 @@ classdef Digitizer < handle
             this.system.triggerDelay_samples       = this.system.triggerDelay_samples_user;
             
             this.vars.triggerDelayManualSamples    = this.system.triggerDelay_samples_user - this.system.triggerDelay_samples +1;
-            
             
             this.system.triggerTimeout_sec    = 0;
             this.system.triggerTimeout_clocks = uint32(floor(this.system.triggerTimeout_sec / 10.e-6 + 0.5));
@@ -251,6 +339,9 @@ classdef Digitizer < handle
                 case 'NPT'
                     this.TS = [];
                     this.CS = [];
+                case 'ContNPT'
+                    this.TS = [];
+                    this.CS = [];
                 case 'CS'
                     this.TS = [];
                     this.NPT = [];
@@ -259,32 +350,33 @@ classdef Digitizer < handle
             retVars = this.vars;
         end
         
-        function preTriggerSamples = calcPreTriggerSamplesTS(this)
-            if this.vars.fs == 5e6
-                if this.vars.channels == 1
-                   preTriggerSamples = 419;
-                elseif this.vars.channels == 2
-                    preTriggerSamples = 410;
-                elseif this.vars.channels == 4
-                    preTriggerSamples = 40;
-                elseif this.vars.channels == 8
-                    preTriggerSamples = 408;
-                elseif this.vars.channels == 16
-                    preTriggerSamples = 396;
-                end        
-            elseif this.vars.fs == 20e6
-                if this.vars.channels == 1
-                   preTriggerSamples = 919;
-                elseif this.vars.channels == 2
-                   preTriggerSamples = 910;
-                elseif this.vars.channels == 4
-                    preTriggerSamples = 910;
-                elseif this.vars.channels == 8
-                    preTriggerSamples = 908;
-                elseif this.vars.channels == 16
-                    preTriggerSamples = 396;
-                end
+        function preRecordSamples = calcPreRecordSampleNPT(this)
+            switch this.vars.channels
+                case 1
+                     preRecordSamples = 7;
+                case 2
+                     preRecordSamples = 6;
+                case 4
+                     preRecordSamples = 10;
+                case 8
+                     preRecordSamples = 10;
+                case 16
+                     preRecordSamples = 11;
             end
+        end
+
+        function preTriggerSamples = calcPreTriggerSamplesTS(this)
+                if this.vars.channels == 1
+                   preTriggerSamples = 7;
+                elseif this.vars.channels == 2
+                    preTriggerSamples = 6;
+                elseif this.vars.channels == 4
+                    preTriggerSamples = 10;
+                elseif this.vars.channels == 8
+                    preTriggerSamples = 10;
+                elseif this.vars.channels == 16
+                    preTriggerSamples = 11;
+                end
             this.system.preTriggerSamples = preTriggerSamples;
         end
         
@@ -337,12 +429,13 @@ classdef Digitizer < handle
         end
         
         function vars = getVars(this)
-           vars.system = this.system;
+           vars.system  = this.system;
            vars.system.boardHandle = [];
+
            vars.vars = this.vars;
-           vars.TS = this.TS;
-           vars.NPT = this.NPT;
-           vars.CS = this.CS;
+           vars.TS   = this.TS;
+           vars.NPT  = this.NPT;
+           vars.CS   = this.CS;
         end
         
         %Time Table Functions
@@ -368,7 +461,6 @@ classdef Digitizer < handle
             % --- Create pointers to CPU memory Buffers ---
             this.allocateDataMat();
             status = this.allocateBuffers();
-
         end
             
         function status = confExtClk(this)
@@ -506,7 +598,7 @@ classdef Digitizer < handle
                     samplesPerRecord      = this.TS.samplesPerBuffer;
                     recordsPerBuffer      = 1;
                     recordsPerAcquisition =  hex2dec('7FFFFFFF');
-                case 'NPT'
+                case {'NPT', 'ContNPT'}
                     admaFlags = this.alazarDefs.ADMA_EXTERNAL_STARTCAPTURE + this.alazarDefs.ADMA_NPT; % Select AutoDMA flags as required
                     preTriggerSamples     = -int32(this.NPT.preTriggerSamples);
                     samplesPerRecord      = this.NPT.samplesPerRecord;
@@ -522,7 +614,7 @@ classdef Digitizer < handle
 
         function status = setRecordSize(this) 
             status = true;
-            if strcmp(this.system.mode, 'NPT')
+            if strcmp(this.system.mode, 'NPT') || strcmp(this.system.mode, 'ContNPT')
                 retCode = AlazarSetRecordSize(this.system.boardHandle, this.NPT.preTriggerSamples, this.NPT.postTriggerSamples);
                 if retCode ~= this.alazarDefs.ApiSuccess; fprintf('DIGITIZER: Error: AlazarSetRecordSize failed -- %s\n', errorToText(retCode)); status = false; return; end
             end
@@ -551,8 +643,10 @@ classdef Digitizer < handle
                     this.bufferDataOut = zeros(this.TS.numOfBuffers, this.TS.samplesPerBufferAllCh, 'uint16');
                 case 'NPT'
                     if this.vars.exportData
-                        this.bufferDataOut = zeros(this.NPT.samplesPerRecord, this.vars.channels, this.vars.numOfBuffers, 'single');
+                        this.bufferDataOut = zeros(this.NPT.postTriggerSamplesUser, this.vars.channels, this.vars.numOfBuffers, 'single');
                     end
+                case 'ContNPT'
+                    this.bufferDataOut = zeros(this.vars.numOfBuffers, this.vars.samplesPerBufferAllCh, 'uint16');
             end
             this.timeTable.allocMemoryBuffers = toc(this.timeTable.allocMemoryBuffers);  
         end
@@ -606,11 +700,10 @@ classdef Digitizer < handle
             buffersCompleted = 0;
             captureDone = false;
             buf = 1;
-            
-            this.timeTable.netAcquisition = tic;
-            
+
             this.initPlots();
             
+            this.timeTable.netAcquisition = tic;
             while ~captureDone && this.vars.continueLooping
                 this.timeTable.loop(buf) = tic;
                 bufferIndex = mod(buffersCompleted, this.system.bufferCount) + 1;
@@ -675,32 +768,47 @@ classdef Digitizer < handle
             end
             this.timeTable.netAcquisition = toc(this.timeTable.netAcquisition);
             
+            this.timeTable.abortRead = tic;
             AlazarAbortAsyncRead(this.system.boardHandle);
+            this.timeTable.abortRead = toc(this.timeTable.abortRead);
             
             % Offline Post Processing (Only for TS)
-            if strcmp(this.system.mode, 'TS')
-                if this.vars.useGPU
-                    this.uData = gpuArray(this.bufferDataOut);
-                else
-                    this.uData = this.bufferDataOut;
-                end
-                this.convertUnsignedSampleToVolts();
-                this.rawDataDeMultiplexing();
-                this.cropData();
-                dataOut = this.Data;
-
-                this.Data = [];
-            elseif strcmp(this.system.mode, 'NPT')
-                if this.vars.exportData
-                    dataOut = this.bufferDataOut(this.vars.triggerDelayManualSamples:this.NPT.postTriggerSamplesUser, :, :);
-                else
-                    dataOut = [];
-                end
+            switch this.system.mode
+                case 'TS'
+                    if this.vars.useGPU
+                        this.Data = gpuArray(this.bufferDataOut);
+                    else
+                        this.Data = this.bufferDataOut;
+                    end
+                    this.convertUnsignedSampleToVolts();
+                    this.rawDataDeMultiplexing();
+                    this.cropData();
+                    dataOut = this.Data;
+    
+                    this.Data = [];
+                case 'NPT'
+                    if this.vars.exportData
+                        dataOut = this.bufferDataOut(this.vars.triggerDelayManualSamples:this.NPT.postTriggerSamplesUser, :, :);
+                    else
+                        dataOut = [];
+                    end
+                case 'ContNPT'
+                    if this.vars.useGPU
+                        this.Data = gpuArray(this.bufferDataOut);
+                    else
+                        this.Data = this.bufferDataOut;
+                    end
+%                     this.bufferDataOut = [];
+                    this.convertUnsignedSampleToVolts();
+                    this.rawDataDeMultiplexing();
+                    dataOut = this.Data;
+                    
+                    this.Data = [];
             end
                 
             this.timeTable.fullAcquisition = toc(this.timeTable.fullAcquisition); 
         end
-        
+
         function monitor(this, vars)
             this.vars.monitor = true;
             
@@ -731,12 +839,50 @@ classdef Digitizer < handle
         end
         
         %Data Post Processing Functions
+        function ppData = rtPostProcessing(this, buffer)
+            switch this.system.mode
+                case 'TS'
+                    ppData = buffer.Value;
+                case 'NPT'
+                    ppData = buffer.Value;
+                    
+                    % Convert to Volts
+                    shiftFact = 2;
+                    bitsRange = 2^16/2;
+                    ppData    = ((cast(ppData, 'single') - bitsRange) * this.system.voltsRange / (bitsRange * shiftFact));
+                    
+                    % Demultiplex
+                    ppData = reshape(ppData, this.vars.channels, this.NPT.samplesPerRecord,  this.NPT.recordsPerBuffer);
+                    
+                    % Average
+                    ppData = mean(ppData, 3);
+
+                    % Organize dimensions
+                    ppData = permute(ppData, [2,1]);
+
+                    % Cut Redundant
+                    ppData(this.NPT.cutIdxs, :) = [];
+
+                case 'ContNPT'
+                    ppData = buffer.Value;
+            end
+        end
+
+        function exportData(this, idx, buffer)
+            switch this.system.mode
+                case {'TS', 'ContNPT'}
+                    this.bufferDataOut(idx,:)   = buffer; 
+                case 'NPT'
+                    this.bufferDataOut(:,:,idx) = buffer;
+            end
+        end
+
         function convertUnsignedSampleToVolts(this)
             this.timeTable.convertUnsignedSampleToVolts = tic;
             
             shiftFact = 2;
             bitsRange = 2^16/2;
-            this.uData = (cast(this.uData, 'single') - bitsRange) * this.system.voltsRange / (bitsRange * shiftFact);
+            this.Data = (cast(this.Data, 'single') - bitsRange) * this.system.voltsRange / (bitsRange * shiftFact);
             
             this.timeTable.convertUnsignedSampleToVolts = toc(this.timeTable.convertUnsignedSampleToVolts);
         end
@@ -747,31 +893,16 @@ classdef Digitizer < handle
             this.timeTable.rawDataDeMultiplexing = tic;
             switch this.system.mode
                 case 'TS'
-                    this.Data = reshape(reshape(this.uData', this.TS.samplesPerAcqAllCh, 1),...
-                                      this.vars.channels,  this.TS.samplesPerAcq);
-                    this.uData = [];
+                    this.Data = reshape(reshape(this.Data', this.TS.samplesPerAcqAllCh, 1),...
+                                        this.vars.channels,  this.TS.samplesPerAcq);
                 case 'NPT'
+
+                case 'ContNPT'
+                    this.Data = reshape(this.Data, this.vars.numOfBuffers, this.vars.channels, this.vars.samplesPerBuffer);
+                    this.Data(:,:,this.NPT.cutIdxs) = [];
+                    this.Data = reshape(permute(this.Data, [2,3,1]), this.vars.channels, this.NPT.samplesPerAcqAllRecords);
+                    this.Data(:, this.NPT.extraRecordIdxs) = [];
             end
-            this.timeTable.rawDataDeMultiplexing = toc(this.timeTable.rawDataDeMultiplexing);             
-        end
-
-        function convertUnsignedSampleToVoltsGPU(this)
-            this.timeTable.convertUnsignedSampleToVolts = tic;
-            
-            shiftFact = 2;
-            bitsRange = 2^16/2;
-
-            this.bufferDataOut = (this.bufferDataOut - bitsRange) * this.system.voltsRange / (bitsRange * shiftFact);
-            
-            this.timeTable.convertUnsignedSampleToVolts = toc(this.timeTable.convertUnsignedSampleToVolts);
-        end
-        
-        function rawDataDeMultiplexingGPU(this, buf)
-            this.timeTable.rawDataDeMultiplexing = tic;
-            
-            this.Data(:, ((buf-1)*this.vars.samplesPerBuffer+1) : buf*this.vars.samplesPerBuffer) =...
-                            reshape(this.bufferDataOut', this.vars.channels,  this.vars.samplesPerBuffer);
-            
             this.timeTable.rawDataDeMultiplexing = toc(this.timeTable.rawDataDeMultiplexing);             
         end
         
@@ -796,48 +927,7 @@ classdef Digitizer < handle
                 clear pbuffer;
             end
         end
-        
-        function data = getCroppedData(this)
-            switch this.system.mode
-                case 'TS'
-                    data = this.croppedData; 
-                case 'NPT'
-                    data = [];
-            end
-        end
-        
-        function ppData = rtPostProcessing(this, buffer)
-            switch this.system.mode
-                case 'TS'
-                    ppData = buffer.Value;
-                case 'NPT'
-                    ppData = buffer.Value;
-                    
-                    % Convert to milivolts
-                    shiftFact = 2;
-                    bitsRange = 2^16/2;
-                    ppData    = ((cast(ppData, 'single') - bitsRange) * this.system.voltsRange / (bitsRange * shiftFact)) * 1e3;
-                    
-                    % Demultiplex
-                    ppData = reshape(ppData, this.vars.channels, this.NPT.samplesPerRecord,  this.NPT.recordsPerBuffer);
-                    
-                    %average
-                    ppData = mean(ppData, 3);
-                    
-                    %Organize dimensions
-                    ppData = permute(ppData, [2,1]);
-            end
-        end
-        
-        function exportData(this, idx, buffer)
-            switch this.system.mode
-                case 'TS'
-                    this.bufferDataOut(idx,:)   = buffer; 
-                case 'NPT'
-                    this.bufferDataOut(:,:,idx) = buffer;
-            end
-        end
-        
+
         %Figures Plots
         function initPlots(this)
             if this.vars.drawData

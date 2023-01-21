@@ -17,10 +17,9 @@ classdef acoustoOptics < handle
         resultNew;
         rawData;
         result;
-        timeTable;
+        splits;
 
         % Variables:
-        uVarsFull;
         uVars;    % Reduced from user to acoustoOptics
         extVars;  % Extended from acoustoOptics to submodules
         measVars; % Measurement vars (after calculation) given from submodules to acoustoOptics
@@ -30,10 +29,12 @@ classdef acoustoOptics < handle
         changeLog;
         connected;
         periAvail;
-        runLive;
+        contMeas;
         graphicsNames;
         owned;
-        rawDataAvail;
+
+        % Run Statistics
+        timeTable;
     end
     
     methods (Static) 
@@ -72,9 +73,12 @@ classdef acoustoOptics < handle
             aoVars.analyzeSingleCh     = true;
             aoVars.contSpeckleAnalysis = false;
             aoVars.acCoupling          = true;
-            
+            aoVars.measTimeLimit       = 1;
+
+            aoVars.displayBuildUp  = false;
+            aoVars.displayBUEvery  = 10;
+
             aoVars.useCalibration      = false;           
-            aoVars.autoCalibration     = false;
             aoVars.timeToSampleCal     = 2;
             
             aoVars.cutArtfct    = false;
@@ -90,7 +94,9 @@ classdef acoustoOptics < handle
             aoVars.N                   = 10;
             aoVars.dispTimeTable       = true; % relevant only with GUI
             aoVars.skipParamsCheck  = false;
-            
+            aoVars.uploadToTelegram = false;
+            aoVars.telegramChatID   = [];
+
             % fGen
             aoVars.usPower = 100;
             
@@ -173,14 +179,11 @@ classdef acoustoOptics < handle
             
             this.uVars   = this.createUserVars();
             this.extVars = this.extVarsCreate();
-            
-%             this.limits.measLimit = 10;
-            this.algo.setMeasLimit(10);
-            
+
             this.graphicsNames = this.graphics.getGraphicsNames();
             
             this.connected = false;
-            this.runLive = false;
+            this.contMeas = false;
         end 
 
         function init(this, owner)
@@ -213,7 +216,7 @@ classdef acoustoOptics < handle
             this.periAvail.completeHardwareAvail =  this.periAvail.digitizer && this.periAvail.fGen && this.periAvail.IO;
         end
         
-        % Complete run
+        % Complete runs
         function res = AOI(this, uVars)
             this.setVars(uVars);
             this.configurePeripherals();
@@ -221,37 +224,12 @@ classdef acoustoOptics < handle
         end
         
         function res = calibrate(this, uVars)
-            % This code is for independent calibration with no consecutive
-            % AOI method.
-            % For calibration immedietly followed by AOI use the
-            % AutoCalibration option.
-            uVars.ao.autoCalibration = false;
             this.setVars(uVars);
             this.configPeripherals();
             res = this.runCalibration();
         end
         
         % Variables
-        function setVars(this, uVars)
-            this.uVarsFull = uVars;
-            if this.uVarsFull.ao.autoCalibration
-                uVarsCal = this.uVarsFull;
-                % Hard Coded Calibration properties
-                uVarsCal.ao.timeToSample = uVarsCal.ao.timeToSampleCal;
-                uVarsCal.ao.useCalibration = false;
-%                 uVarsCal.ao.envDC = 0;
-%                 uVarsCal.ao.envUS = 0;
-%                 
-                uVarsCal.fileSystem.saveResults = false;
-                uVarsCal.fileSystem.saveVars    = false;
-                this.uVars = uVarsCal;
-            else
-                this.uVars = uVars;
-            end
-            this.setAOVars();
-            this.measVars.AO.autoCalibration = this.uVarsFull.ao.autoCalibration;
-        end
-        
         function algoVars = setAlgoVars(this)
             uVarsAO = this.uVars;
             
@@ -294,6 +272,8 @@ classdef acoustoOptics < handle
             algoVars.contSpeckleAnalysis = uVarsAO.ao.contSpeckleAnalysis;
             algoVars.calibrate           = uVarsAO.ao.useCalibration;
             algoVars.acCoupling          = uVarsAO.ao.acCoupling;
+            algoVars.measTimeLimit       = uVarsAO.ao.measTimeLimit;
+
             algoVars.calcMuEff           = uVarsAO.ao.calcMuEff;
             algoVars.muEffModel          = uVarsAO.ao.muEffModel;
             algoVars.muEffIdxs           = uVarsAO.ao.muEffIdxs;
@@ -346,7 +326,16 @@ classdef acoustoOptics < handle
             fprintf("AOI:  3. Sets Digitizer Vars\n")
             digiVars = this.digitizer.uVarsCreate();
 
-            digiVars.mode     = 'TS'; 
+            if this.measVars.algo.general.splitMeas
+                digiVars.mode         = 'ContNPT';
+                digiVars.timeToSample = this.measVars.algo.timing.frameT;
+                digiVars.numAvg  = 1;
+                digiVars.numMeas = this.measVars.algo.samples.framesPerSignal;
+            else
+                digiVars.mode     = 'TS';
+                digiVars.samplesPerMeas = this.measVars.algo.samples.samplesPerMeas;
+            end
+
             digiVars.fs       = this.measVars.algo.sClk.fs;
             digiVars.useGPU   = this.measVars.algo.general.useGPU;
             digiVars.channels = this.measVars.algo.general.channels;           
@@ -356,8 +345,8 @@ classdef acoustoOptics < handle
             digiVars.extTrig = true;
             digiVars.draw    = false;
             
-            digiVars.bufferSizeBytes = 4*(2^20);
-            digiVars.samplesPerMeas  = this.measVars.algo.samples.samplesPerMeas;
+            digiVars.bufferSizeBytes = 16*(2^20);
+            
             
             digiVars.exportCropped = uVarsAO.figs.validStruct.cropped && ~AO.splitMeas;
             if this.uVars.ao.extCropDef
@@ -504,12 +493,9 @@ classdef acoustoOptics < handle
             this.measVars.figs = figsVars;
         end
         
-        function setAOVars(this)
-%             user gives reduced variables. this function convert these 
-%             variables to extended variables suitable for each
-%             submodule\peripheral. this function extend the variables by
-%             adding default acousto optics values to the user reduced
-%             variables
+        function setVars(this, uVars)
+            this.uVars = uVars;
+
             uVarsAO = this.uVars;
             
             fprintf("AOI: ------- Sets Extended Vars From Reduced Vars ----------\n")
@@ -550,6 +536,15 @@ classdef acoustoOptics < handle
             AO.dispTimeTable       = uVarsAO.ao.dispTimeTable;
             AO.skipParamsCheck     = uVarsAO.ao.skipParamsCheck;
             
+            AO.displayBuildUp      = uVarsAO.ao.displayBuildUp;
+            AO.displayBUEvery      = uVarsAO.ao.displayBUEvery;
+            
+            AO.uploadToTelegram = uVarsAO.ao.uploadToTelegram;
+            AO.telegramChatID   = uVarsAO.ao.telegramChatID;
+            
+            AO.topUpMode = false;
+            AO.topUpIdx  = 0;
+
             newExtVars.AO         = AO;
             
             newExtVars.fGen       = fGenVars;
@@ -570,10 +565,11 @@ classdef acoustoOptics < handle
             else
                this.changeLog = this.checkParamsChanged(this.oldExtVars, this.extVars);
             end
-
+    
             this.measVars.AO = this.extVars.AO;
         end
-        
+
+        % Get Functions
         function aoVars = getVars(this)
 %             fprintf("------- Downloading AO Vars ----------\n")
             aoVars.measVars  = this.measVars;
@@ -592,11 +588,7 @@ classdef acoustoOptics < handle
             aoVars.measVars.algo.hadamard.sMatInvSingleSqnc = [];
             aoVars.measVars.algo.hadamard.sMatInvSqnc = [];
         end
-        
-        function setMeasLimit(this, time)
-            this.algo.setMeasLimit(time)            
-        end
-        
+
         function [res] = getResultStruct(this)
             [~, resStruct, ~, resSplit] = this.algo.getResultsStruct();
             
@@ -608,6 +600,10 @@ classdef acoustoOptics < handle
             
         end
         
+        function result = getResult(this)
+            result = this.result; 
+        end
+
         % Peripherals Configurations
         function configPeripherals(this)
             fprintf("AOI: ------- Configuring Peripheral ----------\n")
@@ -695,6 +691,11 @@ classdef acoustoOptics < handle
         function resetDigitizerMem(this)
          	this.digitizer.releaseBuffers();  
         end
+        
+        function resetDigitizer(this)
+            this.digitizer.resetDigitizer();
+            this.configDigitizer();
+        end
 
         % Measurements algorithms types
         function res = runAcoustoOptics(this)
@@ -703,12 +704,6 @@ classdef acoustoOptics < handle
             this.rawData = [];
             this.resultNew = [];
             
-            if this.measVars.AO.autoCalibration
-                this.runCalibration();
-                this.uVars = this.uVarsFull;
-                this.setAOVars();
-                this.configPeripherals();
-            end
             res = this.runMeasureAndAnalyze();
         end
         
@@ -716,26 +711,84 @@ classdef acoustoOptics < handle
             uiwait(msgbox("Please block US beam","Calibration"));
             res = this.runMeasureAndAnalyze();
             this.algo.setCalibrationData(res);
-            this.measVars.AO.autoCalibration = false;
             uiwait(msgbox("Calibration Completed. Please remove US Block","Calibration"));
         end
         
+        function res = runTopUp(this)
+            this.measVars.AO.topUpMode = true;
+            this.measVars.AO.topUpIdx = this.measVars.AO.topUpIdx +1;
+
+            res = this.runMeasureAndAnalyze();
+        end
+        
         function res = runMeasureAndAnalyze(this)
-            [~, ~, dataInSplit, ~] = this.algo.getResultsStruct();
             % Save AO variables (if needed, decided by fileSystem)
-            this.fileSystem.saveVarsToDisk();            
+            if ~this.measVars.AO.topUpMode
+                this.fileSystem.saveVarsToDisk(); 
+            end
+            
             % Measure data and analyse it with AO Algorithm
-            if this.measVars.AO.splitMeas
-                for i = 1:this.measVars.AO.splitNum
-                    fprintf("AOI: Split %d/%d: ", i, this.measVars.AO.splitNum);
-                    this.IO.open();
-                    dataInSplit(:,i) = this.measureAndAnalyse();
-                    this.IO.close();
-                    % No display because no full reconstruction is
-                    % performed in split-mode
+            if this.measVars.AO.splitMeas % Split-mode long measurement
+                this.contMeas = true;
+                T(this.measVars.AO.splitNum) = this.algo.timeTable;
+
+                if this.measVars.AO.topUpMode
+                    offset = this.measVars.AO.splitNum*this.measVars.AO.topUpIdx;
+                else
+                    this.algo.resetCurSplit(); % if starting a new measurement reset the remains of the older one
+                    models = this.algo.getResultsModels();
+                    this.splits = models.baseChSplitArr;
+                    offset = 0;
                 end
-                this.result = this.algo.reconSplittedData(dataInSplit);
-            else 
+
+                splitNum = offset+this.measVars.AO.splitNum;
+                splitStartIdx = offset+1;
+                this.splits(end, splitNum) = this.splits(end,end);
+
+                this.IO.open();
+                for i = splitStartIdx:splitNum
+                    fprintf("AOI: Split %d/%d: ", i, splitNum);
+                    % Check if stop button was pushed
+                    if ~this.contMeas
+                        fprintf("AOI: Aborting Measurement.\n");
+                        this.IO.close();
+                        break;
+                    end
+                    
+                    this.algo.initTimeTable();
+
+                    % Bring current Split Datta
+                    this.splits(:,i) = this.measureAndAnalyse();
+                    
+                    % Full so-far analysis and plotting
+                    if  this.measVars.AO.displayBuildUp 
+                        this.algo.addCurrentSplit(this.splits(:,i), i);
+                        if i==1 || ~mod(i, this.measVars.AO.displayBUEvery)
+                            this.result = this.algo.reconCurSplit();
+                            this.graphics.setData(gather(this.result));
+                            this.plotAll();
+                            if this.measVars.AO.uploadToTelegram
+                                tgprint(this.measVars.AO.telegramChatID, this.graphics.figs.phi.handles.cur.ax, 'photo');
+                                tgprintf(this.measVars.AO.telegramChatID, sprintf("AOI: Split %d/%d: ", i, this.measVars.AO.splitNum));
+                            end
+                        end
+                    end
+
+                    T(i) = this.algo.getTimeTable();
+                    % No display by default, because no full reconstruction is
+                    % performed in split-mode
+                    if i ==1
+                        pause(0.001);
+                    end
+                end
+                this.IO.close();
+                this.contMeas = false;
+                this.algo.initTimeTable();
+                this.result = this.algo.reconSplittedData(this.splits);
+                T(i+1) = this.algo.getTimeTable();
+                this.result.T = T;
+            else % No split
+                % Regular single-meas operation:
                 this.result = this.measureAndAnalyse();
             end
             
@@ -765,7 +818,7 @@ classdef acoustoOptics < handle
         function res = liveAcoustoOptics(this) 
             if this.measVars.AO.limitByN
                 this.fileSystem.initLiveAOFS(this.getVars());
-                this.runLive = true;
+                this.contMeas = true;
  
                 for i=1:this.measVars.AO.N
                     fprintf("AOI: Live AO: %d/%d.\n", i, this.measVars.AO.N);
@@ -776,7 +829,7 @@ classdef acoustoOptics < handle
                         res = this.runAcoustoOptics();
                     end
                     pause(1)
-                    if ~this.runLive
+                    if ~this.contMeas
                         fprintf("AOI: Live AO was STOPPED.\n");
                         break;
                     end
@@ -786,8 +839,8 @@ classdef acoustoOptics < handle
                 this.result = res;
             else %infinite number of measurements
                 %saving is not allowed in unlimited live AO
-                this.runLive = true;
-                while(this.runLive)
+                this.contMeas = true;
+                while(this.contMeas)
                    this.runAcoustoOptics();
                    pause(1);
                 end
@@ -816,7 +869,6 @@ classdef acoustoOptics < handle
                     this.IO.close();
                 end
                 this.timeTable.acq = toc(this.timeTable.acq);
-                this.displayCroppedData();
             else
                  % No source of data (Error)
                  fprintf("AOI: No source of data found.\n");  
@@ -826,11 +878,13 @@ classdef acoustoOptics < handle
             
             this.timeTable.moveData = tic;
             this.algo.setRawData(this.rawData);
-            this.rawData           = gather(this.rawData);
+            this.rawData            = gather(this.rawData);
             this.timeTable.moveData = toc(this.timeTable.moveData);
             
             if this.measVars.AO.splitMeas
+                this.timeTable.saveSplit = tic;
                 this.fileSystem.saveMeasToDisk(this.rawData)
+                this.timeTable.saveSplit = toc(this.timeTable.saveSplit);
                 this.rawData = [];
             end
             
@@ -844,7 +898,6 @@ classdef acoustoOptics < handle
         
         % Misc
         function reCalcData(this, uVars)
-            uVars.ao.autoCalibrate = false;
             this.setVars(uVars);
             this.graphics.setGraphicsDynamicVars();
             fprintf ("AOI: Analyzing...");
@@ -893,11 +946,7 @@ classdef acoustoOptics < handle
                 this.owner.displayAOTimeTable();
             end
         end
-        
-        function result = getResult(this)
-            result = this.result; 
-        end
-        
+
         %Graphics
         function plotAll(this)
             this.graphics.plotSignal('meas');

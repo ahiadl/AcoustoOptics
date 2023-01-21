@@ -9,7 +9,7 @@ digi.connect();
 digiVars = Digitizer.uVarsCreate();
 
 fs = 5e6;
-timeToSample = 50e-6; %[s]
+timeToSample = 0.002; %[s]
 % bytesPerSample = 2;
 
 digiVars.mode      = 'TS'; 
@@ -20,12 +20,13 @@ digiVars.channels  = 1;
 digiVars.triggerDelay = 0;
 digiVars.extClk = true;
 digiVars.extTrig = true;
+digiVars.draw    = false;
 
-digiVars.bufferSizeBytes = 8*(2^20);
+digiVars.bufferSizeBytes = 4*(2^20);
 digiVars.samplesPerMeas  = timeToSample*fs;
 
 digiVars.exportCropped = false;
-
+digiVars.croppedSamples = [];
 
 digi.setVars(digiVars);
 digi.configure();
@@ -38,45 +39,47 @@ plot(res)
 digiVars = Digitizer.uVarsCreate();
 
 digiVars.mode      = 'NPT'; 
-digiVars.fs        = 100e6;
+digiVars.fs        = 20e6;
 digiVars.useGPU    = false;
-digiVars.channels  = 1; 
+digiVars.channels  = 16; 
 
 digiVars.triggerDelay = 0;
-digiVars.extClk  = false;
+digiVars.extClk  = true;
 digiVars.extTrig = true;
 
-digiVars.timeToSample = 300e-6;
-digiVars.avgNum       = 4096;
-digiVars.numMeas      = 1;
+digiVars.measLenType = 'time';
+digiVars.timeToSample = 0.002;
+digiVars.avgNum       = 1;
+digiVars.numMeas      = 250;
 
-digiVars.draw = true;
+digiVars.draw = false;
 
 digi.setVars(digiVars);
 digi.configure();
 
-res = daq.acquire();
-% figure();
-% plot(res)
+for i=1:10
+    tic
+    res = digi.acquire();
+    toc
+end
+
+figure();
+plot(res)
+
 
 
 %% Monitor
 digiVars = Digitizer.uVarsMonitorCreate();
  
-digiVars.fs        = 100e6;
+digiVars.fs        = 20e6;
 digiVars.channels  = 1; 
 
 digiVars.triggerDelay = 0;
-digiVars.extClk  = false;
+digiVars.extClk  = true;
 digiVars.extTrig = true;
 
-digiVars.timeToSample = 300e-6;
-digiVars.avgNum       = 2048;
+digiVars.timeToSample = 0.002;
+digiVars.avgNum       = 1;
 
 
-daq.monitor(digiVars);
-
-
-
-
-
+digi.monitor(digiVars);

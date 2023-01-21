@@ -116,7 +116,7 @@ classdef scan2DAO < handle
             uVars.ao.reopenFigures = uVars.figs.reopenFigures;
             
             this.ao.setVars(uVars.ao);
-            this.aoVars = this.ao.getVars();            
+            this.aoVars = this.ao.getVars();       
             
             %---------------
             % Grid
@@ -265,16 +265,14 @@ classdef scan2DAO < handle
         function resArr = get1DResultsArrayModel(this)
            separateCh  = this.aoVars.measVars.algo.general.analysisReps;
            depthLen    = this.aoVars.measVars.algo.samples.numOfPos;
-           depthLenRaw = this.aoVars.measVars.algo.samples.numOfPosAlgo;
            
            resArr.phi = zeros(depthLen, separateCh);
-           resArr.rawPhi = zeros(depthLenRaw, separateCh);
+           resArr.rawPhi = zeros(depthLen, separateCh);
         end
         
         function resArr = get2DResultsArrayModel(this)
             scanAxLen         = this.grid.scanIdxLen;
             depthLen          = this.aoVars.measVars.algo.samples.numOfPos;
-            depthLenRaw       = this.aoVars.measVars.algo.samples.numOfPosAlgo;
             repeats           = this.grid.repeats;
             separateCh        = this.aoVars.measVars.algo.general.analysisReps;
             
@@ -282,7 +280,7 @@ classdef scan2DAO < handle
             resArr.phiAvg     = zeros(scanAxLen, 1, depthLen, separateCh);
             resArr.phiAvgStd  = zeros(scanAxLen, 1, depthLen, separateCh);
             
-            resArr.rawPhi     = zeros(scanAxLen, 1, depthLenRaw, repeats, separateCh);
+            resArr.rawPhi     = zeros(scanAxLen, 1, depthLen, repeats, separateCh);
         end
         
         function putAOResTo1DResultsArray(this, res)

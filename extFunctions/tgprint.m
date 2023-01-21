@@ -1,4 +1,4 @@
-function tgprint(hFig)
+function tgprint(chat_id, hFig, options)
 % TGPRINT send an image to a Telegram bot
 %
 % Use tgprintf() in the same way as sprintf()
@@ -23,7 +23,6 @@ function tgprint(hFig)
 % Seongsik Park
 % seongsikpark@postech.ac.kr
 
-options = 'photo';
 % if nargin > 0
 %     options = varargin{1};
 % end
@@ -34,7 +33,10 @@ filename = 'temp.png';
 % end
 
 % if vargin
-print(hFig,filename,'-dpng');
+% if hFig.
+% print(hFig, filename, '-dpng');
+% saveas(hFig, filename, 'png');
+exportgraphics(hFig, filename)
 
 f = fopen(filename,'rb');
 d = fread(f,Inf,'*uint8')';
@@ -42,7 +44,7 @@ fclose(f);
 
 % default token and chat_id
 token = '1727085776:AAGm7Vfig68zsUR0rxXeP2-dTF4jnQeXY3Q';
-chat_id = '-512325870';
+
 
 if strcmpi(options,'photo')
     sendstr = ['https://api.telegram.org/bot',token,'/sendPhoto'];

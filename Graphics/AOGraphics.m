@@ -264,15 +264,15 @@ classdef AOGraphics < Graphics
             
             % phi [numOfPos]
             this.setType('phi', 'stem');
-            this.setStrings('phi', [], "Depth (US)[mm]", "\phi", []);
+            this.setStrings('phi', [], "Depth (US)[Idx]", "\phi", []);
             
             % phiRaw [numOfPos]
             this.setType('rawPhi', 'stem');
-            this.setStrings('rawPhi', [], "Depth (US)[mm]", "\phi", []);
+            this.setStrings('rawPhi', [], "Depth (US)[Idx]", "\phi", []);
             
             % phi [numOfPos]
             this.setType('phiLog', 'plot');
-            this.setStrings('phiLog', [], "Depth (US)[mm]", "log(\phi)", ["AlgoPhi"; "RawPhi"]);
+            this.setStrings('phiLog', [], "Depth (US)[Idx]", "log(\phi)", ["AlgoPhi"; "RawPhi"]);
             
         end
         
@@ -297,6 +297,7 @@ classdef AOGraphics < Graphics
             this.setLegendVariables('fittedPowerFFT', 1:numOfCh);
             
             this.updateGraphicsConstruction()
+            this.figs.validStruct = this.uVars.validStruct; % has to be after updating the construction.
 %             if this.uVars.frame > 1
 %                 this.setType('phi', 'stem');
 %             else
@@ -310,8 +311,7 @@ classdef AOGraphics < Graphics
             if this.figs.analyzeSingleCh
                 this.figs.ch = 1;
             end
-            
-            this.figs.validStruct = this.uVars.validStruct;
+
         end
         
         function setData(this, data, usSig, extClkSig)
@@ -593,7 +593,7 @@ classdef AOGraphics < Graphics
                 this.figs.(figName).handles.cur.text = ...
                     text(this.figs.(figName).handles.cur.ax, 0, signal.SNRYlim,...
                     SNRstr, 'FontSize', 14);
-                setStringsToPlot(this, figName) 
+                this.setStringsToPlot(figName);
                 ylim(this.figs.(figName).handles.cur.ax, [signal.minLim, signal.maxLim]);
             else
                 for i = 1:size(signal.yData, 2)

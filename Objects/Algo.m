@@ -17,7 +17,6 @@ classdef Algo < handle
         len;
         hadamard;
 
-        measLimit
         timeTable;
         
         data;
@@ -27,12 +26,13 @@ classdef Algo < handle
 
         curRes;
         result;
-        dataInSplit;
-        resSplit;
+        curSplit;
+
+%         dataInSplit;
+%         resSplit;
     end
  
     methods (Static)   
-        
         function uVars = createUserVars()
             uVars.fSin              = [];              
             uVars.fSqnc             = [];
@@ -61,8 +61,9 @@ classdef Algo < handle
             uVars.analyzeSingleCh     = false;
             uVars.contSpeckleAnalysis = false;
             uVars.calibrate           = false;
-            uVars.acCoupling           = true;
-            
+            uVars.acCoupling          = true;
+            uVars.measTimeLimit       = [];
+
             uVars.cutArtfct           = false;
             uVars.artfctIdxVec        = [];
             
@@ -77,12 +78,26 @@ classdef Algo < handle
             uVars.export.fft            = false;
             uVars.export.usCompCmplx    = false;
         end
+        
+        function convertBaseChToSplits(baseCh)
+            numReps = length(baseCh);
+            numSplit =  length(baseCh.splitRes);
+            
+            
+            dataInSplit = models.baseChSplitArr;
+
+            for j=1:numReps
+                for i = 1:numSplit
+                    dataInSplit(j,:) = baseCh(j).splitRes(i);
+                end
+            end
+        end
+    
     end
     
     methods
         function this = Algo()
             this.initTimeTable();  
-            this.measLimit.time = 8;
         end
 
         %% Set/Get Functions
@@ -115,12 +130,10 @@ classdef Algo < handle
            this.uVars.muEffModel            = user.muEffModel;
            this.uVars.muEffIdxs             = user.muEffIdxs;
            this.uVars.export                = user.export;
+           this.uVars.measTimeLimit         = user.measTimeLimit;
+
            this.calcParameters();
            vars = this.getVars();
-        end
-
-        function setMeasLimit(this, limit)
-           this.measLimit.time = limit; 
         end
         
         function setRawData (this, measSamples)
@@ -196,19 +209,20 @@ classdef Algo < handle
             
             % Split Measurement
             timeToSampleTotal = this.uVars.timeToSample;
-            acqLimitT         = this.measLimit.time;
+            measTimeLimit     = this.uVars.measTimeLimit;
             
-            splitMeas = timeToSampleTotal > acqLimitT;
+            splitMeas = timeToSampleTotal > measTimeLimit;
 
             if splitMeas
                 %Calculate time to sample
-                splitTime = acqLimitT+1;
+                splitTime = measTimeLimit+1;
                 splitNum = 0;
-                while splitTime > acqLimitT
+                while splitTime > measTimeLimit
                     splitNum = splitNum+1;
                     splitTime = round(timeToSampleTotal/splitNum, 3);
                 end
                 timeToSample = splitTime;
+                this.uVars.distFromPhantom = 0;
             else
                 splitNum     = 1;
                 timeToSample = timeToSampleTotal; 
@@ -220,12 +234,12 @@ classdef Algo < handle
             export.deMul          = this.uVars.export.deMul       && ~splitMeas && ~contHadamard;
             export.reshaped       = this.uVars.export.reshaped    && ~splitMeas && ~contSpeckleAnalysis;
             export.fft            = this.uVars.export.fft         && ~splitMeas;
-            export.usCompCmplx    = this.uVars.export.usCompCmplx && ~splitMeas; 
+            export.usCompCmplx    = this.uVars.export.usCompCmplx && ~splitMeas; %#ok<STRNU> 
             
             %--------------------
             % Collect parameters
             %--------------------
-            clear ('acqLimitT');
+            clear ('measTimeLimit');
                
             vars = who();
             for i = 1:length(vars)
@@ -247,8 +261,8 @@ classdef Algo < handle
             % This function calculates the External sClock Params
             % to create with function generator.
             
-            fs     = this.uVars.fs;
-            fgClk  = this.uVars.fgClk;
+            fs    = this.uVars.fs;
+            fgClk = this.uVars.fgClk;
             
             % The data loaded to the AFG must be a multiplication of 16 in manners of data length.
             % creating sClk with 16 cycles meets this requirement no matter
@@ -257,7 +271,7 @@ classdef Algo < handle
             fsNaive     = fs;
             sClkDutyCyc = 50/100;
             
-            fgClkSamplesPerSClkCyc           = fgClk/fs;
+            fgClkSamplesPerSClkCyc = fgClk/fs;
             
             % If there is no round number of fgClk samples in sClk cycle, 
             % slow the sClk to the period where fgClk fits in.
@@ -333,13 +347,13 @@ classdef Algo < handle
             
             % Create the signal
             samplesVec = 0: 1 : fgClkSamplesPerPulse-1;
-            sinSamples = sin(2*pi * (fPulse/fgClk) * samplesVec);
+            sinSamples = sin(2*pi * (fSin/fgClk) * samplesVec);
             
             if ~this.uVars.useHadamard
                 sigVec = zeros(1, pulsePerSqnc);
                 sigVec(1) = 1;
             else
-                sigVec = sMatrix(1, :);
+                sigVec = sMatrix(:, 1)';
             end
             
             sigData = repmat(sigVec, fgClkSamplesPerPulse, 1);
@@ -363,9 +377,7 @@ classdef Algo < handle
             for i = 1:length(vars)
                 if strcmp(vars{i}, 'this'); continue; end
                 this.usSignal.(vars{i}) = eval(vars{i});
-            end
-            
-            
+            end    
         end
 
         function initSamplesParameters(this)
@@ -530,7 +542,8 @@ classdef Algo < handle
             postSignalSamples     = 0;
             
             if this.uVars.useHadamard
-                inPhantomPropSamples  = samplesPerSqnc - samplesPerPulse;
+                inPhantomPropSamples  = 0;
+%                 inPhantomPropSamples  = samplesPerSqnc - samplesPerPulse;
 %                 postSignalSamples     = samplesPerSqnc;
             end
             
@@ -587,31 +600,33 @@ classdef Algo < handle
                 %--------------------------------------
                 % ---- Naive Hadamard
                 %--------------------------------------
-                sMatInvSingleSqnc = zeros(samplesPerSqnc);
-                for i = 1:N
-                    sMatInvSingleSqnc( (i-1)*samplesPerPulse+1:i*samplesPerPulse, ...
-                                        1:samplesPerPulse:end)         = ...
-                                        repmat(sMatInv(i,:),  samplesPerPulse, 1);
+                sVecInv = sMatInv(1,:);
+
+                sVecInvSqnc      = zeros(samplesPerPulse, N);
+                sVecInvSqnc(1,:) = sVecInv;
+                sVecInvSqnc      = sVecInvSqnc(:);
+
+                sMatInvSqnc = zeros(samplesPerSqnc);
+                for i=1:samplesPerSqnc
+                    sMatInvSqnc(i,:) = circshift(sVecInvSqnc, (i-1));
                 end
-                
-                for i = 1:samplesPerPulse
-                    sMatInvSingleSqnc(i:samplesPerPulse:end, :) = circshift(sMatInvSingleSqnc(i:samplesPerPulse:end, :), (i-1), 2);
-                end
-                
-                sMatInvSingleSqnc = flip(sMatInvSingleSqnc,1);
-                
+
 %                 for i = 1:N
 %                     sMatInvSingleSqnc( (i-1)*samplesPerPulse+1:i*samplesPerPulse, ...
-%                                         samplesPerPulse:samplesPerPulse:end)         = ...
+%                                         1:samplesPerPulse:end)         = ...
 %                                         repmat(sMatInv(i,:),  samplesPerPulse, 1);
 %                 end
 %                 
 %                 for i = 1:samplesPerPulse
-%                     sMatInvSingleSqnc(i:samplesPerPulse:end, :) = circshift(sMatInvSingleSqnc(i:samplesPerPulse:end, :), -(i-1), 2);
+%                     sMatInvSingleSqnc(i:samplesPerPulse:end, :) = circshift(sMatInvSingleSqnc(i:samplesPerPulse:end, :), (i-1), 2);
 %                 end
+                
+%                 sMatInvSingleSqnc = flip(sMatInvSingleSqnc,1);
+                
+                
                 %----------------------------------------------------------
                 % Collect Naive-Hadamard Calculation to Hadamard Parameters
-                sMatInvSqnc               = sMatInvSingleSqnc;
+%                 sMatInvSingleSqnc         = sMatInvSingleSqnc;
                 
                 sqncPerFrameHad           = sqncPerFrame;
                 framesPerSignalHad        = framesPerSignal;
@@ -633,40 +648,41 @@ classdef Algo < handle
                 samplesPerDataOutHad       = sqncPerDataOutHad    * samplesPerSqnc;
                 samplesPerDataAllChOutHad  = samplesPerDataOutHad * channels;
                 samplesPerDataOutPreCutHad = sqncPerDataInHad     * samplesPerSqnc;
-                %---------------------------------
-                % Continues Hadamard
-                %---------------------------------
-                if this.general.contHadamard
-                    sMatInvSqncCont = zeros(samplesPerSqnc*samplesPerSqnc, 2*samplesPerSqnc);
-                    for i=1:samplesPerSqnc
-                        tmp = circshift(sMatInvSingleSqnc, -(i-1), 2);
-                        sMatInvSqncCont( (i-1)*samplesPerSqnc+1 : (i*samplesPerSqnc), i:i+samplesPerSqnc-1) = tmp;
-                    end
 
-                    sMatInvSqnc = sMatInvSqncCont;
-                    
-                    %----------------------------------------------------------
-                    % Collect Naive-Hadamard Calculation to Hadamard Parameters
-                    sqncPerFrameHad          = sqncPerFrameRaw * samplesPerSqnc;
-                    framesPerSignalHad        = framesPerSignal;
-                    sqncPerSignalHad          = framesPerSignalHad * sqncPerFrameHad;
-
-                    samplesPerFrameHad        = sqncPerFrameHad   * samplesPerSqnc;
-                    samplesPerSignalHad       = samplesPerFrameHad * framesPerSignalHad;
-
-                    samplesPerPosPerFrameHad  = samplesPerPulse * sqncPerFrameHad;
-                    samplesPerPosPerSignalHad = samplesPerPulse * samplesPerSignalHad;
-
-                    pulsePerFrameHad          = pulsePerSqnc * sqncPerFrameHad;
-                    
-                    %----------------------------------------------------
-                    % Calculate Data Size
-                    sqncPerDataOutHad          = (sqncPerDataInHad-1) * samplesPerSqnc;
-                    sqncPerDataAllChOutHad     = sqncPerDataOutHad    * channels;
-                    samplesPerDataOutHad       = sqncPerDataOutHad    * samplesPerSqnc;
-                    samplesPerDataAllChOutHad  = samplesPerDataOutHad * channels;
-                    samplesPerDataOutPreCutHad = sqncPerDataInHad * samplesPerSqnc;
-                end
+%                 %---------------------------------
+%                 % Continues Hadamard
+%                 %---------------------------------
+%                 if this.general.contHadamard
+%                     sMatInvSqncCont = zeros(samplesPerSqnc*samplesPerSqnc, 2*samplesPerSqnc);
+%                     for i=1:samplesPerSqnc
+%                         tmp = circshift(sMatInvSingleSqnc, -(i-1), 2);
+%                         sMatInvSqncCont( (i-1)*samplesPerSqnc+1 : (i*samplesPerSqnc), i:i+samplesPerSqnc-1) = tmp;
+%                     end
+% 
+%                     sMatInvSqnc = sMatInvSqncCont;
+%                     
+%                     %----------------------------------------------------------
+%                     % Collect Naive-Hadamard Calculation to Hadamard Parameters
+%                     sqncPerFrameHad          = sqncPerFrameRaw * samplesPerSqnc;
+%                     framesPerSignalHad        = framesPerSignal;
+%                     sqncPerSignalHad          = framesPerSignalHad * sqncPerFrameHad;
+% 
+%                     samplesPerFrameHad        = sqncPerFrameHad   * samplesPerSqnc;
+%                     samplesPerSignalHad       = samplesPerFrameHad * framesPerSignalHad;
+% 
+%                     samplesPerPosPerFrameHad  = samplesPerPulse * sqncPerFrameHad;
+%                     samplesPerPosPerSignalHad = samplesPerPulse * samplesPerSignalHad;
+% 
+%                     pulsePerFrameHad          = pulsePerSqnc * sqncPerFrameHad;
+%                     
+%                     %----------------------------------------------------
+%                     % Calculate Data Size
+%                     sqncPerDataOutHad          = (sqncPerDataInHad-1) * samplesPerSqnc;
+%                     sqncPerDataAllChOutHad     = sqncPerDataOutHad    * channels;
+%                     samplesPerDataOutHad       = sqncPerDataOutHad    * samplesPerSqnc;
+%                     samplesPerDataAllChOutHad  = samplesPerDataOutHad * channels;
+%                     samplesPerDataOutPreCutHad = sqncPerDataInHad * samplesPerSqnc;
+%                 end
                 
                 %---------------------------------------------
                 % Collect Had Calculation To Global Parameters
@@ -686,38 +702,38 @@ classdef Algo < handle
                 sqncPerData    = sqncPerDataOutHad;
             end
             
-            %--------------------------------------
-            % ---- Continues Speckle Calculation
-            %--------------------------------------
-            if this.general.contSpeckleAnalysis
-                sqncPerDataInCS        = sqncPerData;
-                sqncPerDatalAllChInCS  = channels * sqncPerData;
-                
-                sqncPerFrameCS           = sqncPerFrame;
-                samplesPerSqncCS         = samplesPerSqnc;
-                framesPerSignalCS        = framesPerSignal   * sqncPerFrameCS;
-                sqncPerSignalCS          = framesPerSignalCS * sqncPerFrameCS;
-                samplesPerSignalCS       = samplesPerFrame   * framesPerSignalCS;
-                samplesPerPosPerSignalCS = samplesPerPulse * sqncPerFrame * framesPerSignalCS;
-
-                %----------------------------------------------------
-                % Collect Cont Parameters
-                sqncPerSignal          = sqncPerSignalCS;
-                framesPerSignal        = framesPerSignalCS;
-                samplesPerSignal       = samplesPerSignalCS;
-                samplesPerPosPerSignal = samplesPerPosPerSignalCS;
-                
-                %----------------------------------------------------
-                % calculate Data Size
-                samplesPerDataOutPreCutCS = sqncPerDataInCS * sqncPerFrameCS * samplesPerSqncCS;
-                sqncPerDataOutCS          = (sqncPerDataInCS - sqncPerFrameCS) * sqncPerFrameCS;
-                sqncPerDataAllChOutCS     = sqncPerDataOutCS     * channels;
-                samplesPerDataOutCS       = sqncPerDataOutCS     * samplesPerSqncCS;
-                samplesPerDataAllChOutCS  = samplesPerDataOutCS  * channels;
-                
-                samplesPerData = samplesPerDataOutCS;
-                sqncPerData    = sqncPerDataOutCS;
-            end
+%             %--------------------------------------
+%             % ---- Continues Speckle Calculation
+%             %--------------------------------------
+%             if this.general.contSpeckleAnalysis
+%                 sqncPerDataInCS        = sqncPerData;
+%                 sqncPerDatalAllChInCS  = channels * sqncPerData;
+%                 
+%                 sqncPerFrameCS           = sqncPerFrame;
+%                 samplesPerSqncCS         = samplesPerSqnc;
+%                 framesPerSignalCS        = framesPerSignal   * sqncPerFrameCS;
+%                 sqncPerSignalCS          = framesPerSignalCS * sqncPerFrameCS;
+%                 samplesPerSignalCS       = samplesPerFrame   * framesPerSignalCS;
+%                 samplesPerPosPerSignalCS = samplesPerPulse * sqncPerFrame * framesPerSignalCS;
+% 
+%                 %----------------------------------------------------
+%                 % Collect Cont Parameters
+%                 sqncPerSignal          = sqncPerSignalCS;
+%                 framesPerSignal        = framesPerSignalCS;
+%                 samplesPerSignal       = samplesPerSignalCS;
+%                 samplesPerPosPerSignal = samplesPerPosPerSignalCS;
+%                 
+%                 %----------------------------------------------------
+%                 % calculate Data Size
+%                 samplesPerDataOutPreCutCS = sqncPerDataInCS * sqncPerFrameCS * samplesPerSqncCS;
+%                 sqncPerDataOutCS          = (sqncPerDataInCS - sqncPerFrameCS) * sqncPerFrameCS;
+%                 sqncPerDataAllChOutCS     = sqncPerDataOutCS     * channels;
+%                 samplesPerDataOutCS       = sqncPerDataOutCS     * samplesPerSqncCS;
+%                 samplesPerDataAllChOutCS  = samplesPerDataOutCS  * channels;
+%                 
+%                 samplesPerData = samplesPerDataOutCS;
+%                 sqncPerData    = sqncPerDataOutCS;
+%             end
               
             %--------------------------------------
             % ---- Cutting Artifacts & MuEff
@@ -731,7 +747,7 @@ classdef Algo < handle
             %--------------------
             if  this.general.useHadamard
                 this.hadamard.sMatInv = sMatInv;
-                this.hadamard.sMatInvSingleSqnc = sMatInvSingleSqnc;
+%                 this.hadamard.sMatInvSingleSqnc = sMatInvSqnc;
                 this.hadamard.sMatInvSqnc       = sMatInvSqnc;
                 if this.general.contHadamard
                     this.hadamard.sMatInvSqncCont   = sMatInvSqncCont;
@@ -740,7 +756,7 @@ classdef Algo < handle
             
             clear ('c', 'channels', 'fSin', 'fSqnc', 'fs', 'sinPerPulse', ... 
                    'frameTime', 'timeToSample', 'preTriggerSamples', ...
-                   'distFromPhantom', 'sMatInvSqnc', 'sMatInvSingleSqnc', 'sMatInvSqncCont');
+                   'distFromPhantom', 'sMatInvSqnc', 'sMatInvSqnc', 'sMatInvSqncCont');
                
             vars = who();
             for i = 1:length(vars)
@@ -792,6 +808,9 @@ classdef Algo < handle
             harEnvIdxs   = harEnvIdxs(:)';
             harEnvIdxs(harEnvIdxs <= 0 | harEnvIdxs > N) = [];
             
+            if envUS == 0
+                harEnvIdxs = [fUsIdxNegShift, fUsIdxPosShift];
+            end
             % Calc indeces of DC
             envDCLen  = floor(envDC / df);
             envVec    = -envDCLen : 1 : envDCLen;
@@ -846,7 +865,6 @@ classdef Algo < handle
 
             tVecSampleClk = ( 0 : 1 : (fgClkSamplesPerFsSig - 1) ) * dtFgClk;
             tVecUS        = ( 0 : 1 : (fgClkSamplesPerSqnc - 1) )  * dtFgClk;
-            
             
             tVecPulse  = ( 0 : 1 : (samplesPerPulse   - 1) ) * dts;
             tVecSqnc   = ( 0 : 1 : (samplesPerSqnc   - 1) ) * dts;
@@ -927,35 +945,6 @@ classdef Algo < handle
         end
 
         %% Algorithm Functions
-        function res = reconstruct(this) 
-            this.resetAlgoRes();
-            if this.general.analyzeSingleCh
-                for i = 1:this.general.channelsToSample
-                    this.data = this.measSamples (i, :);
-                    if this.general.useGPU
-                        this.data = gpuArray(this.data);
-                    end
-                    this.reconAlgo();
-                    this.result(i) = this.curRes;
-                end
-            else
-                % In regular all-ch gpu based analysis measSamples will be
-                % upload to GPU externally
-                this.data = this.measSamples;
-                this.reconAlgo();
-                this.result = this.curRes;
-            end
-            
-            res = this.result;
-
-            % All data in res is CPU
-            this.data = [];
-            if this.general.splitMeas
-                this.curRes    = [];
-                this.result = [];
-            end
-        end
-        
         function reconAlgo(this)
             % measSamples(input)  - [ch x samplesPerMeas]
             % res(output) - struct:
@@ -975,11 +964,6 @@ classdef Algo < handle
             this.timeTable.overallNetSignal = tic;
             this.extractSignal();
             this.timeTable.overallNetSignal = toc(this.timeTable.overallNetSignal);
-
-            % Global Statistics
-%             this.timeTable.overallStatistics = tic;
-%             this.collectGlobalStatistics();
-%             this.timeTable.overallStatistics = toc(this.timeTable.overallStatistics);
             
             % DeMultiplex
             this.timeTable.overallDemultiplex = tic;
@@ -988,12 +972,9 @@ classdef Algo < handle
             end
             this.timeTable.overallDemultiplex = toc(this.timeTable.overallDemultiplex);
             
+            this.timeTable.overallACCoupling = tic;
             this.acCoupling();
-            
-            % Continues Speckle
-            if this.general.contSpeckleAnalysis
-                this.contSpeckle();                
-            end
+            this.timeTable.overallACCoupling = toc(this.timeTable.overallACCoupling);
             
             % Reshape Data
             this.timeTable.overallReshape = tic;
@@ -1050,12 +1031,6 @@ classdef Algo < handle
             this.exportData ('signal')
         end
         
-        function collectGlobalStatistics(this)
-            this.curRes.std       = gather(std(this.data, 0, 2));
-            this.curRes.avg       = gather(mean(this.data, 2));
-            this.curRes.normNoise = mean(this.curRes.std ./ this.curRes.avg);
-        end
-        
         function demultiplexSignal(this)
             % NetSignal(output) - [ch x samplesPerSignal]
             % deMulNetSignal - [ch x samplesPerSignal]
@@ -1072,14 +1047,13 @@ classdef Algo < handle
             this.timeTable.deMulReshape1 = tic;
             this.data = reshape(this.data', samplesPerSqncHad, sqncPerDataAllChInHad);
             this.timeTable.deMulReshape1 = toc(this.timeTable.deMulReshape1);
-            
-            if this.general.contHadamard
-                this.data = repmat(this.data, 2, 1);
-                this.data(samplesPerSqncHad:end, :) = circshift(this.data(samplesPerSqncHad:end, :), -1, 2);
-            end
-            
-            this.data = sMatInvSqnc * this.data;
-            
+
+            sMatInvSqnc = gpuArray(sMatInvSqnc);
+
+            this.timeTable.deMultiplex = tic;
+            this.data   = sMatInvSqnc * this.data;
+            this.timeTable.deMultiplex = toc(this.timeTable.deMultiplex);
+
             this.timeTable.deMulReshape2 = tic;
             this.data = reshape(this.data, samplesPerDataOutPreCutHad, channels)';
             this.timeTable.deMulReshape2 = toc(this.timeTable.deMulReshape2);
@@ -1089,35 +1063,7 @@ classdef Algo < handle
             this.exportData ('deMul')
         end
         
-        function contSpeckle(this)
-            % Collect Variables
-            channels                  = this.general.channelsToAnalyze;
-            samplesPerSqncCS          = this.samples.samplesPerSqncCS;
-            sqncPerDatalAllChInCS     = this.samples.sqncPerDatalAllChInCS;
-            sqncPerFrameCS            = this.samples.sqncPerFrameCS;
-            samplesPerDataOutPreCutCS = this.samples.samplesPerDataOutPreCutCS;
-            samplesPerDataOutCS       = this.samples.samplesPerDataOutCS;
-            
-            % Create Continues Frames
-            this.timeTable.csReshape1 = tic;
-            this.data = reshape(this.data', samplesPerSqncCS, sqncPerDatalAllChInCS);
-            this.timeTable.csReshape1 = toc(this.timeTable.csReshape1);
-            
-            this.data = repmat(this.data, sqncPerFrameCS, 1);
-            for i = 1 : sqncPerFrameCS
-                this.data((i-1)*samplesPerSqncCS+1:i*samplesPerSqncCS, :) =...
-                    circshift(this.data((i-1)*samplesPerSqncCS+1:i*samplesPerSqncCS, :), -(i-1), 2);
-            end
-            
-            this.timeTable.csReshape2 = tic;
-            this.data = reshape(this.data, samplesPerDataOutPreCutCS, channels)';
-            this.timeTable.csReshape2 = toc(this.timeTable.csReshape2);
-            
-            this.data(:, samplesPerDataOutCS+1:end) = [];
-        end
-        
         function acCoupling(this)
-            % AC coupling:
             this.data = this.data - mean(this.data, 2);
         end
         
@@ -1147,6 +1093,8 @@ classdef Algo < handle
                                            framesPerSignal);
             this.timeTable.reshape1 = toc(this.timeTable.reshape1);          
 
+            this.data = this.data - mean(this.data, 2);
+
             % Bring frame-dim to be first (averaging convinient)
             this.timeTable.permute1 = tic;
             this.data = permute(this.data, [1,3,2]);
@@ -1171,32 +1119,28 @@ classdef Algo < handle
             % Merge all samples of a single Poistion from all the sqnces
             % within the frame
             % [frames x ch x samples x numOfPos]
-            this.timeTable.reshape4 = tic;
+            this.timeTable.reshape3 = tic;
             this.data = reshape(this.data, channels,...
                                            framesPerSignal,...
                                            samplesPerPosPerFrame,...
                                            numOfPos);
-            this.timeTable.reshape4 = toc(this.timeTable.reshape4);                       
+            this.timeTable.reshape3 = toc(this.timeTable.reshape3);                       
             
-            % Bring ch dim to first
-            % [ch x frames x samples x numOfPos]
-%             this.timeTable.permute3 = tic;
-%             this.data = permute(this.data, [2,1,3,4]);
-%             this.timeTable.permute3 = toc(this.timeTable.permute3); 
+            this.data = this.data - mean(this.data, 3);
             
             this.exportData ('reshaped');
         end
         
         function fourierTransform(this)
-            % data(input)              - [ch x frames x samples x numOfPos]]
-            % qAvgChFFT(output)        - [ch x samplesPerPos x numOfPos]
+            % data(input)               - [ch x frames x samples x numOfPos]]
+            % frameAvgPowerFFT(output)  - [ch x samplesPerPos x numOfPos]
             
             samplesPerPosPerFrame = this.samples.samplesPerPosPerFrame;
 
             % Perform Fourier Transform
-            this.timeTable.FFTandShift = tic;
-            this.data = (2./samplesPerPosPerFrame) * fftshift( fft(this.data, [], 3) , 3);
-            this.timeTable.FFTandShift = toc(this.timeTable.FFTandShift);
+            this.timeTable.FFT = tic;
+            this.data = (2./samplesPerPosPerFrame)*fft(this.data, [], 3);
+            this.timeTable.FFT = toc(this.timeTable.FFT);
 
             this.exportData('FFT')
             this.exportData('usComp')
@@ -1207,54 +1151,37 @@ classdef Algo < handle
             this.timeTable.absAndPower = toc(this.timeTable.absAndPower);
             
             % Average over all frames
+            % NOTE: shift is here to perform on a lower dimension data.
             this.timeTable.meanFrameFFT = tic;
             this.curRes.frameAvgPowerFFT = permute(mean(this.data, 2), [1,3,4,2]);
-            this.curRes.frameStdPowerFFT = permute(std(this.data, 0, 2), [1,3,4,2]);
             this.timeTable.meanFrameFFT = toc(this.timeTable.meanFrameFFT);
             
-            this.curRes.frameAvgPowerFFTUnCut = this.curRes.frameAvgPowerFFT;
-        end
-        
-        function gatherCurrentSplit(this)
-            this.curRes.frameAvgPowerFFT = gather(this.curRes.frameAvgPowerFFT);
-            this.curRes.frameStdPowerFFT = gather(this.curRes.frameStdPowerFFT);
-        end
-        
-        function resSplit = reconSplittedData(this, dataInSplit)
-            % usCompCmplx(output)      - [frames x ch x numOfPos]
-            % framAvgPowerFFT(output)  - [ch x samplesPerPos x numOfPos]
-            % unFittedFFT(output)      - [samplesPerPos x numOfPos]
-            % unFittedFFTShift(output) - [samplesPerPos x numOfPos]
-            % fitModel(output)         - [samplesPerPos x numOfPos]
-            % fittedFFT(output)        - [samplesPerPos x numOfPos]
-            % phi(output)              - [1 x numOfPos]
-            
-            this.timeTable.splitAnalysis = tic;
-            fprintf("ALGO: Analyzing splitted data.\n");
-            this.resetAlgoRes();
-            this.dataInSplit = dataInSplit;
-            splitNum = this.general.splitNum;
-            
-            splitFrameAvgPowerFFT = zeros(this.general.channelsToAnalyze, this.samples.samplesPerPosPerFrame, this.samples.numOfPosAlgo, splitNum);
-            splitFrameStdPowerFFT = zeros(this.general.channelsToAnalyze, this.samples.samplesPerPosPerFrame, this.samples.numOfPosAlgo, splitNum);
-            
-            for j = 1:this.general.analysisReps
-                this.timeTable.splitAnalysis = tic;
-                this.timeTable.meanFrameFFT  = tic;
-                for i = 1:splitNum
-                    splitFrameAvgPowerFFT(:,:,:,i) = gather(dataInSplit(j,i).frameAvgPowerFFT);
-                    splitFrameStdPowerFFT(:,:,:,i) = gather(dataInSplit(j,i).frameStdPowerFFT);
-                end
-                this.curRes.frameAvgPowerFFT   = mean(splitFrameAvgPowerFFT, 4);
-                this.curRes.frameStdPowerFFT   = (1/splitNum)*sqrt(sum(splitFrameStdPowerFFT.^2 ,4));
-                this.timeTable.meanFrameFFT = toc(this.timeTable.meanFrameFFT);
+            this.timeTable.Shift = tic;
+            this.curRes.frameAvgPowerFFT = fftshift(this.curRes.frameAvgPowerFFT, 2);
+            this.timeTable.Shift = toc(this.timeTable.Shift);
 
-                this.extractPhiFromFFT();
-                this.setStruct(this.curRes, 'resSplit', j);
-                this.resSplit(j).totalRes = this.curRes;
-                this.timeTable.splitAnalysis = toc(this.timeTable.splitAnalysis);
-            end
-            resSplit = this.resSplit;
+        end
+        
+        %% Post Processing:
+        function extractRawPhi(this)
+            %-----------------------------------------------------
+            % Raw Phi Calculation (no fit - averaging over all ch)
+            %-----------------------------------------------------
+            channels = this.general.channelsToAnalyze;
+            fUsIdx = this.freq.fUSIdx;
+
+            % Average over all channels and then SQRT(!)
+            this.timeTable.meanChFFTRaw = tic;
+            this.curRes.rawChAvgFFT     = sqrt(permute(mean(this.curRes.frameAvgPowerFFTCut, 1), [2,3,1]));
+            this.timeTable.meanChFFTRaw = toc(this.timeTable.meanChFFTRaw);
+            
+            this.timeTable.rawPhiExtract = tic;
+            this.curRes.rawPhi = this.curRes.rawChAvgFFT(fUsIdx, :);
+            this.timeTable.rawPhiExtract = toc(this.timeTable.rawPhiExtract);
+
+            this.timeTable.AnalyseRawPhi = tic;
+            this.curRes.analysis.rawPhi = this.analyseRecon(this.curRes.rawPhi);
+            this.timeTable.AnalyseRawPhi = toc(this.timeTable.AnalyseRawPhi);
         end
 
         function extractPhiFromFFT(this)
@@ -1279,22 +1206,13 @@ classdef Algo < handle
             %Cut Artifacts
             this.cutArtifactIndexes();
             
-            %-----------------------------------------------------
-            % Raw Phi Calculation (no fit - averaging over all ch)
-            %-----------------------------------------------------
-            % Average over all channels and SQRT(!)
-            this.timeTable.meanChFFTRaw = tic;
-            this.curRes.rawChAvgFFT     = sqrt(permute(mean(this.curRes.frameAvgPowerFFTCut, 1), [2,3,1]));
-            this.curRes.rawChAvgFFTStd  = sqrt(permute((1/channels)*sqrt(sum(this.curRes.frameStdPowerFFT.^2,1)),[2,3,1]));
-            this.timeTable.meanChFFTRaw = toc(this.timeTable.meanChFFTRaw);
-            
-            this.curRes.rawPhi = this.curRes.rawChAvgFFT(fUsIdx, :);
-
-            this.curRes.analysis.rawPhi = this.analyseRecon(this.curRes.rawPhi);
+            % Extract Raw Phi - Naive Signal Processing
+            this.extractRawPhi();
             
             %-----------------------------------------------------
             % Phi Calculation (fit each channel and then average)
             %-----------------------------------------------------
+            
             %Averag over all positions to create avg channel response before fit
             this.timeTable.meanPos = tic;
             this.curRes.posAvgPowerFFT    = mean(this.curRes.frameAvgPowerFFTCut(:,:,this.curRes.analysis.rawPhi.bkgIdx), 3);
@@ -1308,15 +1226,12 @@ classdef Algo < handle
                 this.curRes.fitModelMat = this.calcFittedFFT();
             end
             this.timeTable.calculateFit = toc(this.timeTable.calculateFit);
-
-%             figure();
-%             stem(this.curRes.fitModelMat(2, :,1))
             
             % Apply Fit
             this.timeTable.applyFit = tic;
-%             this.curRes.fittedPowerFFT = this.curRes.frameAvgPowerFFTCut ./ this.curRes.fitModelMat;
-            this.curRes.fittedPowerFFT = this.curRes.frameAvgPowerFFTCut - this.curRes.fitModelMat;
-            this.timeTable.applyFit = toc(this.timeTable.applyFit);
+            this.curRes.fittedPowerFFT = this.curRes.frameAvgPowerFFTCut ./ this.curRes.fitModelMat;
+%             this.curRes.fittedPowerFFT = this.curRes.frameAvgPowerFFTCut - this.curRes.fitModelMat;
+            this.timeTable.applyFit    = toc(this.timeTable.applyFit);
 
             % Average over all channels
             this.timeTable.meanChFFT = tic;
@@ -1324,11 +1239,11 @@ classdef Algo < handle
             this.timeTable.meanChFFT = toc(this.timeTable.meanChFFT);
 
             % Sqrt FFT
-            this.timeTable.sqrtFittedFFT = tic;
-%             this.curRes.fittedFFT = sqrt(abs(this.curRes.fittedChAvgPowerFFT - 1));
+            this.timeTable.SqrtAbsFittedFFT = tic;
+            this.curRes.fittedFFT = sqrt(abs(this.curRes.fittedChAvgPowerFFT - 1));
 %             this.curRes.fittedFFT = sqrt(abs(this.curRes.fittedChAvgPowerFFT)) - 1;
-            this.curRes.fittedFFT = sqrt(abs(this.curRes.fittedChAvgPowerFFT));
-            this.timeTable.sqrtFittedFFT = toc(this.timeTable.sqrtFittedFFT);
+%             this.curRes.fittedFFT = sqrt(abs(this.curRes.fittedChAvgPowerFFT));
+            this.timeTable.SqrtAbsFittedFFT = toc(this.timeTable.SqrtAbsFittedFFT);
 
             % Extract Ultrasound Component
             this.timeTable.phiExtract = tic;
@@ -1359,10 +1274,9 @@ classdef Algo < handle
 %             title("Final Phi")
             
             % Mark Signal and Background indices
-            
-            this.timeTable.Analyse = tic;
+            this.timeTable.AnalysePhi = tic;
             this.curRes.analysis.phi = this.analyseRecon(this.curRes.phi);
-            this.timeTable.Analyse = toc(this.timeTable.Analyse);
+            this.timeTable.AnalysePhi = toc(this.timeTable.AnalysePhi);
             
             %Selected Normalization:
             this.curRes.phiNorm = this.curRes.analysis.phi.normTypes.phiNorm2;
@@ -1377,7 +1291,6 @@ classdef Algo < handle
             this.curRes.frameAvgPowerFFT = gather(this.curRes.frameAvgPowerFFT);
             
             this.curRes.frameAvgPowerFFTCut = gather(this.curRes.frameAvgPowerFFTCut);
-            this.curRes.frameStdPowerFFT    = gather(this.curRes.frameStdPowerFFT); 
             
             this.curRes.rawChAvgFFT    = gather(this.curRes.rawChAvgFFT);
             this.curRes.rawChAvgFFTStd = gather(this.curRes.rawChAvgFFTStd);
@@ -1399,11 +1312,12 @@ classdef Algo < handle
         
         function cutArtifactIndexes(this)
             this.curRes.frameAvgPowerFFTCut = this.curRes.frameAvgPowerFFT;
-            this.curRes.frameStdPowerFFTCut = this.curRes.frameStdPowerFFT;
+            
+            this.timeTable.CutArtifacts = tic;
             if this.general.cutArtfct
                 this.curRes.frameAvgPowerFFTCut(:,:,this.samples.artfctIdxVec) = [];
-                this.curRes.frameStdPowerFFTCut(:,:,this.samples.artfctIdxVec) = [];
             end
+            this.timeTable.CutArtifacts = toc(this.timeTable.CutArtifacts);
         end
         
         function cal = getCalibration(this)
@@ -1415,6 +1329,7 @@ classdef Algo < handle
             if this.general.useGPU
                 fitModelMat = gpuArray(fitModelMat);
             end
+
             if length(this.freq.fitIdxShift) <11
                 return;
             end
@@ -1424,11 +1339,12 @@ classdef Algo < handle
             numOfPos  = this.samples.numOfPos;
             fBar      = this.freq.fBar;
             idxs      = this.freq.fitIdxShift;
-            
+
             % Calculate Fit
             for i = 1:channels
                 fitVec = this.curRes.posAvgPowerFFT(i, idxs);
                 fitModelMat(i,:) = interp1(fBar(idxs), fitVec, fBar, 'linear', 'extrap');
+%                 fitModelMat(i,:) = interp1(fBar(idxs), fitVec, fBar, 'spline', 'extrap');
             end
 
 %             fitModelMat = repmat(fitModelMat, 1, 1, numOfPos);
@@ -1436,7 +1352,7 @@ classdef Algo < handle
         
         function analysis = analyseRecon(this, phi)
             phi = gather(phi);
-            
+            noiseLevel = 0.1;
             %-------------------------
             % Separate Bakground and Signal:
             %-------------------------
@@ -1445,19 +1361,21 @@ classdef Algo < handle
             minVal = min(phi);
             spanAbs = maxVal - minVal;
 
-            tmpStd = std( phi( phi<(minVal+std(phi)) ) );
+            tmpStd = std(phi( phi<(minVal+4*std(phi)) ) );
             idxVec = 1:length(phi);
-            
-            bkgIdx      = idxVec(phi<=(minVal+2*tmpStd));
+
+%             bkgIdx = idxVec(phi<=(minVal+2*tmpStd));
+            bkgIdx = idxVec(phi< (minVal + spanAbs*noiseLevel));
             bkgSamples  = phi(bkgIdx);
             bkg = phi(bkgIdx);
             
-            signalIdx         = idxVec(phi>(minVal+2*tmpStd));
-            signalSamples     = phi(signalIdx);
+%             signalIdx = idxVec(phi>(minVal+2*tmpStd));
+            signalIdx = idxVec(phi>= (minVal + spanAbs*noiseLevel));
+            signalSamples = phi(signalIdx);
             signal = phi(signalIdx);
             
-            depthVecBkg    = this.len.depthVec(bkgIdx);
-            depthVecSignal = this.len.depthVec(signalIdx);
+            depthVecBkg    = this.len.depthVec(bkgIdx)*1e3;
+            depthVecSignal = this.len.depthVec(signalIdx)*1e3;
             %-------------------------
             % Calculate Statistics:
             %-------------------------  
@@ -1477,7 +1395,11 @@ classdef Algo < handle
 
             %Type 2
             normTypes.phiNorm2 = (phi - avgNoise) ./ spanNoise;
-            normTypes.phiLog2 = log(abs(normTypes.phiNorm2));
+            normTypes.phiLog2 = log(abs(normTypes.phiNorm2)); %#ok<STRNU> 
+            
+            phiSmooth = imfilter(phi, fspecial("average", [1,3]), 'circular', 'same');
+            phiRoot = abs(sqrt(phi));
+            phiLaplace = sqrt(abs(gradient(gradient(phiRoot)) ./ phiRoot));
 
             %--------------------
             % Collect parameters
@@ -1492,6 +1414,8 @@ classdef Algo < handle
         end
 
         function calcMuEff(this)
+            this.timeTable.CalcMuEff = tic;
+
             if this.general.calcMuEff
                 phiCut = this.curRes.phiLog(this.general.muEffIdxs);
                 phiRawCut = this.curRes.analysis.rawPhi.normTypes.phiLog2(this.general.muEffIdxs);
@@ -1520,8 +1444,93 @@ classdef Algo < handle
                     this.curRes.analysis.muEff.(vars{i}) = eval(vars{i});
                 end
             end
+
+            this.timeTable.CalcMuEff        = toc(this.timeTable.CalcMuEff);
         end
         
+        %% Reconstruction types:
+        function res = reconstruct(this) 
+            this.resetAlgoRes();
+            if this.general.analyzeSingleCh
+                for i = 1:this.general.channelsToSample
+                    this.data = this.measSamples (1, :);
+                    this.measSamples (1, :) = [];
+                    if this.general.useGPU
+                        this.data = gpuArray(this.data);
+                    end
+                    this.reconAlgo();
+                    this.result(i) = this.curRes;
+                end
+            else
+                % In regular all-ch gpu based analysis measSamples will be
+                % upload to GPU externally
+                this.data = this.measSamples;
+                this.measSamples = [];
+                this.reconAlgo();
+                this.result = this.curRes;
+            end
+            
+            res = this.result;
+
+            % All data in res is CPU
+            this.data = [];
+%             if this.general.splitMeas
+%                 this.resetAlgoRes();
+%             end
+        end
+
+        function res = reconSplittedData(this, dataInSplit)
+            this.timeTable.OverallSplitAnalysis = tic;
+            fprintf("ALGO: Analyzing splitted data...");
+            this.resetSplitRes();
+            splitNum = this.general.splitNum;
+            
+            splitFrameAvgPowerFFT = zeros(this.general.channelsToAnalyze, this.samples.samplesPerPosPerFrame, this.samples.numOfPosAlgo, splitNum);
+            
+            for j = 1:this.general.analysisReps
+
+                this.timeTable.SplitsMeanFrameFFT  = tic;
+                for i = 1:splitNum
+                    splitFrameAvgPowerFFT(:,:,:,i) = gather(dataInSplit(j,i).frameAvgPowerFFT);
+                end
+                this.curRes.frameAvgPowerFFT = gpuArray(mean(splitFrameAvgPowerFFT, 4));
+                this.timeTable.SplitsMeanFrameFFT = toc(this.timeTable.SplitsMeanFrameFFT);
+                
+                this.extractPhiFromFFT();
+                this.copyStruct(this.curRes, 'result', j);
+                this.result(j).splitRes = dataInSplit(j,:);
+            end
+            this.timeTable.OverallSplitAnalysis = toc(this.timeTable.OverallSplitAnalysis);
+            res = this.result;
+            fprintf("Done!\n");
+        end
+
+        function addCurrentSplit(this, curSplitData, idx)
+            this.timeTable.AddSingleSplit = tic;
+            for j = 1:this.general.analysisReps
+                if idx==1
+                    this.curSplit(j).frameAvgPowerFFT = curSplitData(j).frameAvgPowerFFT;
+                else
+                    this.curSplit(j).frameAvgPowerFFT = (1/idx)*(this.curSplit(j).frameAvgPowerFFT * (idx-1) + curSplitData(j).frameAvgPowerFFT);
+                end
+            end
+            this.timeTable.AddSingleSplit = toc(this.timeTable.AddSingleSplit);
+        end
+        
+        function resCur = reconCurSplit(this)
+            for j = 1:this.general.analysisReps
+                this.curRes.frameAvgPowerFFT   = gpuArray(this.curSplit(j).frameAvgPowerFFT);
+
+                this.extractPhiFromFFT();
+                this.copyStruct(this.curRes, 'result', j);
+            end
+            resCur = this.result;
+        end
+        
+        function gatherCurrentSplit(this)
+            this.curRes.frameAvgPowerFFT = gather(this.curRes.frameAvgPowerFFT);
+        end
+
         %% Misc
         function bufferDataOut = createVirtualData(this, std)
             
@@ -1567,50 +1576,25 @@ classdef Algo < handle
         end
         
         function initTimeTable(this)
-            this.timeTable.FullAnalysis             = 0;
+            this.timeTable = [];
+            timeTableNames = ["FullAnalysis", ...
+                              "overallNetSignal", "overallDemultiplex", "overallACCoupling", "overallReshape", "overallSignalProcessing",...
+                              "extractNetSignal",...
+                              "deMulReshape1","deMultiplex","deMulReshape2",...
+                              "reshape1","permute1","reshape2","permute2","reshape3",...
+                              "FFT","Shift","absAndPower","meanFrameFFT",...
+                              "CutArtifacts",...
+                              "meanChFFTRaw","rawPhiExtract","AnalyseRawPhi",...
+                              "meanPos","calculateFit","applyFit","meanChFFT","SqrtAbsFittedFFT",...
+                              "phiExtract",...
+                              "AnalysePhi","CalcMuEff","gather",...
+                              "exportMeas","exportSignal","exportDeMultiplexed","exportReshaped","exportFFT","exportUsComp",...
+                              "AddSingleSplit", "SplitsMeanFrameFFT", "OverallSplitAnalysis"];
             
-            this.timeTable.overallNetSignal         = 0;
-            this.timeTable.overallStatistics        = 0;
-            this.timeTable.overallDemultiplex       = 0;
-            this.timeTable.overallReshape           = 0;
-            this.timeTable.overallSignalProcessing  = 0;
-            
-            this.timeTable.extractNetSignal         = 0;
-            
-            this.timeTable.deMulReshape1            = 0;
-            this.timeTable.deMultiplex              = 0; 
-            this.timeTable.deMulReshape2            = 0;
-            
-            this.timeTable.reshape1                 = 0;
-            this.timeTable.permute1                 = 0;
-            this.timeTable.reshape2                 = 0;
-            this.timeTable.reshape3                 = 0;
-            this.timeTable.permute2                 = 0;
-            this.timeTable.reshape4                 = 0;
-            this.timeTable.permute3                 = 0;
-            
-            this.timeTable.FFTandShift              = 0;
-            this.timeTable.absAndPower              = 0;
-            this.timeTable.meanFrameFFT             = 0;
-            this.timeTable.meanChFFTRaw             = 0;
-            this.timeTable.meanPos                  = 0;
-            this.timeTable.calculateFit             = 0;
-            this.timeTable.applyFit                 = 0;
-            this.timeTable.meanChFFT                = 0;
-            this.timeTable.sqrtFittedFFT            = 0;
-            this.timeTable.normalizeFFT             = 0;
-            this.timeTable.phiExtract               = 0;
-            
-            this.timeTable.gather                   = 0;
-            
-            this.timeTable.Analyse                  = 0;
-            
-            this.timeTable.exportRawData            = 0;
-            this.timeTable.exportNetSignal          = 0;
-            this.timeTable.exportDeMultiplexed      = 0;
-            this.timeTable.exportReshaped           = 0;
-            this.timeTable.exportFFT                = 0;
-            this.timeTable.exportUsComp             = 0;
+
+            for i=1:length(timeTableNames)
+                this.timeTable.(timeTableNames{i}) = 0;
+            end
         end
         
         function exportData(this, dataName)
@@ -1656,65 +1640,77 @@ classdef Algo < handle
         end
         
         function resetAlgoRes(this)
-             [this.curRes, this.result, this.dataInSplit, this.resSplit]= this.getResultsStruct();
+             models = this.getResultsModels();
+             this.curRes      = models.base;
+             this.result      = models.baseChArr; 
+        end
+
+        function resetSplitRes(this)
+            models      = this.getResultsModels();
+            this.curRes = models.base;
+            this.result = models.baseCh; 
+        end
+
+        function resetCurSplit(this)
+            models        = this.getResultsModels();
+            this.curSplit = models.baseChArr;
         end
         
-        function [res, result, dataInSplit, resSplit] = getResultsStruct(this)
+        function models = getResultsModels(this)
             %Generic result Array
-            tmpRes = struct();
-            
-            tmpRes.std       = [];
-            tmpRes.avg       = [];
-            tmpRes.normNoise = [];
-            
-            tmpRes.frameAvgPowerFFTUnCut   = [];
-            
-            tmpRes.frameAvgPowerFFT = [];
-            tmpRes.frameStdPowerFFT = [];
-            
-            tmpRes.frameAvgPowerFFTCut = [];
-            tmpRes.frameStdPowerFFTCut = [];
-            
-            tmpRes.rawChAvgFFT    = [];
-            tmpRes.rawChAvgFFTStd = [];
-            tmpRes.rawPhi            = [];
+            base = struct();
 
-            tmpRes.posAvgPowerFFT      = [];
-            tmpRes.fitModelMat         = [];
-            tmpRes.fittedPowerFFT      = [];
-            tmpRes.fittedChAvgPowerFFT = [];
-            tmpRes.fittedFFT           = [];
+            base.frameAvgPowerFFT = [];
+            
+            base.frameAvgPowerFFTCut = [];
+            
+            base.rawChAvgFFT    = [];
+            base.rawChAvgFFTStd = [];
+            base.rawPhi            = [];
 
-            tmpRes.phiPreCut = [];
-            tmpRes.phi       = [];
-            tmpRes.phiLog    = [];
-            tmpRes.phiNorm   = [];
+            base.posAvgPowerFFT      = [];
+            base.fitModelMat         = [];
+            base.fittedPowerFFT      = [];
+            base.fittedChAvgPowerFFT = [];
+            base.fittedFFT           = [];
+
+            base.phiPreCut = [];
+            base.phi       = [];
+            base.phiLog    = [];
+            base.phiNorm   = [];
             
-            tmpRes.analysis = [];
-            tmpRes.SNR      = [];            
+            base.analysis = [];           
             
-            tmpRes.export.meas           = [];
-            tmpRes.export.signal         = [];
-            tmpRes.export.deMul          = [];
-            tmpRes.export.reshaped       = [];
-            tmpRes.export.fft            = [];
-            tmpRes.export.usCompCmplx    = [];
-            tmpRes.export.usComp         = [];
-            
-            res = tmpRes;
-            
+            base.export.meas           = [];
+            base.export.signal         = [];
+            base.export.deMul          = [];
+            base.export.reshaped       = [];
+            base.export.fft            = [];
+            base.export.usCompCmplx    = [];
+            base.export.usComp         = [];
+
             %Split Result Struct and Array
-            tmpSplitArr(this.general.splitNum) = tmpRes; 
-            tmpSplitRes = tmpRes;
-            tmpSplitRes.splitRes = tmpSplitArr;
+            baseSplitArr(this.general.splitNum)  = base;
+            baseChArr(this.general.analysisReps) = base;
             
-            % Single Ch analysis extension 
-            result(this.general.analysisReps)         = tmpRes;
-            dataInSplit(this.general.analysisReps, :) = tmpSplitArr;
-            resSplit(this.general.analysisReps)       = tmpSplitRes;
+            baseSplit = base;
+            baseSplit.splitRes = baseSplitArr;
+            
+            % Separate Ch Analysis Extension
+            baseChSplitArr(this.general.analysisReps, :) = baseSplitArr;
+            baseCh(this.general.analysisReps)            = baseSplit;
+
+            % Collect models:
+            models.base         = base;
+            models.baseSplitArr = baseSplitArr;
+            models.baseChArr    = baseChArr;
+            models.baseSplit    = baseSplit;
+            models.baseCh       = baseCh;
+
+            models.baseChSplitArr = baseChSplitArr;
         end
-        
-        function setStruct(this, source, dest, dstIdx)
+
+        function copyStruct(this, source, dest, dstIdx)
             names = fieldnames(source);
             for i = 1:length(names)
                this.(dest)(dstIdx).(names{i}) = source.(names{i});                

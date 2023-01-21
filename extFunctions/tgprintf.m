@@ -1,4 +1,4 @@
-function ret = tgprintf(str)
+function ret = tgprintf(chat_id, str)
 % TGPRINTF send a message to a Telegram bot
 %
 % Use tgprintf() in the same way as sprintf()
@@ -16,7 +16,6 @@ function ret = tgprintf(str)
 % Change the chat_id to the ID of your own group with the bot.
 %
 token = '1727085776:AAGm7Vfig68zsUR0rxXeP2-dTF4jnQeXY3Q';
-chat_id = '-512325870';
 % str = sprintf(varargin{:});
 % print to MATLAB command window
 % fprintf(str);
