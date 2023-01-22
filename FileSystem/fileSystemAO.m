@@ -34,9 +34,9 @@ classdef fileSystemAO < fileSystem
             
             vars.saveMeas        = false;
             vars.saveSignal      = false;
-            vars.saveDeMul  = false;
-            vars.saveReshaped = false;
-            vars.saveFFT            = false;            
+            vars.saveDeMul       = false;
+            vars.saveReshaped    = false;
+            vars.saveFFT         = false;            
         end
     end
     
@@ -54,9 +54,9 @@ classdef fileSystemAO < fileSystem
             
             this.saveMeas        = uVars.saveMeas;
             this.saveSignal      = uVars.saveSignal;
-            this.saveDeMul  = uVars.saveDeMul;
-            this.saveReshaped = uVars.saveReshaped;
-            this.saveFFT            = uVars.saveFFT;
+            this.saveDeMul       = uVars.saveDeMul;
+            this.saveReshaped    = uVars.saveReshaped;
+            this.saveFFT         = uVars.saveFFT;
             
             this.splitMeas          = uVars.splitMeas;
             this.splitNum           = uVars.splitNum;

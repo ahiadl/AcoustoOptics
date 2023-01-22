@@ -474,15 +474,15 @@ classdef AOGraphics < Graphics
             signal.xData = this.fBar(signal.fidxs);
             switch figName               
                 case 'rawFFT'
-                    signal.yData     = this.data.frameAvgPowerFFT(:, signal.fidxs, signal.depthIdx);
-                    signal.yData     = squeeze(signal.yData(:,signal.fidxs));
-                    signal.markerY   = squeeze(this.data.frameAvgPowerFFT(:,this.figs.fIdx, signal.depthIdx));
+                    signal.yData     = this.data.frameAvgPowerFFTCut(:, signal.fidxs, signal.depthIdx);
+%                     signal.yData     = squeeze(signal.yData(:,signal.fidxs));
+                    signal.markerY   = squeeze(this.data.frameAvgPowerFFTCut(:,this.figs.fIdx, signal.depthIdx));
                     signal.titleVars = {{signal.depthVec(signal.depthIdx), signal.depthIdx}};
                 case 'fittingModel'
-                    signal.yData(1,:,1) = permute(this.data.frameAvgPowerFFT(signal.ch, signal.fidxs, signal.depthIdx), [3,1,2]);
+                    signal.yData(1,:,1) = permute(this.data.frameAvgPowerFFTCut(signal.ch, signal.fidxs, signal.depthIdx), [3,1,2]);
                     signal.yData(2,:,1) = permute(this.data.fitModelMat(signal.ch, signal.fidxs), [3,1,2]);
                     signal.titleVars    = {{signal.ch, signal.depthVec(signal.depthIdx), signal.depthIdx}};
-                    signal.markerY(1)   = squeeze(this.data.frameAvgPowerFFT(signal.ch, this.figs.fIdx, signal.depthIdx));
+                    signal.markerY(1)   = squeeze(this.data.frameAvgPowerFFTCut(signal.ch, this.figs.fIdx, signal.depthIdx));
                     signal.markerY(2)   = squeeze(this.data.fitModelMat(signal.ch, this.figs.fIdx));
                 case 'fittedPowerFFT'
                     signal.yData     = this.data.fittedPowerFFT(:, signal.fidxs, signal.depthIdx);

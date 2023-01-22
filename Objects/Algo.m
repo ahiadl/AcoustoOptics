@@ -196,7 +196,8 @@ classdef Algo < handle
             calcMuEff           = this.uVars.calcMuEff;
             muEffModel          = this.uVars.muEffModel;
             muEffIdxs           = this.uVars.muEffIdxs;
-            
+            acCoupling          = this.uVars.acCoupling;
+
             %IndividualCh
             channelsToSample  = channels;
             channelsToAnalyze = channels;
@@ -803,6 +804,8 @@ classdef Algo < handle
             envMat        = repmat(envVec', 1, numOfHar);
             envHarFullLen = length(envVec);
 
+            fUSIdxs = fUSIdx-envHarLen : fUSIdx+envHarLen;
+
             harEnvIdxMat = repmat(harIdxs, envHarFullLen, 1);
             harEnvIdxs   = envMat + harEnvIdxMat;
             harEnvIdxs   = harEnvIdxs(:)';
@@ -998,11 +1001,10 @@ classdef Algo < handle
         function res = reconExtFFTData(this, extData)
             this.result = [];
             this.curRes = [];
-            for i=1:size(extData,1)
+            for i=1:length(extData)
                 this.curRes = [];
                 
-                this.curRes.frameAvgPowerFFT = extData.frameAvgPowerFFT;
-                this.curRes.frameStdPowerFFT = extData.frameStdPowerFFT;
+                this.curRes.frameAvgPowerFFT = extData(i).frameAvgPowerFFT;
                 
                 this.extractPhiFromFFT();
                 if i==1
@@ -1012,7 +1014,7 @@ classdef Algo < handle
                 end
             end
             
-            res = this.result(i);
+            res = this.result;
         end
         
         function extractSignal(this)
@@ -1064,7 +1066,9 @@ classdef Algo < handle
         end
         
         function acCoupling(this)
-            this.data = this.data - mean(this.data, 2);
+            if this.general.acCoupling
+                this.data = this.data - mean(this.data, 2);
+            end
         end
         
         function reshapeSignal(this)
@@ -1202,7 +1206,8 @@ classdef Algo < handle
             % Collect Variables
             channels = this.general.channelsToAnalyze;
             fUsIdx = this.freq.fUSIdx;
-            
+            fUSIdxs = this.freq.fUSIdxs;
+
             %Cut Artifacts
             this.cutArtifactIndexes();
             
@@ -1240,14 +1245,18 @@ classdef Algo < handle
 
             % Sqrt FFT
             this.timeTable.SqrtAbsFittedFFT = tic;
-            this.curRes.fittedFFT = sqrt(abs(this.curRes.fittedChAvgPowerFFT - 1));
-%             this.curRes.fittedFFT = sqrt(abs(this.curRes.fittedChAvgPowerFFT)) - 1;
+%             this.curRes.fittedFFT = sqrt(abs(this.curRes.fittedChAvgPowerFFT - 1));
+            this.curRes.fittedFFT = sqrt(abs(this.curRes.fittedChAvgPowerFFT)) - 1;
 %             this.curRes.fittedFFT = sqrt(abs(this.curRes.fittedChAvgPowerFFT));
             this.timeTable.SqrtAbsFittedFFT = toc(this.timeTable.SqrtAbsFittedFFT);
 
             % Extract Ultrasound Component
             this.timeTable.phiExtract = tic;
-            this.curRes.phiPreCut     = this.curRes.fittedFFT(fUsIdx, :);
+            if false
+                this.curRes.phiPreCut = this.curRes.fittedFFT(fUSIdxs, :);
+            else
+                this.curRes.phiPreCut = max(this.curRes.fittedFFT(fUsIdx, :), [], 1);
+            end
             this.timeTable.phiExtract = toc(this.timeTable.phiExtract);
             
             this.curRes.phi = this.curRes.phiPreCut;
@@ -1255,7 +1264,7 @@ classdef Algo < handle
 %             figure();
 %             subplot(3,2,1)
 %             stem(this.curRes.rawPhi)
-%             ylim([0.4, 1.2])
+% %             ylim([0, 2e-7])
 %             title("Raw")
 %             subplot(3,2,2)
 %             stem(sqrt(abs(squeeze(this.curRes.frameAvgPowerFFT(1, 91,:)))))
@@ -1273,6 +1282,14 @@ classdef Algo < handle
 %             stem(this.curRes.phi)
 %             title("Final Phi")
             
+%             figure();
+%             subplot(2,2,1)
+%             plot(squeeze(this.curRes.frameAvgPowerFFTCut(1,:,103)))
+%             subplot(2,2,2)
+%             plot(squeeze(this.curRes.fitModelMat))
+%             subplot(2,2,3)
+%             plot(this.curRes.fittedChAvgPowerFFT(:, 103))
+
             % Mark Signal and Background indices
             this.timeTable.AnalysePhi = tic;
             this.curRes.analysis.phi = this.analyseRecon(this.curRes.phi);
@@ -1293,7 +1310,7 @@ classdef Algo < handle
             this.curRes.frameAvgPowerFFTCut = gather(this.curRes.frameAvgPowerFFTCut);
             
             this.curRes.rawChAvgFFT    = gather(this.curRes.rawChAvgFFT);
-            this.curRes.rawChAvgFFTStd = gather(this.curRes.rawChAvgFFTStd);
+%             this.curRes.rawChAvgFFTStd = gather(this.curRes.rawChAvgFFTStd);
             this.curRes.rawPhi            = gather(this.curRes.rawPhi);
             
             this.curRes.posAvgPowerFFT       = gather(this.curRes.posAvgPowerFFT);

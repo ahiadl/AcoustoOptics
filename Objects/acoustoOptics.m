@@ -384,6 +384,7 @@ classdef acoustoOptics < handle
                 fileSystemVars.saveReshaped = uVarsFS.saveReshaped;
                 fileSystemVars.saveFFT      = uVarsFS.saveFFT;
             end
+
             fileSystemVars.saveMeas = uVarsFS.saveMeas;
             
             fileSystemVars.splitMeas   = this.measVars.algo.general.splitMeas;
@@ -748,6 +749,7 @@ classdef acoustoOptics < handle
                 this.IO.open();
                 for i = splitStartIdx:splitNum
                     fprintf("AOI: Split %d/%d: ", i, splitNum);
+                    this.fileSystem.updateSplitInd(i);
                     % Check if stop button was pushed
                     if ~this.contMeas
                         fprintf("AOI: Aborting Measurement.\n");
@@ -763,7 +765,7 @@ classdef acoustoOptics < handle
                     % Full so-far analysis and plotting
                     if  this.measVars.AO.displayBuildUp 
                         this.algo.addCurrentSplit(this.splits(:,i), i);
-                        if i==1 || ~mod(i, this.measVars.AO.displayBUEvery)
+                        if i==2 || ~mod(i, this.measVars.AO.displayBUEvery)
                             this.result = this.algo.reconCurSplit();
                             this.graphics.setData(gather(this.result));
                             this.plotAll();
@@ -775,18 +777,23 @@ classdef acoustoOptics < handle
                     end
 
                     T(i) = this.algo.getTimeTable();
+                    
                     % No display by default, because no full reconstruction is
                     % performed in split-mode
-                    if i ==1
-                        pause(0.001);
-                    end
+                    pause(0.001);
                 end
                 this.IO.close();
-                this.contMeas = false;
-                this.algo.initTimeTable();
-                this.result = this.algo.reconSplittedData(this.splits);
-                T(i+1) = this.algo.getTimeTable();
-                this.result.T = T;
+
+                if this.contMeas
+                    this.contMeas = false;
+                    this.algo.initTimeTable();
+                    this.result = this.algo.reconSplittedData(this.splits);
+                    T(i+1) = this.algo.getTimeTable();
+%                     this.result.T = T;
+                else
+                    res = [];
+                    return
+                end
             else % No split
                 % Regular single-meas operation:
                 this.result = this.measureAndAnalyse();
