@@ -192,7 +192,7 @@ classdef fileSystem < handle
                     end
                 end
                 vars = this.hOwner.getVars();
-                save(varsFileName, '-struct', 'vars', '-v7.3');
+                save(varsFileName, '-Struct', 'vars', '-v7.3');
             end
         end
         

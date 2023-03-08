@@ -24,6 +24,8 @@ classdef MTUA < handle
         
         function setVars(this, vars)
             this.csVars = vars;
+
+%             (fs/N) *  ( (-N/2) : 1 : (N/2)-1 );
         end
         
         function updateScanIdx(this) 

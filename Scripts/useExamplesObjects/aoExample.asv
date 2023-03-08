@@ -181,14 +181,14 @@ plot(reShaped(:, 37))
 
 %% Loaded Data
 clc
-path = "D:\MuEff\Uniform\GradedScatteringSet\Focused\Phantom-1";
+path = "D:\MuEff\Uniform\GradedScatteringSet\Focused\Phantom-5";
 
-data = ao.loadData(path);
+[res, vars, rawData] = ao.loadData(path);
 
 
 %% Recalc Loaded Data
 % close all;
-uVarsReCalc = data.vars.uVarsNew;
+uVarsReCalc = vars.uVarsNew;
 uVarsReCalc.ao.acCoupling = true;
 uVarsReCalc.ao.noiseStd = 6e-3;
 uVarsReCalc.figs.depthAxType = 'Index';
@@ -204,6 +204,7 @@ uVarsReCalc.figs.validStruct.finalFFT       = true;
 uVarsReCalc.figs.validStruct.phi    = true;
 uVarsReCalc.figs.validStruct.rawPhi = true;
 uVarsReCalc.figs.validStruct.phiLog = true;
+
 
 resNew = ao.reCalcData(uVarsReCalc);
 
@@ -261,30 +262,27 @@ ylim([-70,1])
 set(hFig1, 'Position', [197,428,1206,365]);
 
 for i=1:length(res.splitRes)
-    curRes = res.splitRes(i);
-    curRes.frameAvgPowerFFT = curRes.frameAvgPowerFFT(1,:,:);
+    curRes = res2.splitRes(i);
     if  i==1
         accRes = curRes;
         accRes.frameAvgPowerFFT = accRes.frameAvgPowerFFT(1,:,:);
     else
-        accRes.frameAvgPowerFFT = (accRes.frameAvgPowerFFT*(i-1) +  curRes.frameAvgPowerFFT) /i;
+        accRes.frameAvgPowerFFT = (accRes.frameAvgPowerFFT*(i-1) +  curRes.frameAvgPowerFFT(1,:,:)) /i;
     end
+    
+    resSingle   = algo.reconExtFFTData(accRes)
+    resTotal(i) = algo.reconExtFFTData(accRes);
+    phi = resTotal(i).phiNorm;
 
-    resSingle(i) = algo.reconExtFFTData(curRes);
-    phiSingle = normMatf(resSingle(i).phiNorm(1:104));
-    SNRSingle(i) = 1/std(phiSingle(1:40));  
+    SNR = 1/std(phi(1:40)); 
 
-    resTotal(i)  = algo.reconExtFFTData(accRes);
-    phiTotal  = normMatf(resTotal(i).phiNorm(1:104));
-    SNRTotal  = 1/std(phiTotal(1:40)); 
-
-    set(hP1, 'YData',  phiTotal);
+    set(hP1, 'YData',  resTotal(i).phiNorm);
     set(hP2, 'YData',  db(resTotal(i).phiNorm));
     set(hTit1, 'String', sprintf( "AO Reconstruction After %d[s]",i));
     set(hTit2, 'String', sprintf( "AO Reconstruction After %d[s]",i));
-    set(hText, 'String', sprintf("SNR: %.2f", SNRTotal));
+    set(hText, 'String', sprintf("SNR: %.2f", SNR));
     drawnow();
-    pause(0.01);
+    pause(0.5);
     frame(i) = getframe(hFig1);
 end
 
@@ -294,13 +292,13 @@ for i = 1:skip:128
     im = frame2im(frame(i)); 
     [imind,cm] = rgb2ind(im,256);
     if i == 1
-      imwrite(imind, cm, "transPhantom.gif", 'gif', 'DelayTime', 0.5, 'Loopcount', inf); 
+      imwrite(imind, cm, "scatPhantom.gif", 'gif', 'DelayTime', 0, 'Loopcount', inf); 
     else 
-      imwrite(imind, cm, "transPhantom.gif", 'gif', 'DelayTime', 0.5, 'WriteMode', 'append'); 
+      imwrite(imind, cm, "scatPhantom.gif", 'gif', 'DelayTime', 0, 'WriteMode', 'append'); 
     end 
 end
 
-mean(SNRSingle)
+
 
 
 

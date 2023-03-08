@@ -222,11 +222,11 @@ classdef AOGraphics < Graphics
             this.setStrings('meas', "Measured Signal Channel: %d", "t[\mus]", "Amp[V]", []);
             
             % signal [ch x samplesPerSignal]
-            this.setType('signal', 'plot');
+            this.setType('signal', 'line');
             this.setStrings('signal', "Net Signal Channel: %d", "t[\mus]", "Amp[V]", []);
             
             % deMultiplexed
-            this.setType('deMul', 'plot');
+            this.setType('deMul', 'line');
             this.setStrings('deMul', "Demultiplexed Signal Channel: %d", "t[\mus]", "Amp[V]", []);
             
             % reshaped [ch x samplesPerPos x numOfPos]
@@ -237,24 +237,24 @@ classdef AOGraphics < Graphics
             % Frequency Domain Signal
             %-------------------
             % rawFFT 
-            this.setType('rawFFT', 'plot');
+            this.setType('rawFFT', 'line');
             this.setStrings('rawFFT', "Raw FFT (Frame-Avg.): Depth: %.2f[mm] (idx: %d)", "f[MHz]", "Power Spectrum", "Ch %d");
             this.setMarkersEnable('rawFFT', true);
             
             % Fitting Model 
-            this.setType('fittingModel', 'plot');
+            this.setType('fittingModel', 'line');
             this.setStrings('fittingModel', "Fitting Model Per-Channel: Ch: %d, Depth: %.2f[mm] (idx: %d)", "f[MHz]", "Power Spectrum", []);
             this.figs.fittingModel.strings.legend = {'Raw FFT'; 'Fit'};
 %             this.figs.fittingModel.strings.updateLegend = false;
             this.setMarkersEnable('fittingModel', true);
             
             % fittedPowerFFT
-            this.setType('fittedPowerFFT', 'plot');
+            this.setType('fittedPowerFFT', 'line');
             this.setStrings('fittedPowerFFT', "Fitted FFT (Frame-Avg.): Depth: %.2f[mm] (idx: %d)", "f[MHz]", "Power Spectrum", "Ch %d");
             this.setMarkersEnable('fittedPowerFFT', true);
             
             % finalFFT
-            this.setType('finalFFT', 'plot');
+            this.setType('finalFFT', 'line');
             this.setStrings('finalFFT', "Final FFT (Ch.-Avg.): Depth: %.2f[mm] (idx: %d)", "f[MHz]", "Power Spectrum", []);
             this.setMarkersEnable('finalFFT', true);
             
@@ -264,15 +264,15 @@ classdef AOGraphics < Graphics
             
             % phi [numOfPos]
             this.setType('phi', 'stem');
-            this.setStrings('phi', [], "Depth (US)[Idx]", "\phi", []);
+            this.setStrings('phi', [], "Depth (US)[%s]", "\phi", []);
             
             % phiRaw [numOfPos]
             this.setType('rawPhi', 'stem');
-            this.setStrings('rawPhi', [], "Depth (US)[Idx]", "\phi", []);
+            this.setStrings('rawPhi', [], "Depth (US)[%s]", "\phi", []);
             
             % phi [numOfPos]
-            this.setType('phiLog', 'plot');
-            this.setStrings('phiLog', [], "Depth (US)[Idx]", "log(\phi)", ["AlgoPhi"; "RawPhi"]);
+            this.setType('phiLog', 'line');
+            this.setStrings('phiLog', [], "Depth (US)[%s]", "log(\phi)", ["AlgoPhi"; "RawPhi"]);
             
         end
         
@@ -295,7 +295,7 @@ classdef AOGraphics < Graphics
             this.figs.numOfChannels = numOfCh;
             this.setLegendVariables('rawFFT',  1:numOfCh);
             this.setLegendVariables('fittedPowerFFT', 1:numOfCh);
-            
+            this.setLegendVariables('phiLog', []);
             this.updateGraphicsConstruction()
             this.figs.validStruct = this.uVars.validStruct; % has to be after updating the construction.
 %             if this.uVars.frame > 1
@@ -397,17 +397,22 @@ classdef AOGraphics < Graphics
                        case 'Normal'
                            signal.xData{1} = this.data.analysis.phi.depthVecBkg;
                            signal.xData{2} = this.data.analysis.phi.depthVecSignal;
+                           signal.XLabelVar = 'mm';
                        case 'Index'
                            signal.xData{1} = this.data.analysis.phi.bkgIdx;
                            signal.xData{2} = this.data.analysis.phi.signalIdx;
+                           signal.XLabelVar = 'idx';
                     end
                     signal.yData{1} = this.data.analysis.phi.bkg;
                     signal.yData{2} = this.data.analysis.phi.signal;
+                    if isempty(signal.yData{2})
+                        signal.yData{2} = min(signal.yData{1});
+                    end
                     signal.SNR      = this.data.analysis.phi.SNR;
-                    signal.noiseStd = this.data.analysis.phi.stdNoise;
+                    signal.SNRSpect = this.data.analysis.phi.SNRSpectral;
                     if this.figs.dispMuEff
-                        signal.muEffVal    = this.data.analysis.muEff.muEffVal;
-                        signal.muEffRawVal = this.data.analysis.muEff.muEffRawVal;
+                        signal.muEffVal    = this.data.analysis.muEff.muEffFitVal;
+                        signal.muEffRawVal = this.data.analysis.muEff.muEffRawFitVal;
                     end
                     minVal = min(min(signal.yData{1}(signal.yData{1}~=-inf)), min(signal.yData{2}(signal.yData{2}~=-inf)));
                     maxVal = max(max(signal.yData{1}(signal.yData{1}~=inf)), max(signal.yData{2}(signal.yData{2}~=inf)));
@@ -416,17 +421,22 @@ classdef AOGraphics < Graphics
                        case 'Normal'
                            signal.xData{1} = this.data.analysis.rawPhi.depthVecBkg;
                            signal.xData{2} = this.data.analysis.rawPhi.depthVecSignal;
+                           signal.XLabelVar = 'mm';
                        case 'Index'
                            signal.xData{1} = this.data.analysis.rawPhi.bkgIdx;
                            signal.xData{2} = this.data.analysis.rawPhi.signalIdx;
+                           signal.XLabelVar = 'idx';
                     end
                     signal.yData{1} = this.data.analysis.rawPhi.bkg;
                     signal.yData{2} = this.data.analysis.rawPhi.signal;
+                    if isempty(signal.yData{2})
+                        signal.yData{2} = min(signal.yData{1});
+                    end
                     signal.SNR      = this.data.analysis.rawPhi.SNR;
-                    signal.noiseStd = this.data.analysis.rawPhi.stdNoise;
+                    signal.SNRSpect = this.data.analysis.rawPhi.SNRSpectral;
                     if this.figs.dispMuEff
-                        signal.muEffVal    = this.data.analysis.muEff.muEffVal;
-                        signal.muEffRawVal = this.data.analysis.muEff.muEffRawVal;
+                        signal.muEffVal    = this.data.analysis.muEff.muEffFitVal;
+                        signal.muEffRawVal = this.data.analysis.muEff.muEffRawFitVal;
                     end
                     minVal = min(min(signal.yData{1}(signal.yData{1}~=-inf)), min(signal.yData{2}(signal.yData{2}~=-inf)));
                     maxVal = max(max(signal.yData{1}(signal.yData{1}~=inf)), max(signal.yData{2}(signal.yData{2}~=inf)));
@@ -435,22 +445,30 @@ classdef AOGraphics < Graphics
                     signal.xData{2}    = this.getDepthAxByType();
                     signal.yData{1}    = this.data.phiLog;
                     signal.yData{2}    = this.data.analysis.rawPhi.normTypes.phiLog2;
+                    switch this.figs.depthAxType
+                        case 'Normal'
+                            signal.XLabelVar = 'mm';
+                        case 'Index'
+                            signal.XLabelVar = 'idx';
+                    end
                     if this.figs.dispMuEff
                         switch this.figs.depthAxType
                             case 'Normal'
                                 signal.xData{3}    = this.data.analysis.muEff.xVecInt;
                                 signal.xData{4}    = this.data.analysis.muEff.xVecInt;
+                                
                             case 'Index'
                                 signal.xData{3}    = this.data.analysis.muEff.xVecIntIdx;
                                 signal.xData{4}    = this.data.analysis.muEff.xVecIntIdx;
+                                
                         end
                         signal.yData{3}    = this.data.analysis.muEff.phiCutInt;
                         signal.yData{4}    = this.data.analysis.muEff.phiRawCutInt;
-                        signal.muEffVal    = this.data.analysis.muEff.muEffVal;
-                        signal.muEffRawVal = this.data.analysis.muEff.muEffRawVal;
+                        signal.muEffVal    = this.data.analysis.muEff.muEffFitVal;
+                        signal.muEffRawVal = this.data.analysis.muEff.muEffRawFitVal;
                     end
                     signal.SNR      = this.data.analysis.phi.SNR;
-                    signal.noiseStd = this.data.analysis.phi.stdNoise;
+                    signal.SNRSpect = this.data.analysis.phi.SNRSpectral;
                     minVal = min(signal.yData{1}(signal.yData{1}~=-inf));
                     maxVal = max(signal.yData{1});
             end
@@ -507,7 +525,7 @@ classdef AOGraphics < Graphics
                     set(this.figs.(gName).handles.cur.plot(hIdx),...
                         'XData', xData,...
                         'YData', gather(yData'));
-                case 'plot'
+                case 'line'
                     set(this.figs.(gName).handles.cur.plot(hIdx),...
                         'XData', xData, ...
                         'YData', gather(yData'));
@@ -562,13 +580,16 @@ classdef AOGraphics < Graphics
             
             signal = this.extractPhi(figName);
             if this.figs.dispMuEff
-               SNRstr = sprintf("SNR: %.2f\nBkg STD: %.2E\n\\mu_{Eff} = %.3f\n\\mu_{Eff}^{Raw} = %.3f", signal.SNR, signal.noiseStd, signal.muEffVal, signal.muEffRawVal);
+               SNRstr = sprintf("SNR: %.2f\nSNR Spect: %.2f\n\\mu_{Eff} = %.3f[mm^{-1}]\n\\mu_{Eff}^{Raw} = %.3f[mm^{-1}]", signal.SNR, signal.SNRSpect, signal.muEffVal, signal.muEffRawVal);
             else
-               SNRstr = sprintf("SNR: %.2f\nBkg STD: %.2E", signal.SNR, signal.noiseStd);
+               SNRstr = sprintf("SNR: %.2f\nSNR Spect: %.2f", signal.SNR, signal.SNRSpect);
             end
             
+            this.setAxesVar(figName, signal.XLabelVar, []);
+
             if ~isgraphics(this.figs.(figName).handles.cur.plot(1)) ||...
                 ~strcmp(this.figs.(figName).type, this.figs.(figName).handles.cur.plot(1).Type)  
+
                 this.figs.(figName).handles.cur.plot = gobjects(1,size(signal.yData,1));
                 for i = 1:size(signal.yData, 2)
                     if i == 2
@@ -579,7 +600,7 @@ classdef AOGraphics < Graphics
                                this.figs.(figName).handles.cur.plot(i) = ...
                                    stem(this.figs.(figName).handles.cur.ax,...
                                    signal.xData{i}, signal.yData{i});
-                        case 'plot'
+                        case 'line'
                            this.figs.(figName).handles.cur.plot(i) = ...
                                plot(this.figs.(figName).handles.cur.ax,...
                                signal.xData{i}, signal.yData{i});
@@ -620,7 +641,7 @@ classdef AOGraphics < Graphics
                        this.figs.(figName).handles.cur.plot = ...
                            stem(this.figs.(figName).handles.cur.ax,...
                            signal.xData, signal.yData);    
-                    case 'plot'
+                    case 'line'
                        this.figs.(figName).handles.cur.plot = ...
                            plot(this.figs.(figName).handles.cur.ax,...
                            signal.xData, signal.yData);  
@@ -648,7 +669,7 @@ classdef AOGraphics < Graphics
                        this.figs.reshaped.handles.cur.plot = ...
                            stem(this.figs.reshaped.handles.cur.ax,...
                            signal.xData, signal.yData);    
-                    case 'plot'
+                    case 'line'
                        this.figs.reshaped.handles.cur.plot = ...
                            plot(this.figs.reshaped.handles.cur.ax,...
                            signal.xData, signal.yData);  

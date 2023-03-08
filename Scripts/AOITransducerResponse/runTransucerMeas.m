@@ -35,7 +35,7 @@ daqIO.open();
 daqIO.close();
 %% Configure the function generator
 updateFGen = true;
-daqIO.close();
+% daqIO.close();
 if updateFGen
     uVarsFGen = AOFGen.createUserVars();
 
@@ -62,7 +62,7 @@ if updateFGen
     sigData = fg.vars.sigData;
 end
 % daqIO.open();
-daqIO.close();
+% daqIO.close();
 fs    = vars.sClk.fs;  
 fSqnc = vars.sig.fSqnc;
 

@@ -3,7 +3,7 @@ classdef acoustoOptics < handle
     %   Detailed explanation goes here
     
     properties
-        owner;
+        ownerGUI;
         
         % Objects:
         fGen;
@@ -29,9 +29,11 @@ classdef acoustoOptics < handle
         changeLog;
         connected;
         periAvail;
-        contMeas;
+        stopMeas;
+        pauseMeas;
+        contLive;
         graphicsNames;
-        owned;
+        ownedByGUI;
 
         % Run Statistics
         timeTable;
@@ -46,57 +48,63 @@ classdef acoustoOptics < handle
             aoVars.frameTime         = 0.002; %[s]
             
             % Sampling Clk
-            aoVars.fs                = 5e6;    %[Hz]
-            aoVars.sClkDcyc          = 50;     %[%]
-            aoVars.fgClk             = 100e6;  %[S/s]
-
+            aoVars.fs       = 5e6;    %[Hz]
+            aoVars.sClkDcyc = 50;     %[%]
+            aoVars.fgClk    = 100e6;  %[S/s]
+ 
             % Digitizer
-            aoVars.timeToSample      = 0.1; %[s]
-            aoVars.channels          = 2; %[#]
-            aoVars.extCropDef       = false;
-            aoVars.extCropSamples   = 1000;
-            
-            % Frequency
-            aoVars.envDC             = 100e3;
-            aoVars.envUS             = 78e3;
+            aoVars.timeToSample   = 0.1; %[s]
+            aoVars.channels       = 2; %[#]
+            aoVars.extCropDef     = false;
+            aoVars.extCropSamples = 1000;
+            aoVars.measTimeLimit   = 1;
 
+            % Frequency
+            aoVars.envDC = 100e3;
+            aoVars.envUS = 50e3;
+ 
             % Geometry & Length
-            aoVars.c                 = 1500;   %[m/s]
-            aoVars.distFromPhantom   = 0; %[m]
+            aoVars.c               = 1500;   %[m/s]
+            aoVars.distFromPhantom = 0; %[m]
 
             % General Operation
-            aoVars.useFrame            = true;
-            aoVars.useGPU              = true;
-            aoVars.useHadamard         = true;
-            aoVars.contHadamard        = false;
-            aoVars.highResAO           = false;
-            aoVars.analyzeSingleCh     = true;
-            aoVars.contSpeckleAnalysis = false;
-            aoVars.acCoupling          = true;
-            aoVars.measTimeLimit       = 1;
+            aoVars.useFrame        = true;
+            aoVars.useGPU          = true;
+            aoVars.useHadamard     = true;
+            aoVars.analyzeSingleCh = true;
+            aoVars.acCoupling      = true;
+            aoVars.keepSplits      = false;
 
             aoVars.displayBuildUp  = false;
             aoVars.displayBUEvery  = 10;
 
-            aoVars.useCalibration      = false;           
-            aoVars.timeToSampleCal     = 2;
+            aoVars.useCalibration  = false;           
+            aoVars.timeToSampleCal = 2;
             
             aoVars.cutArtfct    = false;
             aoVars.artfctIdxVec = [];
             
-            aoVars.calcMuEff     = false;
-            aoVars.muEffModel    = 'Uniform';
-            aoVars.muEffIdxs     = [];
+            aoVars.calcMuEff  = false;
+            aoVars.muEffModel = 'Uniform';
+            aoVars.muEffIdxs  = [];
+            
+            aoVars.extSNRDef   = false;
+            aoVars.extNoiseIdx = [];
+            aoVars.extPeakIdx  = [];
+
+            aoVars.noiseStd = [];
 
             aoVars.useVirtualData      = false;
             aoVars.virtualDataNoiseSTD = 0;
             aoVars.limitByN            = true;
             aoVars.N                   = 10;
             aoVars.dispTimeTable       = true; % relevant only with GUI
-            aoVars.skipParamsCheck  = false;
-            aoVars.uploadToTelegram = false;
-            aoVars.telegramChatID   = [];
 
+            aoVars.skipParamsCheck = false;
+
+            aoVars.uploadToTelegram = false;
+            aoVars.telegramChatID   = '-512325870';            
+            
             % fGen
             aoVars.usPower = 100;
             
@@ -183,16 +191,18 @@ classdef acoustoOptics < handle
             this.graphicsNames = this.graphics.getGraphicsNames();
             
             this.connected = false;
-            this.contMeas = false;
+            this.stopMeas  = false;
+            this.pauseMeas = false;
+            this.contLive  = false;
         end 
 
-        function init(this, owner)
+        function init(this, ownerGUI)
             fprintf("AOI: ------- Initiating AcoustoOptic ----------\n");
             if this.connected   
                 fprintf("AOI: Acousto Optics system is already connected, no need to reconnect.\n");
             else
                 fprintf("AOI: 1. Resetting Instruments\n")
-                instrreset;
+                instrreset; %#ok<INSTRR> 
                 fprintf("AOI: 2. Connecting to fGen\n")
                 % Configure and Activate fGen
                 this.fGen.connect()
@@ -209,9 +219,15 @@ classdef acoustoOptics < handle
                 this.connected = true;
                 
                 if nargin >1
-                    this.owner = owner;
-                    this.owned = true;
+                    this.ownerGUI = ownerGUI;
+                    this.ownedByGUI = true;
                 end
+
+%                 if this.ownedByGUI
+%                     markExtHandles();
+%                 else
+%                     markInternalHandles();
+%                 end
             end
             this.periAvail.completeHardwareAvail =  this.periAvail.digitizer && this.periAvail.fGen && this.periAvail.IO;
         end
@@ -266,10 +282,7 @@ classdef acoustoOptics < handle
             algoVars.useFrame            = uVarsAO.ao.useFrame;
             algoVars.useGPU              = uVarsAO.ao.useGPU;
             algoVars.useHadamard         = uVarsAO.ao.useHadamard;
-            algoVars.contHadamard        = uVarsAO.ao.contHadamard;
-            algoVars.highResAO           = uVarsAO.ao.highResAO;
             algoVars.analyzeSingleCh     = uVarsAO.ao.analyzeSingleCh;
-            algoVars.contSpeckleAnalysis = uVarsAO.ao.contSpeckleAnalysis;
             algoVars.calibrate           = uVarsAO.ao.useCalibration;
             algoVars.acCoupling          = uVarsAO.ao.acCoupling;
             algoVars.measTimeLimit       = uVarsAO.ao.measTimeLimit;
@@ -278,6 +291,12 @@ classdef acoustoOptics < handle
             algoVars.muEffModel          = uVarsAO.ao.muEffModel;
             algoVars.muEffIdxs           = uVarsAO.ao.muEffIdxs;
             
+            algoVars.extSNRDef   = uVarsAO.ao.extSNRDef;  
+            algoVars.extNoiseIdx = uVarsAO.ao.extNoiseIdx;
+            algoVars.extPeakIdx  = uVarsAO.ao.extPeakIdx ;
+
+            algoVars.noiseStd            = uVarsAO.ao.noiseStd;
+
             algoVars.cutArtfct           = uVarsAO.ao.cutArtfct;
             algoVars.artfctIdxVec        = uVarsAO.ao.artfctIdxVec;
             
@@ -545,6 +564,11 @@ classdef acoustoOptics < handle
             
             AO.topUpMode = false;
             AO.topUpIdx  = 0;
+            
+            AO.useGPU     = uVarsAO.ao.useGPU;
+            AO.keepSplits = uVarsAO.ao.keepSplits;
+            
+            AO.longMeas = this.uVars.ao.timeToSample > 16;
 
             newExtVars.AO         = AO;
             
@@ -587,7 +611,7 @@ classdef acoustoOptics < handle
             aoVars.measVars.algo.timing.tVecMeas = [];
             
             aoVars.measVars.algo.hadamard.sMatInvSingleSqnc = [];
-            aoVars.measVars.algo.hadamard.sMatInvSqnc = [];
+            aoVars.measVars.algo.hadamard.sMatInvSqnc       = [];
         end
 
         function [res] = getResultStruct(this)
@@ -727,10 +751,10 @@ classdef acoustoOptics < handle
             if ~this.measVars.AO.topUpMode
                 this.fileSystem.saveVarsToDisk(); 
             end
-            
+            keepSplits = this.measVars.AO.keepSplits;
             % Measure data and analyse it with AO Algorithm
             if this.measVars.AO.splitMeas % Split-mode long measurement
-                this.contMeas = true;
+                this.stopMeas = false;
                 T(this.measVars.AO.splitNum) = this.algo.timeTable;
 
                 if this.measVars.AO.topUpMode
@@ -744,28 +768,46 @@ classdef acoustoOptics < handle
 
                 splitNum = offset+this.measVars.AO.splitNum;
                 splitStartIdx = offset+1;
-                this.splits(end, splitNum) = this.splits(end,end);
+                if ~keepSplits
+                    this.splits(end, splitNum) = this.splits(end,end);
+                end
 
                 this.IO.open();
                 for i = splitStartIdx:splitNum
-                    fprintf("AOI: Split %d/%d: ", i, splitNum);
+                    fprintf("AOI:");
+                    if this.measVars.AO.longMeas
+                        
+                    end
+                    fprintf("Split %d/%d: ", i, splitNum);
                     this.fileSystem.updateSplitInd(i);
                     % Check if stop button was pushed
-                    if ~this.contMeas
-                        fprintf("AOI: Aborting Measurement.\n");
+                    if this.stopMeas
                         this.IO.close();
-                        break;
+                        if this.pauseMeas && this.ownedByGUI
+                            fprintf("AOI: Measurement Paused.\n");
+                            uiwait();
+                            this.IO.open();
+                            this.pauseMeas = false;
+                            this.stopMeas  = false;
+                        else
+                            fprintf("AOI: Aborting Measurement.\n");
+                            break;
+                        end
                     end
-                    
                     this.algo.initTimeTable();
 
                     % Bring current Split Datta
-                    this.splits(:,i) = this.measureAndAnalyse();
+                    curSplit = this.measureAndAnalyse();
+                    if keepSplits
+                        this.splits(:,i) = curSplit;
+                    else
+                        this.splits = curSplit;
+                    end
                     
                     % Full so-far analysis and plotting
-                    if  this.measVars.AO.displayBuildUp 
-                        this.algo.addCurrentSplit(this.splits(:,i), i);
-                        if i==2 || ~mod(i, this.measVars.AO.displayBUEvery)
+                    if  this.measVars.AO.displayBuildUp
+                        this.algo.addCurrentSplit(curSplit, i);
+                        if i==2 || ~mod(i, this.measVars.AO.displayBUEvery) || i==splitNum
                             this.result = this.algo.reconCurSplit();
                             this.graphics.setData(gather(this.result));
                             this.plotAll();
@@ -780,16 +822,18 @@ classdef acoustoOptics < handle
                     
                     % No display by default, because no full reconstruction is
                     % performed in split-mode
-                    pause(0.001);
+
+                    pause(0.001); % For GUI Responsivity
                 end
                 this.IO.close();
 
-                if this.contMeas
-                    this.contMeas = false;
-                    this.algo.initTimeTable();
-                    this.result = this.algo.reconSplittedData(this.splits);
-                    T(i+1) = this.algo.getTimeTable();
-%                     this.result.T = T;
+                if ~this.stopMeas
+                    this.stopMeas = true;
+                    if keepSplits
+                        this.algo.initTimeTable();
+                        this.result = this.algo.reconSplittedData(this.splits);
+                        T(i+1) = this.algo.getTimeTable();
+                    end
                 else
                     res = [];
                     return
@@ -809,9 +853,20 @@ classdef acoustoOptics < handle
             this.plotAll();
             this.timeTable.plotAll = toc(this.timeTable.plotAll);
             
-            % Save results (if needed, decided by fileSystem)
+            % Save results (if needed, decided by fileSystem)                
+            % In case of split mode, exclude raw Data from saved file as it
+            % saved separately during measurement.
+            if this.measVars.AO.splitMeas
+                saveRes = this.result;
+                for i=1:splitNum
+                    saveRes.splitRes(i).export.meas = [];
+                end
+            else
+                saveRes = this.result;
+            end
+
             this.timeTable.saveData = tic;
-            this.fileSystem.saveResultsToDisk(this.result)
+            this.fileSystem.saveResultsToDisk(saveRes)
             this.fileSystem.closeFileSystem();
             this.timeTable.saveData = toc(this.timeTable.saveData);
             
@@ -825,7 +880,7 @@ classdef acoustoOptics < handle
         function res = liveAcoustoOptics(this) 
             if this.measVars.AO.limitByN
                 this.fileSystem.initLiveAOFS(this.getVars());
-                this.contMeas = true;
+                this.contLive = true;
  
                 for i=1:this.measVars.AO.N
                     fprintf("AOI: Live AO: %d/%d.\n", i, this.measVars.AO.N);
@@ -836,7 +891,7 @@ classdef acoustoOptics < handle
                         res = this.runAcoustoOptics();
                     end
                     pause(1)
-                    if ~this.contMeas
+                    if ~this.contLive
                         fprintf("AOI: Live AO was STOPPED.\n");
                         break;
                     end
@@ -846,8 +901,8 @@ classdef acoustoOptics < handle
                 this.result = res;
             else %infinite number of measurements
                 %saving is not allowed in unlimited live AO
-                this.contMeas = true;
-                while(this.contMeas)
+                this.contLive = true;
+                while(this.contLive)
                    this.runAcoustoOptics();
                    pause(1);
                 end
@@ -904,17 +959,37 @@ classdef acoustoOptics < handle
         end
         
         % Misc
-        function reCalcData(this, uVars)
+        function res = reCalcData(this, uVars)
+            uVars.ao.exportData.meas = false;
             this.setVars(uVars);
             this.graphics.setGraphicsDynamicVars();
+            keepSplits = this.measVars.AO.keepSplits;
             fprintf ("AOI: Analyzing...");
             if ~isempty(this.rawData)
+                % non split, with raw data
                 if uVars.ao.useGPU
                     this.algo.setRawData(gpuArray(this.rawData));
                 else
                     this.algo.setRawData(this.rawData)
                 end
                 this.resultNew = this.algo.reconstruct();
+            elseif ~this.measVars.AO.splitMeas && isempty(this.rawData) || this.measVars.AO.splitMeas &&  ~isempty(this.result) && ~keepSplits
+                % non split without raw data OR split without splits data
+                this.resultNew = this.algo.reconFromFFT(this.result);
+            elseif  (this.measVars.AO.splitMeas && ~isempty(this.result)) && keepSplits %% old added condition: && ~isempty(this.result.splitRes(1).export.meas)
+                % split with splits data 
+                splitsNum = length(this.result.splitRes);
+                for i=1:splitsNum
+                    fprintf("%d...", i);
+                    if this.measVars.AO.useGPU 
+                        curData = gpuArray(this.result.splitRes(i).export.meas);
+                    else
+                        curData = this.result.splitRes(i).export.meas;
+                    end
+                    this.algo.setRawData(curData);
+                    this.splits(:,i) = this.algo.reconstruct();
+                end
+                this.resultNew = this.algo.reconSplittedData(this.splits);
             else
                 if isempty(this.result)
                     fprintf("\nAOI: Previous analysis was not complete. There is no results to reCalculate.\n");
@@ -927,6 +1002,7 @@ classdef acoustoOptics < handle
             this.graphics.setData(gather(this.resultNew));
             this.plotAll();
             fprintf ("Done!\n");
+            res = this.resultNew;
         end
         
         function setSamplingTime(this, timeToSample)
@@ -949,8 +1025,8 @@ classdef acoustoOptics < handle
             this.timeTable.algo      = inTimeTable.algo;
             this.timeTable.digitizer = inTimeTable.digitizer;
             
-            if this.owned
-                this.owner.displayAOTimeTable();
+            if this.ownedByGUI
+                this.ownerGUI.displayAOTimeTable();
             end
         end
 
@@ -986,101 +1062,74 @@ classdef acoustoOptics < handle
         end
         
         % Saved data Operation
-        
-        % The following 3 functions should be called consecutively in order
-        % to load data and analyse/plot it.
-        
-        function vars = loadVarsToAO(this, arg, varargin)
-            % Importing vars and sets them into the object but not fully
-            % configuring the object.
-            vars = [];
-            if isstring(arg) || ischar(arg)
+        function data = loadData(this, varargin)
+            rawData = []; %#ok<PROPLC> 
+            if isstring(varargin{1}) || ischar(varargin{1})
                 %argument is file path
-                vars = load(arg);
-            elseif isstruct(arg) 
-                %argument is struct
-                vars = arg;
-            else
-                fprintf("AOI: vars type not supported. Input argument should be filepath or variables struct.\n");
-                return;
-            end
-            
-            % this functionality allows to load variables without faulting
-            % on graphics. if user mentions 'noFigs' or simply suppliend 
-            % only a filename as input, graphics will be automatically
-            % disabled. If user is interested in plotting results later on,
-            % he may supply the AOGraphics uVars struct in this point and
-            % spare him/herself the need in calling another 
-            % ao.setMeasVars() later on.
-            if isempty(varargin) || strcmp(varargin{1}, 'noFigs')
-                vars.figs = AOGraphics.createGraphicsUserVars();
-            elseif strcmp(varargin{2}, 'createFigs')
-                if length(varargin)<2 || isempty(varargin{2})
-                    fprintf("AOI: You asked to create load vars with figures suppoet but didn't supplied figs struct.\n");
-                    return; 
-                end
-                vars.figs = varargin{2};
-            end
-                        
-            if isfield(vars, 'uVars')
-                uVarsLoaded = vars.uVars;
-                % Deactivate file system - all flags are false by default
-                % this is to make sure analysis will not overrun the same file
-                %TODO: apply functionality similar to graphics.
-                uVarsLoaded.fileSystem = fileSystemAO.uVarsCreate(); 
-                this.setMeasVars(uVarsLoaded); %algo vars are calculated in here.
-                fprintf("AOI: New rawData was loaded to AOI.\n");
-            else
-                fprintf("AOI: Error while loading variables: Your file has no uVars field.\n");
-            end
-        end
-        
-        function rawData = loadRawDataToAO(this, arg)
-            rawData = [];
-            if isstring(arg) || ischar(arg)
-                %argument is file path
-                results = load(arg);
-            elseif isstruct(arg)
-                %argument is struct
-                results = arg;
-            else
-                fprintf("AOI: rawData type not supported, input argument should be filepath or variables struct/\n");
-                return;
-            end
-               
-            if isfield(results, 'rawData')
-                this.rawData = results.rawData;
-                rawData = results.rawData;
-                fprintf("AOI: New rawData was loaded to AOI.\n");
-            else
-                fprintf("AOI: Error while loading raw data: Your file has no rawData field\n");
-            end
-        end
-        
-        function res = analyseLoadedData(this)
-            %this function assums your data was already loaded and is
-            %available in this.rawData.
-            
-            % Setup graphics
-            this.graphics.setGraphicsDynamicVars();
-            this.fileSystem.configFileSystem();
-            this.fileSystem.saveVarsToDisk();
+                dirPath = varargin{1};
+                resPath = sprintf("%s/AO-Results.mat", dirPath);
+                res = load(resPath);
+                varsPath = sprintf("%s/AO-Vars.mat", dirPath);
+                vars = load(varsPath);
+                rawDataPath = sprintf("%s/AO-RawData.mat", dirPath);
+                if exist(rawDataPath, "file")
+                    if length(varargin) ==2 
+                        loadRawData = varargin{2};
+                    else
+                        loadRawData = false;
+                    end
 
-            % Analyse
-            fprintf ("AOI: Analyzing!\n")
-            this.algo.setRawData(this.rawData);
-            res                    = this.algo.reconstruct();
-            this.result            = res;
-            this.result.rawData    = this.rawData;
+                    if loadRawData
+                        rawData = load(rawDataPath); %#ok<PROPLC> 
+                    end
+                end
+            elseif isstruct(varargin{1})
+                res = varargin{1};
+                if isempty(varargin{2})
+                    fprintf("Please supply a vars struct.\n");
+                    return
+                end
+                vars = varargin{2};
+
+                if ~isempty(varargin{3})
+                    rawData = varargin{3}; %#ok<PROPLC> 
+                end
+            else
+                fprintf("AOI: Unsupported loaded data format.\n");
+                return
+            end
             
-            % Plot reseults
+            this.result = res;
+
+            vars.uVarsNew            = this.copyUserVars(vars.uVars); % This is to make sure variables format is correct
+            vars.uVarsNew.fileSystem = fileSystemAO.uVarsCreate();    % disable save
+            vars.uVarsNew.figs       = AOGraphics.createUserVars();               % Take existing figures configurations
+ 
+            this.rawData = rawData; %#ok<PROPLC> 
+
+            this.setVars(vars.uVarsNew);
+            this.graphics.setGraphicsDynamicVars();
+
+            this.graphics.setData(gather(this.result));
             this.plotAll();
-            
-            % Save results
-            fprintf("AOI: Saving Results To Disk\n");
-            this.fileSystem.saveResultsToDisk(this.result) 
-            
-            fprintf ("AOI: Done AO\n")
+
+            data.res     = res;
+            data.vars    = vars;
+            data.rawData = rawData; %#ok<PROPLC> 
+        end
+
+        function uVars = copyUserVars(this, varsIn)
+            uVars = this.createUserVars();
+            groups = ["ao", "figs", "fileSystem"];
+            for j=1:length(groups)
+                fields = fieldnames(uVars.(groups(j)));
+                for i=1:length(fields)
+                    if isfield(varsIn.(groups(j)), fields{i})
+                        uVars.(groups(j)).(fields{i}) = varsIn.(groups(j)).(fields{i});
+                    end
+                    % else: leave its default value.
+                end
+            end
         end
         
         function saveVarsToDisk(this, path)
@@ -1088,7 +1137,7 @@ classdef acoustoOptics < handle
             this.fileSystem.saveVarsToDisk(this.getAOVars(), path);
         end
         
-        function saveCurrentMeasManual(this, fsVars)
+        function saveCurrentMeasManual(this, fsVars) 
             fsVars.saveResults = true;
             fsVars.saveVars    = true;
             
@@ -1096,9 +1145,30 @@ classdef acoustoOptics < handle
             this.fileSystem.configFileSystem();
             
             this.fileSystem.saveVarsToDisk();
-            this.fileSystem.saveResultsToDisk(this.result);
+            if isstruct(this.resultNew)
+                res = this.resultNew;
+            else
+                res = this.result;
+            end
+            this.fileSystem.saveResultsToDisk(res);
             this.fileSystem.closeFileSystem();
         end
         
+        function printProgress(this, T)
+           i = this.vars.idxs(3);
+           j = this.vars.idxs(2);
+           totalNumOfLines = this.vars.scanSize(2)*this.vars.scanSize(3);
+           curNumOfLines = (i-1)*this.vars.scanSize(2)+j;
+           percent = curNumOfLines/totalNumOfLines * 100;
+           this.vars.averageTime = (this.vars.averageTime *(curNumOfLines-1) +T )/curNumOfLines;
+           totalTime = totalNumOfLines * this.vars.averageTime / 60;
+           timeToNow = curNumOfLines * this.vars.averageTime / 60;
+           str = sprintf("Done line %d/%d (%.2f [%%%%]). Progress: %.2f/%.2f mins.\n",...
+                            curNumOfLines, totalNumOfLines, percent, timeToNow, totalTime);
+           fprintf(str)
+           if this.vars.tg.text && ~mod(this.vars.idxs(2)-1, this.vars.tg.rep)
+               tgprintf(this.vars.tg.chatID, str);
+           end 
+        end
     end
 end

@@ -62,6 +62,7 @@ classdef Digitizer < handle
             this.system.voltsRange        = 1;
             this.system.bytesPerSample    = 2;
             this.system.preTriggerSamples = 14;
+            this.system.allocatedBuffers = false;
             this.buffers = cell(1, this.system.bufferCount);
             this.vars.figs.hFig    = 1;
             this.vars.figs.hAx     = 1;
@@ -623,7 +624,11 @@ classdef Digitizer < handle
         % Memory Manage Functions       
         function status = allocateBuffers(this)
             this.timeTable.allocateBuffers = tic;
-            
+
+            if this.system.allocatedBuffers
+                this.releaseBuffers();
+            end
+
             status = true;
             for j = 1 : this.system.bufferCount
                 pbuffer = AlazarAllocBuffer(this.system.boardHandle, this.vars.bufferSizeBytes);
@@ -631,6 +636,8 @@ classdef Digitizer < handle
                 if pbuffer == 0; fprintf('DIGITIZER: Error: AlazarAllocBuffer %u samples failed\n', SamplingCard.samplesPerBuffer); status = false; return; end
                 this.buffers(1, j) = { pbuffer };
             end
+
+            this.system.allocatedBuffers = true;
             
             this.timeTable.allocateBuffers = toc(this.timeTable.allocateBuffers);
         end
@@ -918,14 +925,17 @@ classdef Digitizer < handle
         end
         
         function releaseBuffers(this)
-            for bufferIndex = 1:this.system.bufferCount
+            for bufferIndex = 1:size(this.buffers, 2)
                 pbuffer =  this.buffers{1, bufferIndex};
-                retCode = AlazarFreeBuffer(this.system.boardHandle, pbuffer);
-                if retCode ~= this.alazarDefs.ApiSuccess
-                    fprintf('DIGITIZER: Error: AlazarFreeBuffer failed -- %s\n', errorToText(retCode));
+                if ~isempty(pbuffer)
+                    retCode = AlazarFreeBuffer(this.system.boardHandle, pbuffer);
+                    if retCode ~= this.alazarDefs.ApiSuccess
+                        fprintf('DIGITIZER: Error: AlazarFreeBuffer failed -- %s\n', errorToText(retCode));
+                    end
+                    clear pbuffer;
                 end
-                clear pbuffer;
             end
+            this.system.allocatedBuffers = false;
         end
 
         %Figures Plots

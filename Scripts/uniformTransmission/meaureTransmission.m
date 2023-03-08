@@ -1,11 +1,11 @@
-% close all;
-% clear all;
-% clc;
-% instrreset;
+close all;
+clear all;
+clc;
+instrreset;
 
 %% Init Objects
 addpath(genpath(pwd));
-fprintf("Connecting To stages\n");
+fprintf("Connecting To Stages\n");
 stages = stages('Zaber', 'COM3');
 stages.connect(); 
 fprintf("Connecting to digitizer\n");
@@ -14,16 +14,31 @@ daq.connect();
 fprintf("Creating scan object\n");
 cs     = contScan(daq, stages);
 
-% %% Stages Config 
-% stages.setVelocity('X', 10);
-% stages.setVelocity('Y', 10);
-% stages.setVelocity('Z', 10);
+%%
+aofg = AOFGen();
+aofg.init();
+
+uVars = AOFGen.createUserVars();
+
+uVars.fgClk   = 100e6;
+
+uVars.fSig        = 1.25e6;
+uVars.fSqnc       = 20e3;
+uVars.delay       = 0;
+uVars.sigType     = 'Hadamard';
+uVars.cycPerPulse = 1;
+uVars.sigPower    = 20; %
+uVars.fsClk       = 20e6;
+
+aofg.setVars(uVars);
+vars = aofg.getVars();
+aofg.config();
 
 %% Genreal Parameters
 genVars.numOfCh = 1;
 genVars.fs = 1e6;
 
-timeToSample = 0.001;
+timeToSample = 0.010;
 numOfSamples = round(timeToSample * genVars.fs);
 genVars.numOfSamples = numOfSamples;
 
@@ -55,16 +70,16 @@ uVarsCS.axDisc2 = 'X';  %'X', 'Y', 'Z'
 uVarsCS.spanType = 'center'; %'center', 'limits'
 
 uVarsCS.axScanSpan  = 30; %[mm]
-uVarsCS.axDisc1Span = 30; %[mm]
+uVarsCS.axDisc1Span = 0;  %[mm]
 uVarsCS.axDisc2Span = 0;  %[mm]
 
-uVarsCS.axScanStride  = 1; %[mm]
-uVarsCS.axDisc1Stride = 1;   %[mm]
+uVarsCS.axScanStride  = 1;  %[mm]
+uVarsCS.axDisc1Stride = 0;  %[mm]
 uVarsCS.axDisc2Stride = 0;   %[mm]
 
-uVarsCS.axScanRef  = 70; %[mm] %94.6
-uVarsCS.axDisc1Ref = 81.5; %[mm]
-uVarsCS.axDisc2Ref = 10;     %[mm]
+uVarsCS.axScanRef  = 69.3;     %[mm] 100
+uVarsCS.axDisc1Ref = 108;   %[mm] 71.5
+uVarsCS.axDisc2Ref = 0;     %[mm]
 
 % Post Processing
 % Internal:
@@ -79,25 +94,14 @@ uVarsCS.filter  = 0;
 % uVarsCS.plotResults = @MTuserPlotResults;
 
 uVarsCS.userAnalysis = MTUA();
-% uVarsCS.filter      = 0;
-% uVarsCS.postProc    = 0;
-% uVarsCS.initPlots   = 0;
-% uVarsCS.plotResults = 0;
-
-% userAux.sensitivity    = 837;
-userAux.idx = 128;
-N = numOfSamples;
-fs = genVars.fs;
-userAux.fVec = (fs/N) *  ( (-N/2) : 1 : (N/2)-1 );
-uVarsCS.userAux  = userAux;
 
 uVarsCS.plotMode  = 'mid'; % 'max', 'mid', 'user'
 uVarsCS.chToPlot  = 1;
 uVarsCS.posToPlot = 0;
 
-uVarsCS.saveData = true;
-uVarsCS.dir = ".\";
-uVarsCS.filename = "Reflection-NoPDMS";
+uVarsCS.saveData = false;
+uVarsCS.dir = "./Measurements/OpticsPatterns";
+uVarsCS.filename = "Transmission-Point";
 
 %Telegram
 uVarsCS.tg.text   = false;
@@ -121,7 +125,7 @@ digiVars.extClk  = false;
 digiVars.extTrig = true;
 
 digiVars.timeToSample = timeToSample;
-digiVars.avgNum       = 64;
+digiVars.avgNum       = 1;
 digiVars.numMeas      = csVars.daqAcqNum;
 
 digiVars.coupling = 0;

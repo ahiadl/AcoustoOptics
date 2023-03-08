@@ -84,7 +84,7 @@ classdef fGen < handle
             catch
                 this.connected = false;
                 this.hardwareAvailable = false;
-                fprintf("FGEN: Could not open fGen. please check device is ON and CONNECTED.")
+                fprintf("FGEN: Could not open fGen. please check device is ON and CONNECTED.\n")
             end
         end
         
@@ -103,7 +103,7 @@ classdef fGen < handle
                 this.ChVars{1} = ch1;
                 this.ChVars{2} = ch2;
             else
-                fprintf("FGEN: ERROR: AFG is not connected. Channels were not configured")
+                fprintf("FGEN: ERROR: AFG is not connected. Channels were not configured.\n")
             end
         end
         

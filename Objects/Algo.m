@@ -56,10 +56,7 @@ classdef Algo < handle
 
             uVars.useGPU              = false;
             uVars.useHadamard         = false;
-            uVars.contHadamard        = false;
-            uVars.highResAO           = false;
             uVars.analyzeSingleCh     = false;
-            uVars.contSpeckleAnalysis = false;
             uVars.calibrate           = false;
             uVars.acCoupling          = true;
             uVars.measTimeLimit       = [];
@@ -70,13 +67,19 @@ classdef Algo < handle
             uVars.calcMuEff     = false;
             uVars.muEffModel    = 'Uniform';
             uVars.muEffIdxs     = []; % After Cutting Artifacts
-            
-            uVars.export.meas           = false;
-            uVars.export.signal         = false;
-            uVars.export.deMul          = false;
-            uVars.export.reshaped       = false;
-            uVars.export.fft            = false;
-            uVars.export.usCompCmplx    = false;
+
+            uVars.extSNRDef    = false;
+            uVars.extNoiseIdx  = [];
+            uVars.extPeakIdx   = [];
+
+            uVars.noiseStd      = []; % For virtual Data only
+
+            uVars.export.meas        = false;
+            uVars.export.signal      = false;
+            uVars.export.deMul       = false;
+            uVars.export.reshaped    = false;
+            uVars.export.fft         = false;
+            uVars.export.usCompCmplx = false;
         end
         
         function convertBaseChToSplits(baseCh)
@@ -97,7 +100,12 @@ classdef Algo < handle
     
     methods
         function this = Algo()
-            this.initTimeTable();  
+            this.initTimeTable();
+            this.general.splitNum = 1;
+            this.general.analysisReps = 1;
+            models = this.getResultsModels();
+            this.curRes = models.base;
+            this.result = models.base;
         end
 
         %% Set/Get Functions
@@ -118,10 +126,7 @@ classdef Algo < handle
            this.uVars.frameTime             = user.frameTime;
            this.uVars.useGPU                = user.useGPU;
            this.uVars.useHadamard           = user.useHadamard;
-           this.uVars.contHadamard          = user.contHadamard;
-           this.uVars.highResAO             = user.highResAO;
            this.uVars.analyzeSingleCh       = user.analyzeSingleCh;
-           this.uVars.contSpeckleAnalysis   = user.contSpeckleAnalysis;
            this.uVars.calibrate             = user.calibrate;
            this.uVars.acCoupling            = user.acCoupling;
            this.uVars.cutArtfct             = user.cutArtfct;
@@ -129,6 +134,10 @@ classdef Algo < handle
            this.uVars.calcMuEff             = user.calcMuEff;
            this.uVars.muEffModel            = user.muEffModel;
            this.uVars.muEffIdxs             = user.muEffIdxs;
+           this.uVars.extSNRDef             = user.extSNRDef;   
+           this.uVars.extNoiseIdx           = user.extNoiseIdx;
+           this.uVars.extPeakIdx            = user.extPeakIdx;    
+           this.uVars.noiseStd              = user.noiseStd;
            this.uVars.export                = user.export;
            this.uVars.measTimeLimit         = user.measTimeLimit;
 
@@ -183,20 +192,22 @@ classdef Algo < handle
         end
 
         function calcGeneral(this)  
-            useGPU              = this.uVars.useGPU;
-            useHadamard         = this.uVars.useHadamard;
-            contHadamard        = this.uVars.contHadamard;
-            highResAO           = this.uVars.highResAO;
-            useFrame            = this.uVars.useFrame;
-            analyzeSingleCh     = this.uVars.analyzeSingleCh;
-            channels            = this.uVars.channels;
-            contSpeckleAnalysis = this.uVars.contSpeckleAnalysis;
-            calibrate           = this.uVars.calibrate;
-            cutArtfct           = this.uVars.cutArtfct;
-            calcMuEff           = this.uVars.calcMuEff;
-            muEffModel          = this.uVars.muEffModel;
-            muEffIdxs           = this.uVars.muEffIdxs;
-            acCoupling          = this.uVars.acCoupling;
+            channels            = this.uVars.channels; 
+
+            useFrame        = this.uVars.useFrame;
+            useGPU          = this.uVars.useGPU;
+            useHadamard     = this.uVars.useHadamard;         
+            analyzeSingleCh = this.uVars.analyzeSingleCh;
+            calibrate       = this.uVars.calibrate;
+            acCoupling      = this.uVars.acCoupling;
+            cutArtfct       = this.uVars.cutArtfct;
+            calcMuEff       = this.uVars.calcMuEff;
+            muEffModel      = this.uVars.muEffModel;
+            muEffIdxs       = this.uVars.muEffIdxs;
+            extSNRDef       = this.uVars.extSNRDef ;   
+            extNoiseIdx     = this.uVars.extNoiseIdx;
+            extPeakIdx      = this.uVars.extPeakIdx;
+            noiseStd        = this.uVars.noiseStd;
 
             %IndividualCh
             channelsToSample  = channels;
@@ -230,7 +241,7 @@ classdef Algo < handle
             end
             
             % Export Data
-            export.meas           = this.uVars.export.meas ;
+            export.meas           = this.uVars.export.meas        && ~splitMeas;
             export.signal         = this.uVars.export.signal      && ~splitMeas;
             export.deMul          = this.uVars.export.deMul       && ~splitMeas && ~contHadamard;
             export.reshaped       = this.uVars.export.reshaped    && ~splitMeas && ~contSpeckleAnalysis;
@@ -547,11 +558,7 @@ classdef Algo < handle
 %                 inPhantomPropSamples  = samplesPerSqnc - samplesPerPulse;
 %                 postSignalSamples     = samplesPerSqnc;
             end
-            
-            if this.uVars.contSpeckleAnalysis
-                postSignalSamples = postSignalSamples + samplesPerFrameRaw;
-            end
-            
+
             samplesPerDataRaw = samplesPerSignalRaw  + postSignalSamples;
             preSignalSamples  = prePhantomSamples    + inPhantomPropSamples;
             samplesPerMeas    = preSignalSamples     + samplesPerDataRaw;
@@ -748,11 +755,7 @@ classdef Algo < handle
             %--------------------
             if  this.general.useHadamard
                 this.hadamard.sMatInv = sMatInv;
-%                 this.hadamard.sMatInvSingleSqnc = sMatInvSqnc;
                 this.hadamard.sMatInvSqnc       = sMatInvSqnc;
-                if this.general.contHadamard
-                    this.hadamard.sMatInvSqncCont   = sMatInvSqncCont;
-                end
             end
             
             clear ('c', 'channels', 'fSin', 'fSqnc', 'fs', 'sinPerPulse', ... 
@@ -805,6 +808,8 @@ classdef Algo < handle
             envHarFullLen = length(envVec);
 
             fUSIdxs = fUSIdx-envHarLen : fUSIdx+envHarLen;
+            fUSIdxsNoise = fUSIdx-3*envHarLen : fUSIdx+3*envHarLen;
+            fUSIdxsNoise (ismember(fUSIdxsNoise, fUSIdxs)) = [];
 
             harEnvIdxMat = repmat(harIdxs, envHarFullLen, 1);
             harEnvIdxs   = envMat + harEnvIdxMat;
@@ -1000,10 +1005,15 @@ classdef Algo < handle
         
         function res = reconExtFFTData(this, extData)
             this.result = [];
-            this.curRes = [];
+            models = this.getResultsModels();
+
             for i=1:length(extData)
-                this.curRes = [];
-                
+                this.curRes = models.base;
+%                 if isfield(extData(i), 'splitRes')
+%                     this.curRes = models.baseSplit;
+%                 else
+%                     this.curRes = models.base;
+%                 end
                 this.curRes.frameAvgPowerFFT = extData(i).frameAvgPowerFFT;
                 
                 this.extractPhiFromFFT();
@@ -1246,7 +1256,7 @@ classdef Algo < handle
             % Sqrt FFT
             this.timeTable.SqrtAbsFittedFFT = tic;
 %             this.curRes.fittedFFT = sqrt(abs(this.curRes.fittedChAvgPowerFFT - 1));
-            this.curRes.fittedFFT = sqrt(abs(this.curRes.fittedChAvgPowerFFT)) - 1;
+            this.curRes.fittedFFT = abs(sqrt(abs(this.curRes.fittedChAvgPowerFFT)) - 1);
 %             this.curRes.fittedFFT = sqrt(abs(this.curRes.fittedChAvgPowerFFT));
             this.timeTable.SqrtAbsFittedFFT = toc(this.timeTable.SqrtAbsFittedFFT);
 
@@ -1310,7 +1320,6 @@ classdef Algo < handle
             this.curRes.frameAvgPowerFFTCut = gather(this.curRes.frameAvgPowerFFTCut);
             
             this.curRes.rawChAvgFFT    = gather(this.curRes.rawChAvgFFT);
-%             this.curRes.rawChAvgFFTStd = gather(this.curRes.rawChAvgFFTStd);
             this.curRes.rawPhi            = gather(this.curRes.rawPhi);
             
             this.curRes.posAvgPowerFFT       = gather(this.curRes.posAvgPowerFFT);
@@ -1369,59 +1378,101 @@ classdef Algo < handle
         
         function analysis = analyseRecon(this, phi)
             phi = gather(phi);
-            noiseLevel = 0.1;
+
+            bkgIdxUser  = this.general.extNoiseIdx;
+            peakIdxUser = this.general.extPeakIdx;
+
+            fittedFFT = gather(this.curRes.fittedFFT);
+            fUSIdx    = this.freq.fUSIdx;
+            usEnvIdx  = this.freq.fUSIdxsNoise;
+
             %-------------------------
             % Separate Bakground and Signal:
             %-------------------------
-            %Phi
-            maxVal = max(phi);
-            minVal = min(phi);
-            spanAbs = maxVal - minVal;
-
-            tmpStd = std(phi( phi<(minVal+4*std(phi)) ) );
             idxVec = 1:length(phi);
 
-%             bkgIdx = idxVec(phi<=(minVal+2*tmpStd));
-            bkgIdx = idxVec(phi< (minVal + spanAbs*noiseLevel));
-            bkgSamples  = phi(bkgIdx);
-            bkg = phi(bkgIdx);
+            minVal = min(phi);
             
-%             signalIdx = idxVec(phi>(minVal+2*tmpStd));
-            signalIdx = idxVec(phi>= (minVal + spanAbs*noiseLevel));
-            signalSamples = phi(signalIdx);
-            signal = phi(signalIdx);
+            if this.general.extSNRDef
+                peakIdx = peakIdxUser;
+                maxVal  = phi(peakIdx);
+                spanAbs =  maxVal - minVal;
+
+                tmpStd      = std(phi(bkgIdxUser));
+                tmpBkgLevel = mean(phi(bkgIdxUser));
+                bkgIdxMask  = phi < (tmpBkgLevel+3*tmpStd);
+            else
+                [maxVal, peakIdx] = max(phi);
+                spanAbs = maxVal - minVal;
+
+                noiseLevel = 0.2;
+                
+                tmpStd      = std(phi( phi<(minVal+4*std(phi)) ) );
+                tmpBkgLevel = mean(phi( phi<(minVal+4*std(phi)) ));
+                bkgIdxMask  = phi < (minVal + spanAbs*noiseLevel);              
+            end
             
+            bkgIdx = idxVec(bkgIdxMask);
+            bkg    = phi(bkgIdx);
+            
+            signalIdx = idxVec(~bkgIdxMask);
+            signal    = phi(signalIdx);
+
             depthVecBkg    = this.len.depthVec(bkgIdx)*1e3;
             depthVecSignal = this.len.depthVec(signalIdx)*1e3;
+            
             %-------------------------
-            % Calculate Statistics:
-            %-------------------------  
-            stdNoise  = std(bkgSamples);
-            avgNoise  = mean(bkgSamples);
+            % Calculate SNR & Statisics:
+            %-------------------------
+            %Spatial SNR:
+            stdNoise  = std(bkg);
+            avgNoise  = mean(bkg);
             spanNoise = maxVal - avgNoise;
             
-            SNR = spanAbs/stdNoise;
-
+            SNRAbs = spanAbs/stdNoise;
+            SNR = spanNoise/stdNoise;
+            
+            %Spectral SNR:
+            if ~isempty(fittedFFT)
+                spectSamples = fittedFFT(:, peakIdx);
+    
+                spectSignal    = spectSamples(fUSIdx);
+                spectNoiseMean = mean(spectSamples(usEnvIdx));
+                spectNoiseStd  = std(spectSamples(usEnvIdx));
+                
+                SNRSpectral = (spectSignal - spectNoiseMean) / spectNoiseStd;
+            else
+                SNRSpectral = [];
+            end
             %-------------------------
             % Norm and Log:
             %-------------------------
             % ----- Phi:
-            %Type 1 Normalization:
+            % Type 1 - Minimum:
             normTypes.phiNorm1 = (phi - minVal) ./ spanAbs;
-            normTypes.phiLog1 = log(normTypes.phiNorm1);
+            normTypes.phiLog1  = log(normTypes.phiNorm1);
 
-            %Type 2
+            % Type 2 - Average Noise:
             normTypes.phiNorm2 = (phi - avgNoise) ./ spanNoise;
-            normTypes.phiLog2 = log(abs(normTypes.phiNorm2)); %#ok<STRNU> 
+            normTypes.phiLog2  = log(abs(normTypes.phiNorm2));
             
-            phiSmooth = imfilter(phi, fspecial("average", [1,3]), 'circular', 'same');
-            phiRoot = abs(sqrt(phi));
-            phiLaplace = sqrt(abs(gradient(gradient(phiRoot)) ./ phiRoot));
+            % Type3 - Maximum:
+            normTypes.phiNorm3 = phi ./ maxVal;
+            normTypes.phiLog3  = log(abs(normTypes.phiNorm3)); %#ok<STRNU> 
+            
+            % Processing:
+            dX = this.len.dDepth*1e3;
+            phiSmooth  = imfilter(phi, fspecial("average", [1,3]), 'circular', 'same');
+            phiRoot    = abs(sqrt(phi));
+            phiLaplace = sqrt(abs((gradient(gradient(phiRoot)*dX)*dX) ./ phiRoot));
 
             %--------------------
             % Collect parameters
             %--------------------
-            clear ('phi');
+            clear ('phi', 'bkgIdxUser' ,'peakIdxUser', 'fittedFFT', 'fUSIdx', "usEnvIdx");
+            clear ('idxVec', 'tmpStd', 'tmpBkgLevel', 'bkgIdxMask');
+            clear ('spectSamples');
+
             vars = who();
             for i = 1:length(vars)
                 if strcmp(vars{i}, 'this'); continue; end
@@ -1442,14 +1493,18 @@ classdef Algo < handle
                 xVecIntIdx = this.general.muEffIdxs(1) : 0.1 : this.general.muEffIdxs(end);
                 phiCutInt = interp1(xVecCut, phiCut', xVecInt, 'pchip')';
                 phiRawCutInt = interp1(xVecCut, phiRawCut', xVecInt, 'pchip')';
-                
+
                 switch this.general.muEffModel
                     case 'Uniform'
-                       gradVals = gradient(phiCutInt);
-                       muEffVal = mean(abs(gradVals(2:end-1))) /2 /dxInt;
-                       
-                       gradValsRaw = gradient(phiRawCutInt);
-                       muEffRawVal = mean(abs(gradValsRaw(2:end-1))) /2 /dxInt;
+                       gradVals = gradient(phiCutInt /2);
+                       muEffVal = mean(abs(gradVals(2:end-1))) /dxInt;
+                       fitRes      = fit(xVecIntIdx', phiCutInt/2, 'poly1');
+                       muEffFitVal = fitRes.p1;
+
+                       gradValsRaw = gradient(phiRawCutInt/2);
+                       muEffRawVal = mean(abs(gradValsRaw(2:end-1)))  /dxInt;
+                       fitRawRes      = fit(xVecIntIdx', phiRawCutInt/2, 'poly1');
+                       muEffRawFitVal = fitRawRes.p1;
                     case 'Point'
 
                     case 'TwoFibers'
@@ -1491,9 +1546,6 @@ classdef Algo < handle
 
             % All data in res is CPU
             this.data = [];
-%             if this.general.splitMeas
-%                 this.resetAlgoRes();
-%             end
         end
 
         function res = reconSplittedData(this, dataInSplit)
@@ -1502,14 +1554,15 @@ classdef Algo < handle
             this.resetSplitRes();
             splitNum = this.general.splitNum;
             
-            splitFrameAvgPowerFFT = zeros(this.general.channelsToAnalyze, this.samples.samplesPerPosPerFrame, this.samples.numOfPosAlgo, splitNum);
+            splitFrameAvgPowerFFT = zeros(this.general.channelsToAnalyze, this.samples.samplesPerPosPerFrame);
             
             for j = 1:this.general.analysisReps
 
                 this.timeTable.SplitsMeanFrameFFT  = tic;
                 for i = 1:splitNum
-                    splitFrameAvgPowerFFT(:,:,:,i) = gather(dataInSplit(j,i).frameAvgPowerFFT);
+                    splitFrameAvgPowerFFT = splitFrameAvgPowerFFT + dataInSplit(j,i).frameAvgPowerFFT;
                 end
+                splitFrameAvgPowerFFT = splitFrameAvgPowerFFT / splitNum;
                 this.curRes.frameAvgPowerFFT = gpuArray(mean(splitFrameAvgPowerFFT, 4));
                 this.timeTable.SplitsMeanFrameFFT = toc(this.timeTable.SplitsMeanFrameFFT);
                 
@@ -1544,6 +1597,16 @@ classdef Algo < handle
             resCur = this.result;
         end
         
+        function resNew = reconFromFFT(this, res)
+            for j = 1:this.general.analysisReps
+                this.curRes.frameAvgPowerFFT   = gpuArray(res(j).frameAvgPowerFFT);
+
+                this.extractPhiFromFFT();
+                this.copyStruct(this.curRes, 'result', j);
+            end
+            resNew = this.result;
+        end
+
         function gatherCurrentSplit(this)
             this.curRes.frameAvgPowerFFT = gather(this.curRes.frameAvgPowerFFT);
         end

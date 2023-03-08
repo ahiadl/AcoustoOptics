@@ -666,7 +666,7 @@ end
 % Release the buffers
 for bufferIndex = 1:bufferCount
     pbuffer = buffers{1, bufferIndex};
-%     retCode = AlazarFreeBuffer(boardHandle, pbuffer);
+    retCode = AlazarFreeBuffer(boardHandle, pbuffer);
     if retCode ~= ApiSuccess
         fprintf('Error: AlazarFreeBuffer failed -- %s\n', errorToText(retCode));
     end

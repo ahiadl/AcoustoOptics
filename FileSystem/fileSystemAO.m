@@ -133,12 +133,12 @@ classdef fileSystemAO < fileSystem
                 data.(fieldName) = meas;
                 fprintf("%s: Saving meas.\n", this.fsName);
                 if strcmp(this.scanIdentifierPrefix, "")
-                    dataFileName = sprintf("%s/%s-Results.mat", this.projPath, this.objName);
+                    dataFileName = sprintf("%s/%s-RawData.mat", this.projPath, this.objName);
                 else
-                    dataFileName = sprintf("%s/%s-%s-Results.mat", this.projPath, this.objName, this.scanIdentifierPrefix);
+                    dataFileName = sprintf("%s/%s-%s-RawData.mat", this.projPath, this.objName, this.scanIdentifierPrefix);
                 end
                 if exist(dataFileName, 'file')
-                    save(dataFileName, '-struct', 'data', '-append', '-v7.3');
+                    save(dataFileName, '-struct', 'data', '-append');
                 else
                     save(dataFileName, '-struct', 'data', '-v7.3');
                 end

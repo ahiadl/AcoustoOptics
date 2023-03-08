@@ -94,9 +94,16 @@ classdef Graphics < handle
         end
         
         function setLegendVariables(this, gName, legendVars)
-            for i=1:length(legendVars)
-                this.figs.(gName).strings.legend{i}  =...
-                    sprintf(this.figs.(gName).strings.legendModel, legendVars(i));
+            if isempty(legendVars)
+                for i=1:length( this.figs.(gName).strings.legendModel)
+                    this.figs.(gName).strings.legend{i} = ...
+                        this.figs.(gName).strings.legendModel(i);
+                end
+            else    
+                for i=1:length(legendVars)
+                    this.figs.(gName).strings.legend{i}  =...
+                        sprintf(this.figs.(gName).strings.legendModel, legendVars(i));
+                end
             end
         end
         
