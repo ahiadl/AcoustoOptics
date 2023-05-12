@@ -222,12 +222,6 @@ classdef acoustoOptics < handle
                     this.ownerGUI = ownerGUI;
                     this.ownedByGUI = true;
                 end
-
-%                 if this.ownedByGUI
-%                     markExtHandles();
-%                 else
-%                     markInternalHandles();
-%                 end
             end
             this.periAvail.completeHardwareAvail =  this.periAvail.digitizer && this.periAvail.fGen && this.periAvail.IO;
         end
@@ -742,7 +736,7 @@ classdef acoustoOptics < handle
         function res = runTopUp(this)
             this.measVars.AO.topUpMode = true;
             this.measVars.AO.topUpIdx = this.measVars.AO.topUpIdx +1;
-
+            this.resultNew = [];
             res = this.runMeasureAndAnalyze();
         end
         

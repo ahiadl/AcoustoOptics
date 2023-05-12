@@ -78,9 +78,9 @@ classdef IntSys < handle
                 this.extStages = false; 
             end
             
-            if (nargin > 0) && isfield(handles, 'aoS2D')
+            if (nargin > 0) && isfield(handles, 'aos')
                 %External AOS2D
-                this.aoS2D = handles.aoS2D; %assuming external S2D will be given with already initialized stages object
+                this.aoS2D = handles.aos; %assuming external S2D will be given with already initialized stages object
             else
                 %Internal AOS2D
                 this.aoS2D = scan2DAO([], this.stages);

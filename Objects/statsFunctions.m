@@ -39,7 +39,6 @@ classdef statsFunctions < handle
             end 
         end
         
-        
         function totStr = printStr(this, str, dispStr)
             totStr = sprintf('%s %s: %s\n', datestr(datetime('now'), 'HH:MM:SS.FFF'),this.objName, str);
             if dispStr
@@ -58,18 +57,14 @@ classdef statsFunctions < handle
         end
 
         function startScanTime(this, field, str, vars)
-            meas = sprintf(this.strings.(field), vars);
-            meas = strrep(meas, '.' , '');
-            this.timeTable.(field).(meas).(str) = tic;
+            this.timeTable.tic.(field).(str)(vars(1), vars(2)) = tic;
         end
         
         function stopScanTime(this, field, str, vars)
-            meas = sprintf(this.strings.(field), vars);
-            meas = strrep(meas, '.' , '');
-            this.timeTable.(field).(meas).(str) = toc(this.timeTable.(field).(meas).(str));
+            this.timeTable.(field).(str)(vars(1), vars(2)) = toc( this.timeTable.tic.(field).(str)(vars(1), vars(2)));
         end
         
-        function resetTimeTable(this)
+        function resetTimeTable(this, sz1, sz2, fields)
             this.timeTable = struct();
         end
         

@@ -1,4 +1,4 @@
-classdef fileSystemS2D < fileSystem
+classdef fileSystemAOS < fileSystem
     
     properties
 
@@ -13,11 +13,11 @@ classdef fileSystemS2D < fileSystem
     end
     
     methods
-        function this = fileSystemS2D(hOwner, subObjHandle)
+        function this = fileSystemAOS(hOwner, subObjHandle)
             this@fileSystem(hOwner, subObjHandle)
-            this.uVars = fileSystemS2D.uVarsCreate();
-            this.objName = "2DScan";
-            this.fsName  = "S2D";
+            this.uVars = fileSystemAOS.uVarsCreate();
+            this.objName = "AOScan";
+            this.fsName  = "AOS";
             this.resDirName = "AOResults";
         end
         
@@ -26,9 +26,9 @@ classdef fileSystemS2D < fileSystem
            setUserVars@fileSystem(this, uVars);
         end
         
-        function configFileSystem(this, firstAxis)
+        function configFileSystem(this, scan1Label, scan2Label)
            configFileSystem@fileSystem(this);
-           this.scanIdentifierSuffixModel =  sprintf("R-%s-%s-%s", "%d", firstAxis, "%.2f");
+           this.scanIdentifierSuffixModel =  sprintf("%s-%s-%s-%s", scan2Label, "%.2f", scan1Label, "%.2f");
         end
         
         function saveVarsToDisk(this)

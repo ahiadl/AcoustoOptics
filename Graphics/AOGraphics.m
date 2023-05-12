@@ -406,7 +406,8 @@ classdef AOGraphics < Graphics
                     signal.yData{1} = this.data.analysis.phi.bkg;
                     signal.yData{2} = this.data.analysis.phi.signal;
                     if isempty(signal.yData{2})
-                        signal.yData{2} = min(signal.yData{1});
+                        [signal.yData{2}, k] = max(signal.yData{1}); 
+                        signal.xData{2} = signal.xData{1}(k);
                     end
                     signal.SNR      = this.data.analysis.phi.SNR;
                     signal.SNRSpect = this.data.analysis.phi.SNRSpectral;
@@ -430,7 +431,8 @@ classdef AOGraphics < Graphics
                     signal.yData{1} = this.data.analysis.rawPhi.bkg;
                     signal.yData{2} = this.data.analysis.rawPhi.signal;
                     if isempty(signal.yData{2})
-                        signal.yData{2} = min(signal.yData{1});
+                        [signal.yData{2}, k] = max(signal.yData{1});
+                        signal.xData{2}      = signal.xData{1}(k);
                     end
                     signal.SNR      = this.data.analysis.rawPhi.SNR;
                     signal.SNRSpect = this.data.analysis.rawPhi.SNRSpectral;
@@ -456,11 +458,9 @@ classdef AOGraphics < Graphics
                             case 'Normal'
                                 signal.xData{3}    = this.data.analysis.muEff.xVecInt;
                                 signal.xData{4}    = this.data.analysis.muEff.xVecInt;
-                                
                             case 'Index'
                                 signal.xData{3}    = this.data.analysis.muEff.xVecIntIdx;
                                 signal.xData{4}    = this.data.analysis.muEff.xVecIntIdx;
-                                
                         end
                         signal.yData{3}    = this.data.analysis.muEff.phiCutInt;
                         signal.yData{4}    = this.data.analysis.muEff.phiRawCutInt;

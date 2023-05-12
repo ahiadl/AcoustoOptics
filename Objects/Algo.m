@@ -1490,7 +1490,7 @@ classdef Algo < handle
                 xVecCut = this.len.depthVec(this.general.muEffIdxs)*1e3;
                 dxInt   = (this.len.dDepth*1e3)/10;
                 xVecInt = (xVecCut(1)):dxInt:(xVecCut(end));
-                xVecIntIdx = this.general.muEffIdxs(1) : 0.1 : this.general.muEffIdxs(end);
+                xVecIntIdx = (this.general.muEffIdxs(1) : 0.1 : this.general.muEffIdxs(end));
                 phiCutInt = interp1(xVecCut, phiCut', xVecInt, 'pchip')';
                 phiRawCutInt = interp1(xVecCut, phiRawCut', xVecInt, 'pchip')';
 
@@ -1498,12 +1498,12 @@ classdef Algo < handle
                     case 'Uniform'
                        gradVals = gradient(phiCutInt /2);
                        muEffVal = mean(abs(gradVals(2:end-1))) /dxInt;
-                       fitRes      = fit(xVecIntIdx', phiCutInt/2, 'poly1');
+                       fitRes      = fit(xVecInt', cast(phiCutInt/2, 'double'), 'poly1');
                        muEffFitVal = fitRes.p1;
 
                        gradValsRaw = gradient(phiRawCutInt/2);
                        muEffRawVal = mean(abs(gradValsRaw(2:end-1)))  /dxInt;
-                       fitRawRes      = fit(xVecIntIdx', phiRawCutInt/2, 'poly1');
+                       fitRawRes      = fit(xVecInt', cast(phiRawCutInt/2, 'double'), 'poly1');
                        muEffRawFitVal = fitRawRes.p1;
                     case 'Point'
 
