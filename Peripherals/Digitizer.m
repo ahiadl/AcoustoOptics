@@ -175,6 +175,7 @@ classdef Digitizer < handle
                     this.TS.croppedSamples = vars.croppedSamples;
                     
                     drawData = false;
+                    fprintf("DIGITIZER: Sampling Method: TS\n");
                 case 'NPT'
                     preTriggerSamples = 0;
                     preRecordSamples = this.calcPreRecordSampleNPT();
@@ -225,7 +226,7 @@ classdef Digitizer < handle
                         this.vars.figs.tVec = (0:1:(samplesPerRecord-1))/this.vars.fs *1e6;
                         this.vars.figs.fVec = (this.vars.fs/samplesPerRecord) *  ( (-samplesPerRecord/2) : 1 : (samplesPerRecord/2)-1 ) /1e6;
                     end
-
+                    fprintf("DIGITIZER: Sampling Method: NPT\n");
                 case 'ContNPT'
                     % Measure continuesly numerous triggers and perform no
                     % averaging.
@@ -293,6 +294,8 @@ classdef Digitizer < handle
                     this.NPT.cutIdxs = [1:preRecordSamples, postTriggerSamplesArt+1:samplesPerRecord];
                     this.NPT.samplesPerAcqAllRecords = postTriggerSamplesUser * recordsPerAcqRaw;
                     this.NPT.extraRecordIdxs = (postTriggerSamplesUser*vars.numMeas+1) :  this.NPT.samplesPerAcqAllRecords;
+
+                    fprintf("DIGITIZER: Sampling Method: ContNPT\n");
             end
             
             this.calcTriggerDelayAlignment()
@@ -787,8 +790,9 @@ classdef Digitizer < handle
                     else
                         this.Data = this.bufferDataOut;
                     end
-                    this.convertUnsignedSampleToVolts();
                     this.rawDataDeMultiplexing();
+                    this.convertUnsignedSampleToVolts();
+                    
                     this.cropData();
                     dataOut = this.Data;
     

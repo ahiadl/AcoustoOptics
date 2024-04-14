@@ -199,8 +199,8 @@ classdef fGen < handle
                 end
                 pause(0.1);
                 % Connect the Output
-                fprintf(this.inst, ':OUTP ON');
-                if this.valVars; disp(query(this.inst, ':OUTP?')); end
+%                 fprintf(this.inst, ':OUTP ON');
+%                 if this.valVars; disp(query(this.inst, ':OUTP?')); end
                 % Checking for Errors
                 err = query(this.inst, ':SYST:ERR?');
                 % Wait for completion

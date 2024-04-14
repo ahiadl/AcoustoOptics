@@ -6,10 +6,11 @@ classdef fileSystemAOS < fileSystem
     end
     
     methods (Static)
-    
-    function uVars = uVarsFileSystemCreate()
+        function uVars = uVarsFileSystemCreate()
             uVars = fileSystem.uVarsCreate();
+            uVars.saveAO = false;
         end
+
     end
     
     methods
@@ -26,9 +27,9 @@ classdef fileSystemAOS < fileSystem
            setUserVars@fileSystem(this, uVars);
         end
         
-        function configFileSystem(this, scan1Label, scan2Label)
+        function configFileSystem(this, scan1Label, scan2Label, scan3Label)
            configFileSystem@fileSystem(this);
-           this.scanIdentifierSuffixModel =  sprintf("%s-%s-%s-%s", scan2Label, "%.2f", scan1Label, "%.2f");
+           this.scanIdentifierSuffixModel =  sprintf("%s-%s-%s-%s-%s-%s", scan3Label, "%.2f", scan2Label, "%.2f", scan1Label, "%.2f");
         end
         
         function saveVarsToDisk(this)

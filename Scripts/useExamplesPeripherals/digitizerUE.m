@@ -1,15 +1,15 @@
 close all;
 clear all;
 clc;
-
+%%
 digi = Digitizer();
 digi.connect();
 
 %% TS
 digiVars = Digitizer.uVarsCreate();
 
-fs = 5e6;
-timeToSample = 0.002; %[s]
+fs = 100e6;
+timeToSample = 0.0002; %[s]
 % bytesPerSample = 2;
 
 digiVars.mode      = 'TS'; 
@@ -18,7 +18,7 @@ digiVars.useGPU    = false;
 digiVars.channels  = 1; 
 
 digiVars.triggerDelay = 0;
-digiVars.extClk = true;
+digiVars.extClk = false;
 digiVars.extTrig = true;
 digiVars.draw    = false;
 

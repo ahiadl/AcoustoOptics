@@ -114,7 +114,7 @@ classdef Rigol_DS1074z < handle
             %Constructor
             
             %Interface configuration and instrument connection
-            this.VisaObj = visa(VendorName,VisaAddress);%initiallizes the visa object
+            this.VisaObj = visadev(VendorName,VisaAddress);%initiallizes the visa object
             this.VisaObj.InputBufferSize = 5000;  % Set the buffer size at 5e7 - note: it is not verified if this setting this input buffer size is actually needed
             this.VisaObj.Timeout = 5;   % Set the timeout value
             this.VisaObj.ByteOrder = 'littleEndian'; % Set the Byte order

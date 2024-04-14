@@ -1,10 +1,10 @@
-close all;
-clear all;
-clc;
-
-ao = acoustoOptics();
-ao.init();
-% stages = stages('COM3');
+% close all;
+% clear all;
+% clc;
+% 
+% ao = acoustoOptics();
+% ao.init();
+% % stages = stages('COM3');
 % stages.connect();
 
 % stages.assignStagesAxes(['X','Y'], [1,2]);
@@ -22,33 +22,33 @@ uVars.ao.fSin        = 1.25e6; %[Hz]
 uVars.ao.fSqnc       = 5e3;    %[Hz]
 uVars.ao.frameTime   = 0.002;  %[s]
 
-
 % Sampling Clk
 uVars.ao.fs       = 20e6;   %[Hz]
 uVars.ao.sClkDcyc = 50;     %[%]
 uVars.ao.fgClk    = 100e6;  %[S/s]
 
 % Digitizer
-uVars.ao.timeToSample   = 0.002; %[s]
+uVars.ao.timeToSample   = 1; %[s]
 uVars.ao.channels       = 1;     %[#]
 uVars.ao.extCropDef     = false;
 uVars.ao.extCropSamples = 0;
+uVars.ao.measTimeLimit   = 1;
 
 % Frequency
 uVars.ao.envDC = 100e3;
 uVars.ao.envUS = 50e3;
 
 % Geometry & Length
-uVars.ao.c               = 1400; %[m/s]
+uVars.ao.c               = 1500; %[m/s]
 uVars.ao.distFromPhantom = 0;    %[m]
 
 % General Operation
-uVars.ao.useFrame        = true;
+uVars.ao.useFrame        = false;
 uVars.ao.useGPU          = true;
 uVars.ao.useHadamard     = false;
 uVars.ao.analyzeSingleCh = true;
 uVars.ao.acCoupling      = true;
-uVars.ao.measTimeLimit   = 1;
+uVars.ao.keepSplits      = false;
 
 uVars.ao.displayBuildUp  = false;
 uVars.ao.displayBUEvery  = 16;
@@ -65,7 +65,7 @@ uVars.ao.muEffIdxs  = 200:220;
 
 uVars.ao.noiseStd   = [];
 
-uVars.ao.useVirtualData      = true;
+uVars.ao.useVirtualData      = false;
 uVars.ao.virtualDataNoiseSTD = 0;
 uVars.ao.limitByN            = true;
 uVars.ao.N                   = 10;
@@ -74,7 +74,7 @@ uVars.ao.dispTimeTable       = true; % relevant only with GUI
 uVars.ao.skipParamsCheck = false;
 
 uVars.ao.uploadToTelegram    = false;
-uVars.ao.telegramChatID      = [];
+uVars.ao.telegramChatID      = '-512325870';
 
 % fGen
 uVars.ao.usPower = 100; % [%]
@@ -95,7 +95,7 @@ uVars.ao.exportData.usCompCmplx = false;
 % Figures Variables
 %---------------------------
 uVars.figs.ch        = 1;
-uVars.figs.depthIdx  = 81;
+uVars.figs.depthIdx  = 146;
 uVars.figs.frame     = 1;
 
 uVars.figs.reopenFigures  = false;
@@ -119,27 +119,27 @@ uVars.figs.validStruct.reshaped = false;
 uVars.figs.validStruct.rawFFT         = false;
 uVars.figs.validStruct.calibration    = false;
 uVars.figs.validStruct.fittingModel   = false;
-uVars.figs.validStruct.fittedPowerFFT = true;
+uVars.figs.validStruct.fittedPowerFFT = false;
 uVars.figs.validStruct.finalFFT       = true;
 
 uVars.figs.validStruct.phi    = true;
-uVars.figs.validStruct.rawPhi = true;
-uVars.figs.validStruct.phiLog = true;
+uVars.figs.validStruct.rawPhi = false;
+uVars.figs.validStruct.phiLog = false;
 %----------------------%
 % File System Variables
 %----------------------%
-uVars.fileSystem.saveMeas       = false;
+uVars.fileSystem.saveMeas       = true;
 uVars.fileSystem.saveSignal     = false;
 uVars.fileSystem.saveDeMul      = false;
 uVars.fileSystem.saveReshaped   = false;
 uVars.fileSystem.saveFFT        = false;
 uVars.fileSystem.savePhiChCmplx = false;
 
-uVars.fileSystem.saveResults = false;
+uVars.fileSystem.saveResults = true;
 uVars.fileSystem.saveFigs    = false; %not implemented yet
 
-uVars.fileSystem.dirPath     = ".\Scripts\objectUseExamples\examplesData";
-uVars.fileSystem.projName    = "Example AO";
+uVars.fileSystem.dirPath     = "D:\Basics";
+uVars.fileSystem.projName    = "PMT-NoFrame-NoWLScan-1Ch-Tmp";
 uVars.fileSystem.resDirName  = "Results";
 
 uVars.fileSystem.extProject     = false;
@@ -181,14 +181,14 @@ plot(reShaped(:, 37))
 
 %% Loaded Data
 clc
-path = "D:\MuEff\Uniform\GradedScatteringSet\Focused\Phantom-5";
+path = "D:\MuEff\Uniform\GradedScatteringSet\Focused\Phantom-1";
 
-[res, vars, rawData] = ao.loadData(path);
+data = ao.loadData(path);
 
 
 %% Recalc Loaded Data
 % close all;
-uVarsReCalc = vars.uVarsNew;
+uVarsReCalc = data.vars.uVarsNew;
 uVarsReCalc.ao.acCoupling = true;
 uVarsReCalc.ao.noiseStd = 6e-3;
 uVarsReCalc.figs.depthAxType = 'Index';
@@ -204,7 +204,6 @@ uVarsReCalc.figs.validStruct.finalFFT       = true;
 uVarsReCalc.figs.validStruct.phi    = true;
 uVarsReCalc.figs.validStruct.rawPhi = true;
 uVarsReCalc.figs.validStruct.phiLog = true;
-
 
 resNew = ao.reCalcData(uVarsReCalc);
 
@@ -262,27 +261,30 @@ ylim([-70,1])
 set(hFig1, 'Position', [197,428,1206,365]);
 
 for i=1:length(res.splitRes)
-    curRes = res2.splitRes(i);
+    curRes = res.splitRes(i);
+    curRes.frameAvgPowerFFT = curRes.frameAvgPowerFFT(1,:,:);
     if  i==1
         accRes = curRes;
         accRes.frameAvgPowerFFT = accRes.frameAvgPowerFFT(1,:,:);
     else
-        accRes.frameAvgPowerFFT = (accRes.frameAvgPowerFFT*(i-1) +  curRes.frameAvgPowerFFT(1,:,:)) /i;
+        accRes.frameAvgPowerFFT = (accRes.frameAvgPowerFFT*(i-1) +  curRes.frameAvgPowerFFT) /i;
     end
-    
-    resSingle   = algo.reconExtFFTData(accRes)
-    resTotal(i) = algo.reconExtFFTData(accRes);
-    phi = resTotal(i).phiNorm;
 
-    SNR = 1/std(phi(1:40)); 
+    resSingle(i) = algo.reconExtFFTData(curRes);
+    phiSingle = normMatf(resSingle(i).phiNorm(1:104));
+    SNRSingle(i) = 1/std(phiSingle(1:40));  
 
-    set(hP1, 'YData',  resTotal(i).phiNorm);
+    resTotal(i)  = algo.reconExtFFTData(accRes);
+    phiTotal  = normMatf(resTotal(i).phiNorm(1:104));
+    SNRTotal  = 1/std(phiTotal(1:40)); 
+
+    set(hP1, 'YData',  phiTotal);
     set(hP2, 'YData',  db(resTotal(i).phiNorm));
     set(hTit1, 'String', sprintf( "AO Reconstruction After %d[s]",i));
     set(hTit2, 'String', sprintf( "AO Reconstruction After %d[s]",i));
-    set(hText, 'String', sprintf("SNR: %.2f", SNR));
+    set(hText, 'String', sprintf("SNR: %.2f", SNRTotal));
     drawnow();
-    pause(0.5);
+    pause(0.01);
     frame(i) = getframe(hFig1);
 end
 
@@ -292,13 +294,13 @@ for i = 1:skip:128
     im = frame2im(frame(i)); 
     [imind,cm] = rgb2ind(im,256);
     if i == 1
-      imwrite(imind, cm, "scatPhantom.gif", 'gif', 'DelayTime', 0, 'Loopcount', inf); 
+      imwrite(imind, cm, "transPhantom.gif", 'gif', 'DelayTime', 0.5, 'Loopcount', inf); 
     else 
-      imwrite(imind, cm, "scatPhantom.gif", 'gif', 'DelayTime', 0, 'WriteMode', 'append'); 
+      imwrite(imind, cm, "transPhantom.gif", 'gif', 'DelayTime', 0.5, 'WriteMode', 'append'); 
     end 
 end
 
-
+mean(SNRSingle)
 
 
 

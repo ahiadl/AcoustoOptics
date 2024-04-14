@@ -178,38 +178,49 @@ classdef AOFGen < handle
             
             sigVec = zeros(1, pulsePerSqnc);
             sigVec(1) = 1;
-
-            switch this.vars.sigType
-                case 'Hadamard'
-                    sigVec = sMatrix(1, :);
-                    sigSamples = sin(2*pi * (fSig/fgClk) * samplesVec);
-                case 'SinePulse'
-                    sigSamples = sin(2*pi * (fSig/fgClk) * samplesVec);
-                case 'CW'
-                    sigVec = ones(1, pulsePerSqnc);
-                    sigSamples = sin(2*pi * (fSig/fgClk) * samplesVec);
-                case 'DeltaPulse'
-                    sigSamples    = zeros(1,NgPulse);
-                    sigSamples(1) = 1;
-                case 'RectPulse'
-                    sigSamples = ones(1,NgPulse);
-                case 'BiPolarRectPulse'
-                    if mod(NgPulse, 2)
-                        lenPos = floor(NgPulse/2);
-                        lenNeg = floor(NgPulse/2)+1;
-                    else
-                        lenPos = NgPulse/2;
-                        lenNeg = NgPulse/2;
-                    end
-                    sigSamples = [ones(1,lenPos), -1*ones(1,lenNeg)];
-            end
             
-            sigData = repmat(sigVec, NgPulse, 1);
-            idxs = find(sigVec);
-            sigData(:, idxs) = repmat(sigSamples', 1, length(idxs));
-            sigData = sigData(:);
-
-            sigData = circshift(sigData, this.vars.shift);
+            if ~strcmp(this.vars.sigType, 'Linear') && ~strcmp(this.vars.sigType, 'Test')
+                switch this.vars.sigType
+                    case 'Hadamard'
+                        sigVec = sMatrix(1, :);
+                        sigSamples = sin(2*pi * (fSig/fgClk) * samplesVec);
+                    case 'SinePulse'
+                        sigSamples = sin(2*pi * (fSig/fgClk) * samplesVec);
+                    case 'CW'
+                        sigVec = ones(1, pulsePerSqnc);
+                        sigSamples = sin(2*pi * (fSig/fgClk) * samplesVec);
+                    case 'DeltaPulse'
+                        sigSamples    = zeros(1,NgPulse);
+                        sigSamples(1) = 1;
+                    case 'RectPulse'
+                        sigSamples = ones(1,NgPulse);
+                    case 'BiPolarRectPulse'
+                        if mod(NgPulse, 2)
+                            lenPos = floor(NgPulse/2);
+                            lenNeg = floor(NgPulse/2)+1;
+                        else
+                            lenPos = NgPulse/2;
+                            lenNeg = NgPulse/2;
+                        end
+                        sigSamples = [ones(1,lenPos), -1*ones(1,lenNeg)]; 
+                end
+                
+                sigData = repmat(sigVec, NgPulse, 1);
+                idxs = find(sigVec);
+                sigData(:, idxs) = repmat(sigSamples', 1, length(idxs));
+                sigData = sigData(:);
+    
+                sigData = circshift(sigData, this.vars.shift);
+            else
+                switch this.vars.sigType
+                    case 'Linear'
+                        sigData = linspace(-1, 1, NgSqnc);
+                    case 'Test'
+                        LinData = linspace(-1,0, NgSqnc/2);
+                        sqData =  linspace(0,1,NgSqnc/2).^2;
+                        sigData = [LinData, sqData];
+                end
+            end
             %--------------------
             % Collect parameters
             %--------------------

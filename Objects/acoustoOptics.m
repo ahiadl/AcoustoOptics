@@ -34,6 +34,8 @@ classdef acoustoOptics < handle
         contLive;
         graphicsNames;
         ownedByGUI;
+        usSigGate
+        
 
         % Run Statistics
         timeTable;
@@ -74,6 +76,7 @@ classdef acoustoOptics < handle
             aoVars.analyzeSingleCh = true;
             aoVars.acCoupling      = true;
             aoVars.keepSplits      = false;
+            aoVars.externalIOCtrl  = false;
 
             aoVars.displayBuildUp  = false;
             aoVars.displayBUEvery  = 10;
@@ -103,14 +106,16 @@ classdef acoustoOptics < handle
             aoVars.skipParamsCheck = false;
 
             aoVars.uploadToTelegram = false;
-            aoVars.telegramChatID   = '-512325870';            
+            aoVars.telegramChatID   = '-512325870';    
+            aoVars.tgBUEvery = [];
             
             % fGen
             aoVars.usPower = 100;
             
             % IO
-            aoVars.IOPort = 1;
-            aoVars.IOLine = 4;
+            aoVars.IOPort         = 1;
+            aoVars.IOLine         = 4;
+            
 
             % Export
             aoVars.exportData.meas        = false;
@@ -194,6 +199,9 @@ classdef acoustoOptics < handle
             this.stopMeas  = false;
             this.pauseMeas = false;
             this.contLive  = false;
+
+            this.usSigGate = "IO";
+%             this.usSigGate = "AFG";
         end 
 
         function init(this, ownerGUI)
@@ -486,6 +494,11 @@ classdef acoustoOptics < handle
 
             figsVars.depthVecNormRaw = this.measVars.algo.len.depthVecAlgo;
             
+            figsVars.depthCutNormInt = this.measVars.algo.len.depthCutNormInt;
+            figsVars.depthCutCntrInt = this.measVars.algo.len.depthCutCntrInt;
+            figsVars.depthCutZeroInt = this.measVars.algo.len.depthCutZeroInt;
+            figsVars.depthCutIdxInt  = this.measVars.algo.len.depthCutIdxInt;
+
             figsVars.tVecUS          = this.measVars.algo.timing.tVecUS;
             figsVars.tVecSampleClk   = this.measVars.algo.timing.tVecSampleClk;
             
@@ -514,6 +527,9 @@ classdef acoustoOptics < handle
             
             fprintf("AOI: ------- Sets Extended Vars From Reduced Vars ----------\n")
             
+            this.measVars = [];
+            this.graphics.resetGraphicsData();
+
             %Algorithm:
             algoVars = this.setAlgoVars();
             newExtVars.algo = algoVars;
@@ -529,6 +545,7 @@ classdef acoustoOptics < handle
             
             %IO:
             IOVars = this.setIOVars();
+            
 
             %File System:
             fileSystemVars = this.setFileSystemVars(uVarsAO.fileSystem);
@@ -549,13 +566,18 @@ classdef acoustoOptics < handle
             AO.N                   = uVarsAO.ao.N;
             AO.dispTimeTable       = uVarsAO.ao.dispTimeTable;
             AO.skipParamsCheck     = uVarsAO.ao.skipParamsCheck;
-            
+            AO.externalIOCtrl      = uVarsAO.ao.externalIOCtrl;
+
             AO.displayBuildUp      = uVarsAO.ao.displayBuildUp;
             AO.displayBUEvery      = uVarsAO.ao.displayBUEvery;
             
             AO.uploadToTelegram = uVarsAO.ao.uploadToTelegram;
             AO.telegramChatID   = uVarsAO.ao.telegramChatID;
-            
+            AO.tgBUEvery        = uVarsAO.ao.tgBUEvery;
+            if ~mod(AO.tgBUEvery, AO.displayBUEvery)
+                AO.tgBUEvery = ceil(AO.tgBUEvery/AO.displayBUEvery)*AO.displayBUEvery;
+            end
+
             AO.topUpMode = false;
             AO.topUpIdx  = 0;
             
@@ -684,7 +706,11 @@ classdef acoustoOptics < handle
             this.fGen.setData(dataCh1, dataCh2);
             this.fGen.configChannel(1);
             this.fGen.configChannel(2);
-            
+            this.fGen.enableOutput(2);
+            if strcmp(this.usSigGate, 'IO')
+                this.fGen.enableOutput(1);
+            end
+
             this.graphics.setData([], sigData', clkData')
             
             if this.measVars.figs.validStruct.extClk
@@ -750,7 +776,7 @@ classdef acoustoOptics < handle
             if this.measVars.AO.splitMeas % Split-mode long measurement
                 this.stopMeas = false;
                 T(this.measVars.AO.splitNum) = this.algo.timeTable;
-
+                
                 if this.measVars.AO.topUpMode
                     offset = this.measVars.AO.splitNum*this.measVars.AO.topUpIdx;
                 else
@@ -762,25 +788,29 @@ classdef acoustoOptics < handle
 
                 splitNum = offset+this.measVars.AO.splitNum;
                 splitStartIdx = offset+1;
-                if ~keepSplits
+                if keepSplits
                     this.splits(end, splitNum) = this.splits(end,end);
                 end
-
-                this.IO.open();
+                
+                if ~this.measVars.AO.externalIOCtrl 
+                    this.openUSSignal();
+                end
                 for i = splitStartIdx:splitNum
+                    tLoop = tic;
                     fprintf("AOI:");
-                    if this.measVars.AO.longMeas
-                        
-                    end
                     fprintf("Split %d/%d: ", i, splitNum);
                     this.fileSystem.updateSplitInd(i);
                     % Check if stop button was pushed
                     if this.stopMeas
-                        this.IO.close();
+                        if ~ this.measVars.AO.externalIOCtrl 
+                            this.closeUSSignal();
+                        end
                         if this.pauseMeas && this.ownedByGUI
                             fprintf("AOI: Measurement Paused.\n");
                             uiwait();
-                            this.IO.open();
+                            if ~ this.measVars.AO.externalIOCtrl 
+                                this.openUSSignal();
+                            end
                             this.pauseMeas = false;
                             this.stopMeas  = false;
                         else
@@ -790,24 +820,31 @@ classdef acoustoOptics < handle
                     end
                     this.algo.initTimeTable();
 
-                    % Bring current Split Datta
+                    % Measure single split with limited analysis
                     curSplit = this.measureAndAnalyse();
+
+                    % Keep single split in case requested
                     if keepSplits
                         this.splits(:,i) = curSplit;
                     else
                         this.splits = curSplit;
+                        
                     end
-                    
-                    % Full so-far analysis and plotting
-                    if  this.measVars.AO.displayBuildUp
-                        this.algo.addCurrentSplit(curSplit, i);
+
+                    % Full so-far analysis
+                    this.algo.addCurrentSplit(curSplit, i);
+
+                    % Build up plotting
+                    if this.measVars.AO.displayBuildUp
                         if i==2 || ~mod(i, this.measVars.AO.displayBUEvery) || i==splitNum
                             this.result = this.algo.reconCurSplit();
                             this.graphics.setData(gather(this.result));
                             this.plotAll();
                             if this.measVars.AO.uploadToTelegram
-                                tgprint(this.measVars.AO.telegramChatID, this.graphics.figs.phi.handles.cur.ax, 'photo');
-                                tgprintf(this.measVars.AO.telegramChatID, sprintf("AOI: Split %d/%d: ", i, this.measVars.AO.splitNum));
+                                if i==2 || ~mod(i, this.measVars.AO.tgBUEvery) || i==splitNum 
+                                    tgprint(this.measVars.AO.telegramChatID, this.graphics.figs.phi.handles.cur.ax, 'photo');
+                                    tgprintf(this.measVars.AO.telegramChatID, sprintf("AOI: Split %d/%d: ", i, this.measVars.AO.splitNum));
+                                end
                             end
                         end
                     end
@@ -817,9 +854,13 @@ classdef acoustoOptics < handle
                     % No display by default, because no full reconstruction is
                     % performed in split-mode
 
-                    pause(0.001); % For GUI Responsivity
+                    pause(0.01); % For GUI Responsivity
+                    tLoop = toc(tLoop);
+                    this.printProgress(i, tLoop, splitStartIdx, splitNum);
                 end
-                this.IO.close();
+                if ~ this.measVars.AO.externalIOCtrl 
+                    this.closeUSSignal();
+                end
 
                 if ~this.stopMeas
                     this.stopMeas = true;
@@ -835,6 +876,7 @@ classdef acoustoOptics < handle
             else % No split
                 % Regular single-meas operation:
                 this.result = this.measureAndAnalyse();
+                fprintf("\n");
             end
             
             % Set data to graphics object
@@ -870,7 +912,7 @@ classdef acoustoOptics < handle
             end
             res = this.result;
         end
-        
+
         function res = liveAcoustoOptics(this) 
             if this.measVars.AO.limitByN
                 this.fileSystem.initLiveAOFS(this.getVars());
@@ -916,13 +958,13 @@ classdef acoustoOptics < handle
                 % Get data from digitizer (Measure)
                 fprintf ("AOI: Acquiring...");
                 this.timeTable.acq = tic;
-                if ~this.measVars.AO.splitMeas
-                    this.IO.open();
+                if ~this.measVars.AO.externalIOCtrl && ~this.measVars.AO.splitMeas
+                    this.openUSSignal()
                     pause(1);
                 end
                 this.rawData = this.digitizer.acquire();
-                if ~this.measVars.AO.splitMeas
-                    this.IO.close();
+                if ~this.measVars.AO.externalIOCtrl && ~this.measVars.AO.splitMeas
+                    this.closeUSSignal;
                 end
                 this.timeTable.acq = toc(this.timeTable.acq);
             else
@@ -949,9 +991,60 @@ classdef acoustoOptics < handle
             res = this.algo.reconstruct();
             this.timeTable.reconstruct = toc(this.timeTable.reconstruct);
             
-            fprintf ("Done!\n");
+            fprintf ("Done!");
         end
         
+        function res = measureAndSaveRepeats(this, r)
+            this.result    = [];
+            this.rawData   = [];
+            this.resultNew = [];
+            
+            if ~this.measVars.AO.topUpMode
+                this.fileSystem.saveVarsToDisk();
+            end
+            
+            projPath = this.fileSystem.projPath;
+            
+            this.measVars.AO.externalIOCtrl = true;
+            
+            this.openUSSignal;
+            pause(10);
+            
+            for i=1:r
+                fprintf("Repeat: %d\n", i);
+                a1 = tic;
+                
+                this.result    = [];
+                this.rawData   = [];
+                this.resultNew = [];
+                
+                this.graphics.data = [];
+
+                a2 = tic;
+                curRes = this.measureAndAnalyse();
+                a(2) = toc(a2);
+
+                meas     = curRes.export.meas;
+                res.phi      = curRes.phi;
+                res.phiLog   = curRes.phiLog;
+                
+                clear curRes;
+                
+                fprintf("AOI: Saving Data.\n")
+                a3 = tic;
+                filename = sprintf("%s/rawData-%d.mat", projPath, i);
+                save(filename, 'meas', '-v7.3');
+                filename = sprintf("%s/AO-Result-%d.mat", projPath, i);
+                save(filename, 'res', '-v7.3');
+                a(3) = toc (a3);
+
+                a(1) = toc(a1);
+                fprintf("Total Time: %.2f, Measure & Analyze: %.2f, Save: %.2f\n", a);
+            end
+            this.closeUSSignal;
+            
+        end
+
         % Misc
         function res = reCalcData(this, uVars)
             uVars.ao.exportData.meas = false;
@@ -1021,6 +1114,24 @@ classdef acoustoOptics < handle
             
             if this.ownedByGUI
                 this.ownerGUI.displayAOTimeTable();
+            end
+        end
+
+        function openUSSignal(this)
+            switch this.usSigGate
+                case "IO"
+                    this.IO.open();
+                case "AFG"
+                    this.fGen.enableOutput(1);
+            end
+        end
+
+        function closeUSSignal(this)
+            switch this.usSigGate
+                case "IO"
+                    this.IO.close();
+                case "AFG"
+                    this.fGen.disableOutput(1);
             end
         end
 
@@ -1148,21 +1259,22 @@ classdef acoustoOptics < handle
             this.fileSystem.closeFileSystem();
         end
         
-        function printProgress(this, T)
-           i = this.vars.idxs(3);
-           j = this.vars.idxs(2);
-           totalNumOfLines = this.vars.scanSize(2)*this.vars.scanSize(3);
-           curNumOfLines = (i-1)*this.vars.scanSize(2)+j;
-           percent = curNumOfLines/totalNumOfLines * 100;
-           this.vars.averageTime = (this.vars.averageTime *(curNumOfLines-1) +T )/curNumOfLines;
-           totalTime = totalNumOfLines * this.vars.averageTime / 60;
-           timeToNow = curNumOfLines * this.vars.averageTime / 60;
-           str = sprintf("Done line %d/%d (%.2f [%%%%]). Progress: %.2f/%.2f mins.\n",...
-                            curNumOfLines, totalNumOfLines, percent, timeToNow, totalTime);
-           fprintf(str)
-           if this.vars.tg.text && ~mod(this.vars.idxs(2)-1, this.vars.tg.rep)
-               tgprintf(this.vars.tg.chatID, str);
-           end 
+        function printProgress(this, i, tLoop, splitStartIdx, splitNum)
+            num = splitNum - splitStartIdx +1;
+            cur = i - splitStartIdx + 1;
+            
+            if cur == 1
+                this.measVars.progress.tLoop = zeros(1,num);
+            end
+            this.measVars.progress.tLoop(cur) = tLoop;
+            curTotal = sum(this.measVars.progress.tLoop(1:cur));
+            avgLoop  = curTotal/cur;
+            est = avgLoop * num;
+            curTotalMins = floor(curTotal/60);
+            curTotalSec  = round(mod(curTotal, 60)); 
+            estMins = floor(est/60);
+            estSec  = round(mod(est, 60));
+            fprintf(" - %d:%d/%d:%d [M:S]\n", curTotalMins, curTotalSec, estMins, estSec);
         end
     end
 end

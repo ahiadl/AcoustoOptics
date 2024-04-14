@@ -19,13 +19,12 @@ classdef MTUA < handle
         end
         
         function setCSHandle(this, hCs)
+            % Dont Change this functionality
             this.hCs = hCs;
         end
         
         function setVars(this, vars)
             this.csVars = vars;
-
-%             (fs/N) *  ( (-N/2) : 1 : (N/2)-1 );
         end
         
         function updateScanIdx(this) 

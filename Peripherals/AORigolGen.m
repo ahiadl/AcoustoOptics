@@ -28,22 +28,17 @@ classdef AORigolGen < handle
     
     methods
         function this = AORigolGen(input)
-            address = 'USB0::0x1AB1::0x0642::DG1ZA231702060::0';
+            address = 'USB0::0x1AB1::0x0642::DG1ZA231702060::0::INSTR';
             if nargin ==1; address = input; end
 
             this.fg = Rigol_DG1022A('NI', address);
-%             this.fg.connect();
         end
         
         function init(this)
-            fgClk = 100e6;
-
             this.vars.fGenVars.ch{1}.syncOwner     = true;
             this.vars.fGenVars.ch{1}.coup          = 50;
-%             this.vars.fGenVars.ch{1}.srate         = fgClk;
             this.vars.fGenVars.ch{2}.syncOwner     = false;
             this.vars.fGenVars.ch{2}.coup          = 50;
-%             this.vars.fGenVars.ch{2}.srate         = fgClk;
         end
         
         function setVars(this, uVars)
@@ -61,15 +56,15 @@ classdef AORigolGen < handle
             this.vars.fGenVars.ch{1}.srate = uVars.fgClk;
             
             if isempty(uVars.clkPower)
-                this.vars.fGenVars.ch{2}.amp = 2;
+                this.vars.fGenVars.ch{2}.amp = 1;
             else
-                this.vars.fGenVars.ch{2}.amp = 2 * uVars.clkPower/100;
+                this.vars.fGenVars.ch{2}.amp = 1 * uVars.clkPower/100;
             end
 
             if isempty(uVars.sigPower)
-                this.vars.fGenVars.ch{1}.amp = 2;
+                this.vars.fGenVars.ch{1}.amp = 1;
             else
-                this.vars.fGenVars.ch{1}.amp = 2 * uVars.sigPower/100 ;
+                this.vars.fGenVars.ch{1}.amp = 1 * uVars.sigPower/100 ;
             end
 
             this.vars.shift = uVars.shift;
@@ -77,6 +72,7 @@ classdef AORigolGen < handle
             this.createSignals();
             
             this.vars.fGenVars.ch{1}.coup =  50;
+            
         end
         
         function curVars = getVars(this)
@@ -146,12 +142,13 @@ classdef AORigolGen < handle
             NgSin   = floor(fgClk / fSig);    % Hidden assumtion: fgClk/fSin is a Natural number.        
             NgPulse = floor(fgClk / fPulse); 
 
-            factor = lcm( lcm(NgPulse, NgClkCyc), 16); %lcm = least common multiple
+%             factor = lcm( lcm(NgPulse, NgClkCyc), 16); %lcm = least common multiple
+            factor = 1;
             
             NgSqnc = ceil(NgSqnc/factor)*factor;
             fSqnc  = fgClk / NgSqnc;
             
-            pulsePerSqnc = NgSqnc / NgPulse;
+            pulsePerSqnc = floor(NgSqnc / NgPulse);
 
             if strcmp(this.vars.sigType, 'Hadamard')
                 sMatrix = createSMatrix(pulsePerSqnc, 'QR'); 
@@ -238,6 +235,13 @@ classdef AORigolGen < handle
         function closeOutputs(this)
             this.fg.disableAllOutputs();
         end
+        
+        function setDebug(this, debug)
+            this.fg.debug = debug;
+        end
     end
 end
 
+
+
+git 

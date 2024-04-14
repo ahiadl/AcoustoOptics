@@ -4,22 +4,25 @@ clc;
 
 instrreset;
 
-
 aofg = AORigolGen();
 aofg.init();
 
-clc
+aofg.setDebug(true);
+
+% clc
 uVars = AORigolGen.createUserVars();
 
 uVars.fgClk   = 60e6;
 
 uVars.fSig    = 1.25e6;
-uVars.fSqnc   = 10e3;
+uVars.fSqnc   = 20e3;
 uVars.delay   = 0;
+% uVars.sigType = 'CW';
 uVars.sigType = 'Hadamard';
+% uVars.sigType     = 'SinePulse';
 uVars.cycPerPulse = 1;
-uVars.amp = 0.4; %1 -> 2.5V
-uVars.fsClk   = 20e6;
+uVars.amp         = 1; %1 -> 2.5V
+uVars.fsClk       = 20e6;
 
 aofg.setVars(uVars);
 vars = aofg.getVars();

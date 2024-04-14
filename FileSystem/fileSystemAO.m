@@ -94,19 +94,19 @@ classdef fileSystemAO < fileSystem
             if this.saveAnyTot
                 data = res;
                 for i= 1:this.chToAnalyze
-                    if (this.saveMeas && ~this.splitMeas)
+                    if (this.saveMeas && this.splitMeas)
                         data(i).export.meas = [];    
                     end
-                    if (this.saveSignal && ~this.splitMeas)
+                    if (this.saveSignal && this.splitMeas)
                          data(i).export.signal = [];
                     end
-                    if (this.saveDeMul && ~this.splitMeas)
+                    if (this.saveDeMul && this.splitMeas)
                         data(i).export.deMul = [];
                     end
-                    if (this.saveReshaped && ~this.splitMeas)
+                    if (this.saveReshaped && this.splitMeas)
                         data(i).export.reshaped = [];
                     end
-                    if (this.saveFFT && ~this.splitMeas)
+                    if (this.saveFFT && this.splitMeas)
                         data(i).export.fft = [];
                     end
                 end

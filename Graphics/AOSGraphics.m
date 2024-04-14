@@ -10,7 +10,7 @@ classdef AOSGraphics < Graphics
 
     methods (Static)
        function figsNames = getGraphicsNames()
-            figsNames = {'scanPlane'; 'scanPlaneLog'; "navLine"; "navLineLog"; "navPlane"; "navPlaneLog"};
+            figsNames = {'scanPlane'; 'scanPlaneLog'; 'navLine'; 'navLineLog'; 'navPlane'; 'navPlaneLog'};
        end 
        
        function vars = getLineNavVarsStruct()
@@ -38,6 +38,12 @@ classdef AOSGraphics < Graphics
             figs.scan2VecCntr   = [];
             figs.scan2VecZero   = [];
             figs.scan2VecNorm   = [];
+            
+            figs.scan3AxType       = 'Normal';
+            figs.scan3Vec       = [];
+            figs.scan3VecCntr   = [];
+            figs.scan3VecZero   = [];
+            figs.scan3VecNorm   = [];
 
             figs.depthAxType       = 'Normal';
             figs.depthVec       = [];
@@ -45,26 +51,26 @@ classdef AOSGraphics < Graphics
             figs.depthVecZero   = [];
             figs.depthVecNorm   = [];
             
-            figs.thirdPos   = [];
-
             figs.scan1Label     = 'Y';
             figs.scan2Label     = 'X';
-            figs.thirdLabel     = 'Z';
-            figs.depthLabel     = 'Z';
+            figs.scan3Label     = 'Z';
+            figs.depthLabel     = 'D';
             figs.mainPlaneLabel = 'YZ';
 
             figs.scanAxLimsToPlot = [];
             figs.dScan1           = [];
             figs.dScan2           = [];
+            figs.dScan3           = [];
             figs.dDDepth          = [];
  
             % Current Position
             figs.scan1Pos  = 0;
             figs.scan2Pos  = 0;
-            figs.thirdPos  = 0;         
+            figs.scan3Pos  = 0;         
             
             figs.scan1Idx = 1;
             figs.scan2Idx = 1;
+            figs.scan3Idx = 1;
 
             % Line Navigator Position          
             figs.varsNavLine  = AOSGraphics.getLineNavVarsStruct;
@@ -72,6 +78,7 @@ classdef AOSGraphics < Graphics
             
             figs.scan1LimsToPlot = [];
             figs.scan2LimsToPlot = [];
+            figs.scan3LimsToPlot = [];
             figs.depthLimsToPlot = [];
             
             figs.normDispPlaneColors = false;
@@ -114,6 +121,7 @@ classdef AOSGraphics < Graphics
        function figs  = createUserVars()
             figs.scan1AxType        = 'Normal';
             figs.scan2AxType        = 'Normal';
+            figs.scan3AxType        = 'Normal';
             figs.depthAxType        = 'Normal';
 
             figs.reopenFigures       = false;
@@ -172,30 +180,30 @@ classdef AOSGraphics < Graphics
         function setGraphicsStaticVars(this)
             % scanPlane
             this.setType('scanPlane', 'imagesc');
-            this.setStrings('scanPlane', "Scan Plane %s: %s = %.2f [mm] - Ch: %d", "Depth (US) %s [mm]", "Scan %s[mm]", []);
+            this.setStrings('scanPlane', "Scan Plane %s: (%s, %s) = (%.2f, %.2f) [mm] - Ch: %d", "Depth (US) %s [mm]", "Scan %s[mm]", []);
             
             % scanPlaneLog
             this.setType('scanPlaneLog', 'imagesc');
-            this.setStrings('scanPlaneLog', "Scan Plane (Log) %s: %s = %.2f - Ch: %d", "Depth (US) %s [mm] ", "Scan %s[mm]", []);
+            this.setStrings('scanPlaneLog', "Scan Plane %s (Log): (%s, %s) = (%.2f, %.2f) [mm] - Ch: %d", "Depth (US) %s [mm] ", "Scan %s[mm]", []);
             
             % navLine
             this.setType('navLine', 'stem');
-            this.setStrings('navLine', "Line Navigator:  (%s, %s) = (%.2f, %.2f) - Ch: %d", "%s [mm]", "\\phi[v]", []);
+            this.setStrings('navLine', "Line Navigator %s: (%s, %s, %s) = (%.2f, %.2f, %.2f) - Ch: %d", "%s [mm]", "\\phi[v]", []);
             
             % navLineLog
             this.setType('navLineLog', 'plot');
-            this.setStrings('navLineLog', "Line Navigator (Log): (%s, %s) = (%.2f, %.2f) - Ch: %d", "%s [mm]",  "\\phi[Log]", []);
+            this.setStrings('navLineLog', "Line Navigator %s (Log): (%s, %s, %s) = (%.2f, %.2f, %.2f) - Ch: %d", "%s [mm]",  "\\phi[Log]", []);
             
              % navPlane
             this.setType('navPlane', 'imagesc');
-            this.setStrings('navPlane', "Plane Navigator %s: %s = %.2f - Ch: %d", "%s[mm]", "%s[mm]", []);
+            this.setStrings('navPlane', "Plane Navigator %s: (%s, %s) = (%.2f, %.2f) [mm] - Ch: %d", "%s[mm]", "%s[mm]", []);
             
             % navPlaneLog
             this.setType('navPlaneLog', 'imagesc');
-            this.setStrings('navPlaneLog', "Plane Navigator %s (Log):  %s =  %.2f - Ch: %d", "%s[mm]", "%s[mm]", []);
+            this.setStrings('navPlaneLog', "Plane Navigator %s (Log): (%s, %s) = (%.2f, %.2f) [mm] - Ch: %d", "%s[mm]", "%s[mm]", []);
         end
 
-        function setGraphicsScanVars(this)           
+        function setGraphicsScanVars(this)
             this.figs.channelsInRes         = this.uVars.channelsInRes;
             this.figs.singleChannelAnalysis = this.uVars.singleChannelAnalysis;
             this.setSepChIdx(this.uVars.sepChIdx); 
@@ -203,12 +211,15 @@ classdef AOSGraphics < Graphics
 
             this.figs.scan1Label   = this.uVars.scan1Label;
             this.figs.scan2Label   = this.uVars.scan2Label;
+            this.figs.scan3Label   = this.uVars.scan3Label;
             this.figs.thirdLabel   = this.uVars.thirdLabel;
-            this.figs.depthLabel   = this.uVars.depthLabel;
+            this.figs.depthLabel   = 'D';
+%             this.figs.depthLabel   = this.uVars.depthLabel;
             this.figs.mainPlaneLabel = this.uVars.mainPlane;
             
             this.figs.scan1AxType   = this.uVars.scan1AxType;
-            this.figs.scan2AxType   = this.uVars.scan1AxType;
+            this.figs.scan2AxType   = this.uVars.scan2AxType;
+            this.figs.scan3AxType   = this.uVars.scan3AxType;
             this.figs.depthAxType   = this.uVars.depthAxType;
 
             this.figs.scan1VecNorm = this.uVars.scan1VecNorm;
@@ -220,6 +231,11 @@ classdef AOSGraphics < Graphics
             this.figs.scan2VecCntr = this.figs.scan2VecNorm - mean(this.figs.scan2VecNorm);
             this.figs.scan2VecZero = abs(this.figs.scan2VecNorm - this.figs.scan2VecNorm(1));
             this.setAxisType(this.figs.scan2Label);
+            
+            this.figs.scan3VecNorm = this.uVars.scan3VecNorm;
+            this.figs.scan3VecCntr = this.figs.scan3VecNorm - mean(this.figs.scan3VecNorm);
+            this.figs.scan3VecZero = abs(this.figs.scan3VecNorm - this.figs.scan3VecNorm(1));
+            this.setAxisType(this.figs.scan3Label);
 
             this.figs.depthVecNorm = this.uVars.depthVecNorm*1e3;
             this.figs.depthVecCntr = this.figs.depthVecNorm - mean(this.figs.depthVecNorm);
@@ -230,16 +246,16 @@ classdef AOSGraphics < Graphics
             
             this.figs.scan1Idx = 1;
             this.figs.scan2Idx = 1;
+            this.figs.scan3Idx = 1;
             this.figs.scan1Pos = 0;
             this.figs.scan2Pos = 0;
+            this.figs.scan3Pos = 0;
 
-            this.figs.varsNavLine.ax1Label = this.uVars.varsNavLine.ax1Label;
-            this.figs.varsNavLine.ax1Idx   = this.uVars.varsNavLine.ax1Idx;
-            this.figs.varsNavLine.ax2Label = this.uVars.varsNavLine.ax2Label;
-            this.figs.varsNavLine.ax2Idx   = this.uVars.varsNavLine.ax2Idx; 
+            this.figs.varsNavLine.labels = this.uVars.varsNavLine.labels;
+            this.figs.varsNavLine.idx    = this.uVars.varsNavLine.idx; 
 
-            this.figs.varsNavPlane.normAx = this.uVars.varsNavPlane.normAx;
-            this.figs.varsNavPlane.axIdx  = this.uVars.varsNavPlane.axIdx; 
+            this.figs.varsNavPlane.labels = this.uVars.varsNavPlane.labels;
+            this.figs.varsNavPlane.idx    = this.uVars.varsNavPlane.idx; 
 
             this.figs.validStruct = this.uVars.validStruct;
 
@@ -252,8 +268,10 @@ classdef AOSGraphics < Graphics
         function updateCurPosAndIdx(this, pns)
             this.figs.scan1Idx  = pns.curIdx(1);
             this.figs.scan2Idx  = pns.curIdx(2);
+            this.figs.scan3Idx  = pns.curIdx(3);
             this.figs.scan1Pos  = pns.curPos(1);
             this.figs.scan2Pos  = pns.curPos(2);
+            this.figs.scan3Pos  = pns.curPos(3);
         end
 
         function setAxisType(this, ax)
@@ -285,10 +303,28 @@ classdef AOSGraphics < Graphics
                 if length(this.figs.scan2Vec(1)) == 1
                     this.figs.dScan2 = 1;
                 else
-                    this.figs.dScan2          = abs(this.figs.scan2Vec(1) - this.figs.scan2Vec(2));
+                    this.figs.dScan2 = abs(this.figs.scan2Vec(1) - this.figs.scan2Vec(2));
                 end
                 this.figs.scan2LimsToPlot = [min(this.figs.scan2Vec) - this.figs.dScan2,...
                                              max(this.figs.scan2Vec) + this.figs.dScan2];
+            elseif strcmp(ax, this.figs.scan3Label)
+                switch this.figs.scan3AxType
+                    case 'Normal'
+                        this.figs.scan3Vec = this.figs.scan3VecNorm;
+                    case 'Center'
+                        this.figs.scan3Vec = this.figs.scan3VecCntr;
+                    case 'Zero'
+                        this.figs.scan3Vec = this.figs.scan3VecZero;
+                    case 'Index'
+                        this.figs.scan3Vec = 1:length(this.figs.scan3VecNorm);
+                end
+                if length(this.figs.scan3Vec(1)) == 1
+                    this.figs.dScan3 = 1;
+                else
+                    this.figs.dScan3 = abs(this.figs.scan3Vec(1) - this.figs.scan3Vec(2));
+                end
+                this.figs.scan3LimsToPlot = [min(this.figs.scan3Vec) - this.figs.dScan3,...
+                                             max(this.figs.scan3Vec) + this.figs.dScan3];
             elseif strcmp(ax, this.figs.depthLabel)
                 switch this.figs.depthAxType
                     case 'Normal'
@@ -315,15 +351,13 @@ classdef AOSGraphics < Graphics
         end
 
         function setNavLineVars(this, vars)
-            this.figs.varsNavLine.ax1Label = vars.ax1Label;
-            this.figs.varsNavLine.ax1Idx   = vars.ax1Idx;
-            this.figs.varsNavLine.ax2Label = vars.ax2Label;
-            this.figs.varsNavLine.ax2Idx   = vars.ax2Idx;
+            this.figs.varsNavLine.labels = vars.labels;
+            this.figs.varsNavLine.idx    = vars.idx;
         end
 
         function setNavPlaneVars(this, vars)
-            this.figs.varsNavPlane.normAx  = vars.normAx;
-            this.figs.varsNavPlane.axIdx   = vars.axIdx;
+            this.figs.varsNavPlane.labels = vars.normAx;
+            this.figs.varsNavPlane.idx    = vars.axIdx;
         end
     
         function setDispPlaneColorNorm(this, val)
@@ -353,7 +387,7 @@ classdef AOSGraphics < Graphics
         end
 
         function initDataArray(this)
-            rstPhi    = zeros(length(this.figs.scan1Vec), length(this.figs.scan2Vec), length(this.figs.depthVec),  this.uVars.channelsInRes);
+            rstPhi    = zeros(length(this.figs.scan1Vec), length(this.figs.scan2Vec), length(this.figs.scan3Vec), length(this.figs.depthVec),  this.uVars.channelsInRes);
             this.data.phi       = rstPhi;
             this.data.phiLog    = rstPhi;
             this.data.phiNorm   = rstPhi;
@@ -362,7 +396,7 @@ classdef AOSGraphics < Graphics
             this.data.glbMin  = zeros(1, this.uVars.channelsInRes);
             this.data.glbSpan = ones(1, this.uVars.channelsInRes);
 
-            this.data.glbMinLog = -Inf*ones(1, this.uVars.channelsInRes);;
+            this.data.glbMinLog = -Inf*ones(1, this.uVars.channelsInRes);
         end
 
         function setData(this, res)
@@ -391,75 +425,108 @@ classdef AOSGraphics < Graphics
                 dim = 1;
             elseif strcmp(label, this.figs.scan2Label)
                 dim = 2;
-            elseif strcmp(label, this.figs.depthLabel)
+            elseif strcmp(label, this.figs.scan3Label)
                 dim = 3;
+            elseif strcmp(label, this.figs.depthLabel)
+                dim = 4;
             end
         end
         
-        function [ax1, ax2, lineVec, lineLabel] = extractLineNavAxFromLabels(this, label1, label2)
-            if strcmp(label1, this.figs.scan1Label)
-                ax1 = this.figs.scan1Vec;
-                if strcmp(label2, this.figs.scan1Label)
-                    error("Identical Line Navigator Labels");
-                elseif strcmp(label2, this.figs.scan2Label)
-                    ax2 = this.figs.scan2Vec;
-                    lineVec = this.figs.depthVec;
-                    lineLabel = this.figs.depthLabel;
-                elseif strcmp(label2, this.figs.depthLabel)
-                    ax2 = this.figs.depthVec;
-                    lineVec = this.figs.scan2Vec;
-                    lineLabel = this.figs.scan2Label;
+        function lineNavData = extractLineNavAxFromLabels(this)
+            
+            labels = this.figs.varsNavLine.labels;
+            idx    = this.figs.varsNavLine.idx;
+
+            if strcmp(labels(1), this.figs.scan1Label)
+                lineNavData.lineAxLabel = this.figs.scan1Label;
+                lineNavData.lineAxVec = this.figs.scan1Vec;
+            elseif strcmp(labels(1), this.figs.scan2Label)
+                lineNavData.lineAxLabel = this.figs.scan2Label;
+                lineNavData.lineAxVec = this.figs.scan2Vec;
+            elseif strcmp(labels(1), this.figs.scan3Label)
+                lineNavData.lineAxLabel = this.figs.scan3Label;
+                lineNavData.lineAxVec = this.figs.scan3Vec;
+            elseif strcmp(labels(1), this.figs.depthLabel)
+                lineNavData.lineAxLabel = this.figs.depthLabel;
+                lineNavData.lineAxVec = this.figs.depthVec;
+            end
+
+            for i=2:4
+                axLabelField = sprintf("ax%dLabel", i);
+                axVecField   = sprintf("ax%dVec", i);
+                axValField   = sprintf("ax%dVal", i);
+                axIdxField   = sprintf("ax%dIdx", i);
+                
+                if strcmp(labels(i), this.figs.scan1Label)
+                    lineNavData.(axLabelField) = this.figs.scan1Label;
+                    lineNavData.(axVecField) = this.figs.scan1Vec;
+                    lineNavData.(axValField) = this.figs.scan1Vec(idx(i-1));
+                elseif strcmp(labels(i), this.figs.scan2Label)
+                    lineNavData.(axLabelField) = this.figs.scan2Label;
+                    lineNavData.(axVecField) = this.figs.scan2Vec;
+                    lineNavData.(axValField) = this.figs.scan2Vec(idx(i-1));
+                elseif strcmp(labels(i), this.figs.scan3Label)
+                    lineNavData.(axLabelField) = this.figs.scan3Label;
+                    lineNavData.(axVecField) = this.figs.scan3Vec;
+                    lineNavData.(axValField) = this.figs.scan3Vec(idx(i-1));
+                elseif strcmp(labels(i), this.figs.depthLabel)
+                    lineNavData.(axLabelField) = this.figs.depthLabel;
+                    lineNavData.(axVecField) = this.figs.depthVec;
+                    lineNavData.(axValField) = this.figs.depthVec(idx(i-1));
                 end
-            elseif strcmp(label1, this.figs.scan2Label)
-                ax1 = this.figs.scan2Vec;
-                if strcmp(label2, this.figs.scan1Label)
-                    ax2 = this.figs.scan1Vec;
-                    lineVec = this.figs.depthVec;
-                    lineLabel = this.figs.depthLabel;
-                elseif strcmp(label2, this.figs.scan2Label)
-                    error("Identical Line Navigator Labels");
-                elseif strcmp(label2, this.figs.depthLabel)
-                    ax2 = this.figs.depthVec;
-                    lineVec = this.figs.scan1Vec;
-                    lineLabel = this.figs.scan1Label;
-                end
-            elseif strcmp(label1, this.figs.depthLabel)
-                ax1 = this.figs.depthVec;
-                if strcmp(label2, this.figs.scan1Label)
-                    ax2 = this.figs.scan1Vec;
-                    lineVec = this.figs.scan2Vec;
-                    lineLabel = this.figs.scan2Label;
-                elseif strcmp(label2, this.figs.scan2Label)
-                    ax2 = this.figs.scan2Vec;
-                    lineVec = this.figs.scan1Vec;
-                    lineLabel = this.figs.scan1Label;
-                elseif strcmp(label2, this.figs.depthLabel)
-                    error("Identical Line Navigator Labels");
-                end
+                lineNavData.(axIdxField) = idx(i-1);
             end
         end
-        
-        function [ax1, ax2, ax3, label1, label2, planeLabel] = extractPlaneNavAxes(this, ax3Label)
-            if strcmp(ax3Label, this.figs.scan1Label)
-                ax1 = this.figs.depthVec;
-                ax2 = this.figs.scan2Vec;
-                ax3 = this.figs.scan1Vec;
-                label1 = this.figs.depthLabel;
-                label2 = this.figs.scan2Label;
-            elseif strcmp(ax3Label, this.figs.scan2Label)
-                ax1 = this.figs.depthVec;
-                ax2 = this.figs.scan1Vec;
-                ax3 = this.figs.scan2Vec;
-                label1 = this.figs.depthLabel;
-                label2 = this.figs.scan1Label;
-            elseif strcmp(ax3Label, this.figs.depthLabel)
-                ax1 = this.figs.scan1Vec;
-                ax2 = this.figs.scan2Vec;
-                ax3 = this.figs.depthVec;
-                label1 = this.figs.scan1Label;
-                label2 = this.figs.scan2Label;
+
+        function planeData = extractPlaneNavAxesFromLabel(this)
+            labels = this.figs.varsNavPlane.labels;
+            idx    = this.figs.varsNavPlane.idx;
+
+            for i=1:2
+                axLabelField = sprintf("line%dAxLabel", i);
+                axVecField   = sprintf("line%dAxVec", i);
+                if strcmp(labels(i), this.figs.scan1Label)
+                    planeData.(axLabelField) = this.figs.scan1Label;
+                    planeData.(axVecField) = this.figs.scan1Vec;
+                elseif strcmp(labels(i), this.figs.scan2Label)
+                    planeData.(axLabelField) = this.figs.scan2Label;
+                    planeData.(axVecField) = this.figs.scan2Vec;
+                elseif strcmp(labels(i), this.figs.scan3Label)
+                    planeData.(axLabelField) = this.figs.scan3Label;
+                    planeData.(axVecField) = this.figs.scan3Vec;
+                elseif strcmp(labels(i), this.figs.depthLabel)
+                    planeData.(axLabelField) = this.figs.depthLabel;
+                    planeData.(axVecField) = this.figs.depthVec;
+                end
             end
-            planeLabel = sprintf("%s%s", label1, label2);
+
+            for i=3:4
+                axLabelField = sprintf("ax%dLabel", i);
+                axVecField   = sprintf("ax%dVec", i);
+                axValField   = sprintf("ax%dVal", i);
+                axIdxField   = sprintf("ax%dIdx", i);
+                
+                if strcmp(labels(i), this.figs.scan1Label)
+                    planeData.(axLabelField) = this.figs.scan1Label;
+                    planeData.(axVecField) = this.figs.scan1Vec;
+                    planeData.(axValField) = this.figs.scan1Vec(idx(i-2));
+                elseif strcmp(labels(i), this.figs.scan2Label)
+                    planeData.(axLabelField) = this.figs.scan2Label;
+                    planeData.(axVecField) = this.figs.scan2Vec;
+                    planeData.(axValField) = this.figs.scan2Vec(idx(i-2));
+                elseif strcmp(labels(i), this.figs.scan3Label)
+                    planeData.(axLabelField) = this.figs.scan3Label;
+                    planeData.(axVecField) = this.figs.scan3Vec;
+                    planeData.(axValField) = this.figs.scan3Vec(idx(i-2));
+                elseif strcmp(labels(i), this.figs.depthLabel)
+                    planeData.(axLabelField) = this.figs.depthLabel;
+                    planeData.(axVecField) = this.figs.depthVec;
+                    planeData.(axValField) = this.figs.depthVec(idx(i-2));
+                end
+                planeData.(axIdxField) = idx(i-2);
+            end
+
+            planeData.planeLabel = sprintf("%s%s", planeData.line1AxLabel, planeData.line2AxLabel);
         end
 
         function data = extractScanPlaneFromData(this, gName)
@@ -468,14 +535,14 @@ classdef AOSGraphics < Graphics
 
             switch gName
                 case 'scanPlane'
-                    data.cData = permute(this.data.phiNorm(:, this.figs.scan2Idx, :, this.figs.sepChIdx), [1,3,2,4]);;
+                    data.cData = permute(this.data.phiNorm(:, this.figs.scan2Idx, this.figs.scan3Idx, :, this.figs.sepChIdx), [1,4,2,3,5]);
                     if this.figs.normDispPlaneColors
                         data.clims = [min(data.cData(:)), max(data.cData(:))];
                     else
                         data.clims = [0, 1];
                     end
                 case 'scanPlaneLog'
-                    data.cData = permute(this.data.phiLog(:, this.figs.scan2Idx, :, this.figs.sepChIdx), [1,3,2,4]);
+                    data.cData = permute(this.data.phiLog(:, this.figs.scan2Idx, this.figs.scan3Idx, :, this.figs.sepChIdx), [1,4,2,3,5]);
                     if this.figs.normDispPlaneColors
                         data.clims = [min(data.cData(:)), 0];
                     else
@@ -487,26 +554,29 @@ classdef AOSGraphics < Graphics
             end
             data.titleVars = {{ this.figs.mainPlaneLabel,...
                                 this.figs.scan2Label,...
+                                this.figs.scan3Label,...
                                 this.figs.scan2Pos,...
+                                this.figs.scan3Pos,...
                                 this.figs.sepChIdx}};
             data.xLabelVar = this.figs.depthLabel;
             data.yLabelVar = this.figs.scan1Label;
         end
-        
+
         function data = extractNavPlaneFromData(this, gName)
-            [ax1, ax2, axNorm, label1, label2, planeLabel] = this.extractPlaneNavAxes(this.figs.varsNavPlane.normAx);
-            data.xData = ax2;
-            data.yData = ax1;
+            dimOrder = zeros(1,5);
+            for i=1:4
+                dimOrder(i) = this.extractDimFromLabel(this.figs.varsNavLine.labels(i));
+            end
+            dimOrder(5) = 5;
             
-            dimNorm = this.extractDimFromLabel(this.figs.varsNavPlane.normAx);
-            dimOrder = 1:length(size(this.data.phi));
-            dimOrder(dimNorm) = [];
-            dimOrder = [dimNorm,dimOrder];
+            planeData = this.extractPlaneNavAxesFromLabel();
+            data.xData = planeData.line2AxVec;
+            data.yData = planeData.line1AxVec;
             
             switch gName
                 case 'navPlane'
-                    phi = permute(this.data.phiNorm, dimOrder); % Bring normal axis to dim 1;
-                    phi = squeeze(phi(this.figs.varsNavPlane.axIdx, :, :, this.figs.sepChIdx));
+                    phi = permute(this.data.phiNorm, dimOrder);
+                    phi = squeeze(phi(:, :, planeData.ax3Idx,  planeData.ax4Idx, this.figs.sepChIdx));
                     data.cData = phi;
                     if this.figs.normDispPlaneColors
                         data.clims = [min(phi(:)), max(phi(:))];
@@ -514,10 +584,11 @@ classdef AOSGraphics < Graphics
                         data.clims = [0, 1];
                     end
                 case 'navPlaneLog'
-                    phiLog     = permute(this.data.phiLog, dimOrder);
-                    data.cData = squeeze(phiLog(this.figs.varsNavPlane.axIdx, :, :, this.figs.sepChIdx));
+                    phiLog = permute(this.data.phiLog, dimOrder);
+                    phiLog = squeeze(phiLog(:, :, planeData.ax3Idx,  planeData.ax4Idx, this.figs.sepChIdx));
+                    data.cData = phiLog;
                     if this.figs.normDispPlaneColors
-                        data.clims = [min(data.cData(:)), 0];
+                        data.clims = [min(phiLog(:)), max(phiLog(:))];
                     else
                         data.clims = [this.data.glbMinLog(this.figs.sepChIdx), 0];
                     end
@@ -525,39 +596,45 @@ classdef AOSGraphics < Graphics
             if data.clims(1) == data.clims(2)
                 data.clims(2)= data.clims(1)+1;
             end
-            data.titleVars = {{ planeLabel,...
-                                this.figs.varsNavPlane.normAx,...
-                                axNorm(this.figs.varsNavPlane.axIdx),...
+            data.titleVars = {{ planeData.planeLabel,...
+                                planeData.ax3Label,...
+                                planeData.ax4Label,...
+                                planeData.ax3Val,...
+                                planeData.ax4Val,...
                                 this.figs.sepChIdx}};
-            data.xLabelVar = label2;
-            data.yLabelVar = label1;
+
+            data.xLabelVar = planeData.line2AxLabel;
+            data.yLabelVar = planeData.line1AxLabel;
         end
 
         function data = extractNavLineFromData(this, gName)
-            dim1 = this.extractDimFromLabel(this.figs.varsNavLine.ax1Label);
-            dim2 = this.extractDimFromLabel(this.figs.varsNavLine.ax2Label);
-            
-            dimOrder = 1:length(size(this.data.phi));
-            dimOrder([dim1, dim2]) = [];
-            dimOrder = [dim1, dim2, dimOrder];
+            dimOrder = zeros(1,5);
+            for i=1:4
+                dimOrder(i) = this.extractDimFromLabel(this.figs.varsNavLine.labels(i));
+            end
+            dimOrder(5) = 5;
 
-            [ax1, ax2, data.xData, lineLabel] = this.extractLineNavAxFromLabels(this.figs.varsNavLine.ax1Label,...
-                                                                                this.figs.varsNavLine.ax2Label);
+            lineData = this.extractLineNavAxFromLabels();
+            data.xData = lineData.lineAxVec;
+
             switch gName
                 case "navLine"
                     phi = permute(this.data.phiNorm, dimOrder);
                 case "navLineLog"
                     phi = permute(this.data.phiLog, dimOrder);
             end
-            data.yData = squeeze(phi(this.figs.varsNavLine.ax1Idx, this.figs.varsNavLine.ax2Idx, :,  this.figs.sepChIdx));
-            
-            data.titleVars  =  {{this.figs.varsNavLine.ax1Label,...
-                                 this.figs.varsNavLine.ax2Label,...
-                                 ax1(this.figs.varsNavLine.ax1Idx),...
-                                 ax2(this.figs.varsNavLine.ax2Idx),...
+            data.yData = squeeze(phi(:, lineData.ax2Idx, lineData.ax3Idx, lineData.ax4Idx, this.figs.sepChIdx));
+                        
+            data.titleVars  =  {{lineData.lineAxLabel,...
+                                 lineData.ax2Label,...
+                                 lineData.ax3Label,...
+                                 lineData.ax4Label,...
+                                 lineData.ax2Val,...
+                                 lineData.ax3Val,...
+                                 lineData.ax4Val,...
                                  this.figs.sepChIdx}};
 
-            data.xLabelVar = lineLabel;
+            data.xLabelVar = lineData.lineAxLabel;
             data.yLabelVar = [];
         end
 
